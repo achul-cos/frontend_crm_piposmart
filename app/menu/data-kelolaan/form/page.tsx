@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface NasabahItem {
   totalFu: number;
@@ -27,7 +27,7 @@ interface NasabahItem {
   callStatus: string;
   chatStatus: string;
   validitas: string;
-  remarks: string; 
+  remarks: string;
   sumberNasabah: string;
   finalisasiClosing: string;
   skemaId?: string;
@@ -35,56 +35,83 @@ interface NasabahItem {
   noted: string;
 }
 
-const DATA_PACKET_MASTER: Record<string, any[]> = {
-  "Basic": [
-    { id_skema: "basic_24", nama_promo: "24 Bulan Basic", tenor_bulan: "24", total_penjualan: 1716000 },
-    { id_skema: "basic_18", nama_promo: "18 Bulan Basic", tenor_bulan: "18", total_penjualan: 1398000 },
-    { id_skema: "basic_12", nama_promo: "12 Bulan Basic", tenor_bulan: "12", total_penjualan: 858000 },
-    { id_skema: "basic_9", nama_promo: "9 Bulan Basic", tenor_bulan: "9", total_penjualan: 702000 },
-    { id_skema: "basic_1", nama_promo: "1 Bulan Basic", tenor_bulan: "1", total_penjualan: 78000 }
-  ],
-  "Business": [
-    { id_skema: "biz_24", nama_promo: "24 Bulan Business", tenor_bulan: "24", total_penjualan: 2596000 },
-    { id_skema: "biz_18", nama_promo: "18 Bulan Business", tenor_bulan: "18", total_penjualan: 1998000 },
-    { id_skema: "biz_12", nama_promo: "12 Bulan Business", tenor_bulan: "12", total_penjualan: 1298000 },
-    { id_skema: "biz_9", nama_promo: "9 Bulan Business", tenor_bulan: "9", total_penjualan: 998000 },
-    { id_skema: "biz_6", nama_promo: "6 Bulan Business", tenor_bulan: "6", total_penjualan: 708000 },
-    { id_skema: "biz_1", nama_promo: "1 Bulan Business", tenor_bulan: "1", total_penjualan: 118000 }
-  ],
-  "Pro": [
-    { id_skema: "pro_24", nama_promo: "24 Bulan Pro", tenor_bulan: "24", total_penjualan: 3368000 },
-    { id_skema: "pro_18", nama_promo: "18 Bulan Pro", tenor_bulan: "2688000", total_penjualan: 2688000 },
-    { id_skema: "pro_12", nama_promo: "12 Bulan Pro", tenor_bulan: "12", total_penjualan: 1688000 },
-    { id_skema: "pro_9", nama_promo: "9 Bulan Pro", tenor_bulan: "9", total_penjualan: 1368000 },
-    { id_skema: "pro_6", nama_promo: "6 Bulan Pro", tenor_bulan: "6", total_penjualan: 1008000 },
-    { id_skema: "pro_1", nama_promo: "1 Bulan Pro", tenor_bulan: "1", total_penjualan: 168000 }
-  ],
-  "Bundling & Alat": [
-    { id_skema: "bund_starter", nama_promo: "Paket Starter Pro (JAGOAN PRO)", tenor_bulan: "12", total_penjualan: 2078000 },
-    { id_skema: "bund_pos_pro", nama_promo: "POS Bundle Pro", tenor_bulan: "12", total_penjualan: 5288000 },
-    { id_skema: "bund_jagoan_biz", nama_promo: "Jagoan Business", tenor_bulan: "12", total_penjualan: 1598000 },
-    { id_skema: "bund_pos_biz", nama_promo: "POS Bundle Business", tenor_bulan: "12", total_penjualan: 4798000 }
-  ]
-};
+const LIST_PIC = ["Satria", "Lydia", "Laura", "Fenya", "Sales A", "Sales B", "Sales C"];
+
+const getToday = () => new Date().toISOString().split("T")[0];
+
+
+function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "phone" | "sales" }) {
+  const className = "h-4 w-4 text-[#C92C1E]";
+
+  if (type === "code") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h10M7 12h6m-6 5h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+      </svg>
+    );
+  }
+
+  if (type === "user") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" />
+      </svg>
+    );
+  }
+
+  if (type === "brand") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 21V8.25A2.25 2.25 0 016.75 6h10.5a2.25 2.25 0 012.25 2.25V21M8.25 6V3.75h7.5V6M8.25 11.25h.008M12 11.25h.008M15.75 11.25h.008M8.25 15h.008M12 15h.008M15.75 15h.008" />
+      </svg>
+    );
+  }
+
+  if (type === "outlet") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 4l7.5 6.5M6.75 9.5V20.25h10.5V9.5M9.75 20.25v-6h4.5v6" />
+      </svg>
+    );
+  }
+
+  if (type === "phone") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372a1.125 1.125 0 00-.852-1.091l-4.423-1.106a1.125 1.125 0 00-1.173.417l-.97 1.293a1.125 1.125 0 01-1.21.38 12.035 12.035 0 01-7.143-7.143 1.125 1.125 0 01.38-1.21l1.293-.97a1.125 1.125 0 00.417-1.173L6.963 3.102A1.125 1.125 0 005.872 2.25H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM3.75 21a8.25 8.25 0 0116.5 0M18.75 8.25h2.25M19.875 7.125v2.25" />
+    </svg>
+  );
+}
+
 
 export default function FormInputDummyPage() {
   const router = useRouter();
   const [editId, setEditId] = useState<number | null>(null);
-  
+
   const [formInput, setFormInput] = useState<Partial<NasabahItem>>({
-    totalFu: 1,
-    tanggalFu: "",
-    tahun: "2026",
-    bulan: "Juni",
-    pic: "Satria",
-    statusAkun: "Akun Baru",
-    kodeBaris: "",
     kodeOwner: "",
     namaOwner: "",
     projectBrand: "",
     outlet: "",
     noHpOwner: "",
     noHpOutlet: "",
+    pic: "Satria",
+
+    // Default data agar struktur lama tetap aman
+    totalFu: 0,
+    tanggalFu: "",
+    tahun: "2026",
+    bulan: "Juni",
+    tanggalDibagikan: "",
+    statusAkun: "Akun Baru",
+    kodeBaris: "",
     createDateProject: "",
     expiredDate: "",
     totalTransaksi: 0,
@@ -93,276 +120,305 @@ export default function FormInputDummyPage() {
     chatStatus: "PENDING",
     validitas: "VALID",
     remarks: "0",
-    sumberNasabah: "Instagram", // Default selection
-    finalisasiClosing: "Basic",
-    skemaId: "basic_24",
-    nominal: 1716000,
-    noted: ""
+    sumberNasabah: "Instagram",
+    finalisasiClosing: "",
+    skemaId: "",
+    nominal: 0,
+    noted: "",
   });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const idParam = params.get("id");
-      if (idParam) {
-        const targetNo = Number(idParam);
-        setEditId(targetNo);
-        
-        const cached = localStorage.getItem("piposmart_nasabah_data");
-        if (cached) {
-          const list: NasabahItem[] = JSON.parse(cached);
-          const matchItem = list.find(item => item.no === targetNo);
-          if (matchItem) setFormInput(matchItem);
-        }
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const idParam = params.get("id");
+
+    if (!idParam) return;
+
+    const targetNo = Number(idParam);
+    setEditId(targetNo);
+
+    const cached = localStorage.getItem("piposmart_nasabah_data");
+    if (!cached) return;
+
+    try {
+      const list: NasabahItem[] = JSON.parse(cached);
+      const matchItem = list.find((item) => item.no === targetNo);
+
+      if (matchItem) {
+        setFormInput(matchItem);
       }
+    } catch {
+      setFormInput((prev) => prev);
     }
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    
-    setFormInput((prev) => {
-      const nextForm = { ...prev, [name]: value };
+  const handleInputChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = event.target;
 
-      if (name === "finalisasiClosing") {
-        const listSkemaTersedia = DATA_PACKET_MASTER[value] || [];
-        const skemaPertama = listSkemaTersedia.length > 0 ? listSkemaTersedia[0].id_skema : "";
-        nextForm.skemaId = skemaPertama;
-        
-        const targetSkema = listSkemaTersedia.find(s => s.id_skema === skemaPertama);
-        if (targetSkema) nextForm.nominal = targetSkema.total_penjualan;
-      }
-
-      if (name === "skemaId") {
-        const listSkemaTersedia = DATA_PACKET_MASTER[nextForm.finalisasiClosing || "Basic"] || [];
-        const targetSkema = listSkemaTersedia.find(s => s.id_skema === value);
-        if (targetSkema) nextForm.nominal = targetSkema.total_penjualan;
-      }
-
-      return nextForm;
-    });
+    setFormInput((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  const handleSaveData = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formInput.namaOwner || !formInput.noHpOwner) {
-      alert("Nama Owner dan Nomor HP wajib diisi!");
+  const handleSaveData = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!formInput.kodeOwner || !formInput.namaOwner) {
+      alert("Kode Owner dan Nama Owner wajib diisi.");
       return;
     }
 
     const cached = localStorage.getItem("piposmart_nasabah_data");
-    let currentList: NasabahItem[] = cached ? JSON.parse(cached) : [];
+    let currentList: NasabahItem[] = [];
+
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        currentList = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        currentList = [];
+      }
+    }
 
     if (editId !== null) {
-      currentList = currentList.map(item => item.no === editId ? (formInput as NasabahItem) : item);
-      alert("Data Kelolaan berhasil diperbarui.");
+      currentList = currentList.map((item) =>
+        item.no === editId
+          ? {
+              ...item,
+              kodeOwner: formInput.kodeOwner || "",
+              namaOwner: formInput.namaOwner || "",
+              projectBrand: formInput.projectBrand || "",
+              outlet: formInput.outlet || "",
+              noHpOwner: formInput.noHpOwner || "",
+              noHpOutlet: formInput.noHpOutlet || "",
+              pic: formInput.pic || "Satria",
+            }
+          : item,
+      );
+
+      alert("Data profil berhasil diperbarui.");
     } else {
+      const nextNo =
+        currentList.length > 0
+          ? Math.max(...currentList.map((item) => Number(item.no) || 0)) + 1
+          : 1;
+
       const itemBaru: NasabahItem = {
-        ...(formInput as NasabahItem),
-        no: currentList.length + 6,
-        tanggalDibagikan: formInput.tanggalDibagikan || new Date().toISOString().split('T')[0],
-        createDateProject: formInput.createDateProject || new Date().toISOString().split('T')[0]
+        totalFu: 0,
+        tanggalFu: "",
+        tahun: "2026",
+        bulan: "Juni",
+        no: nextNo,
+        pic: formInput.pic || "Satria",
+        tanggalDibagikan: getToday(),
+        statusAkun: "Akun Baru",
+        kodeBaris: "",
+        kodeOwner: formInput.kodeOwner || "",
+        namaOwner: formInput.namaOwner || "",
+        projectBrand: formInput.projectBrand || "",
+        outlet: formInput.outlet || "",
+        noHpOwner: formInput.noHpOwner || "",
+        noHpOutlet: formInput.noHpOutlet || "",
+        createDateProject: getToday(),
+        expiredDate: "",
+        totalTransaksi: 0,
+        scor: 0,
+        callStatus: "PENDING",
+        chatStatus: "PENDING",
+        validitas: "VALID",
+        remarks: "0",
+        sumberNasabah: "Instagram",
+        finalisasiClosing: "",
+        skemaId: "",
+        nominal: 0,
+        noted: "",
       };
+
       currentList.push(itemBaru);
-      alert("Record data baru berhasil ditambahkan.");
+      alert("Data profil berhasil ditambahkan.");
     }
 
     localStorage.setItem("piposmart_nasabah_data", JSON.stringify(currentList));
     router.push("/menu/data-kelolaan");
   };
 
-
-  const listTenorTersedia = DATA_PACKET_MASTER[formInput.finalisasiClosing || "Basic"] || [];
-
   return (
-    <div className="max-w-4xl mx-auto space-y-6 font-sans text-[#1C1C1E]">
-      
-      {/* Header Panel */}
-      <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-gray-200/60 shadow-xs">
+    <div className="mx-auto max-w-lg space-y-6 font-sans text-[#1C1C1E]">
+      <div className="flex flex-col gap-4 rounded-2xl border border-gray-200/60 bg-white p-6 shadow-xs sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
-            <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            {editId !== null ? "Edit Data Kelolaan" : "Tambah Data Kelolaan Baru"}
+          <h1 className="flex items-center gap-2 text-xl font-black text-gray-900">
+            <svg
+              className="h-5 w-5 text-[#C92C1E]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            {editId !== null ? "Edit Profil Customer" : "Tambah Profil Customer"}
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">Workspace pengisian parameter kriteria data harian Piposmart Digital Indonesia.</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Form ini hanya mengisi data utama customer. Bagian scoring sudah dihapus.
+          </p>
         </div>
-        <Link href="/menu/data-kelolaan" className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5">
-          ← Kembali Ke Tabel
+
+        <Link
+          href="/menu/data-kelolaan"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-700 shadow-sm transition hover:border-[#C92C1E]/30 hover:bg-red-50 hover:text-[#C92C1E]"
+        >
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+          <span>Kembali</span>
         </Link>
       </div>
 
-      <form onSubmit={handleSaveData} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-5">
-        
-        {/* SUB FORM: SISI MERAH */}
-        <div className="p-4 bg-red-50/30 border border-red-100 rounded-xl space-y-3">
-          <span className="text-[10px] font-black text-[#C92C1E] uppercase tracking-wider block">🔴 ATRIBUT SISI MERAH (PROFIL & LOG AKTIVITAS)</span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Kode Owner *</label>
-              <input type="text" name="kodeOwner" value={formInput.kodeOwner || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold" placeholder="ex: 18907" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Nama Owner Nasabah *</label>
-              <input type="text" name="namaOwner" value={formInput.namaOwner || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" placeholder="ex: Amanda Artha" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">PIC Penanggung Jawab *</label>
-              <select name="pic" value={formInput.pic || "Satria"} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer font-black text-[#C92C1E]">
-                <option value="Satria">Satria</option>
-                <option value="Lydia">Lydia</option>
-                <option value="Laura">Laura</option>
-                <option value="Fenya">Fenya</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Kalender Tanggal Follow Up (FU)</label>
-              <input type="date" name="tanggalFu" value={formInput.tanggalFu || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold text-gray-700 cursor-pointer" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Total Kuantitas FU</label>
-              <input type="number" name="totalFu" value={formInput.totalFu || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" placeholder="ex: 5" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Pilihan Bulan Laporan</label>
-              <select name="bulan" value={formInput.bulan || "Juni"} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer font-bold text-gray-700">
-                <option value="Januari">Januari</option><option value="Februari">Februari</option><option value="Maret">Maret</option><option value="April">April</option><option value="Mei">Mei</option><option value="Juni">Juni</option><option value="Juli">Juli</option><option value="Agustus">Agustus</option><option value="September">September</option><option value="Oktober">Oktober</option><option value="November">November</option><option value="Desember">Desember</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Tahun Laporan</label>
-              <input type="text" name="tahun" value={formInput.tahun || "2026"} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">No. HP Owner *</label>
-              <input type="text" name="noHpOwner" value={formInput.noHpOwner || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" placeholder="ex: 08524026xxx" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Status Kelompok Akun</label>
-              <select name="statusAkun" value={formInput.statusAkun || "Akun Baru"} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer font-bold text-gray-700">
-                <option value="Akun Baru">Akun Baru</option><option value="Outlet Baru">Outlet Baru</option><option value="Referral Mitra">Referral Mitra</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Project / Brand</label>
-              <input type="text" name="projectBrand" value={formInput.projectBrand || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Nama Unit Outlet</label>
-              <input type="text" name="outlet" value={formInput.outlet || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">No. HP Outlet</label>
-              <input type="text" name="noHpOutlet" value={formInput.noHpOutlet || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Kode Baris</label>
-              <input type="text" name="kodeBaris" value={formInput.kodeBaris || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Tanggal Dibagikan</label>
-              <input type="date" name="tanggalDibagikan" value={formInput.tanggalDibagikan || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Create Date Project</label>
-              <input type="date" name="createDateProject" value={formInput.createDateProject || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E]" />
-            </div>
-          </div>
-        </div>
+      <form
+        onSubmit={handleSaveData}
+        className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs"
+      >
+        <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/30 p-4">
+          <span className="block text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
+            Data Profil Customer
+          </span>
 
-        {/* SUB FORM: SISI HIJAU */}
-        <div className="p-4 bg-emerald-50/20 border border-emerald-100 rounded-xl space-y-3">
-          <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider block">🟢 ATRIBUT SISI HIJAU (SCORING & INTEGRASI KATALOG CLOSING)</span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
+            <FormInput
+              label="Kode Owner *"
+              icon="code"
+              name="kodeOwner"
+              value={formInput.kodeOwner || ""}
+              onChange={handleInputChange}
+              placeholder="Contoh: 18907"
+            />
+
+            <FormInput
+              label="Nama Owner *"
+              icon="user"
+              name="namaOwner"
+              value={formInput.namaOwner || ""}
+              onChange={handleInputChange}
+              placeholder="Contoh: Amanda Artha"
+            />
+
+            <FormInput
+              label="Nama Brand"
+              icon="brand"
+              name="projectBrand"
+              value={formInput.projectBrand || ""}
+              onChange={handleInputChange}
+              placeholder="Contoh: Azzahra Laundry"
+            />
+
+            <FormInput
+              label="Nama Outlet"
+              icon="outlet"
+              name="outlet"
+              value={formInput.outlet || ""}
+              onChange={handleInputChange}
+              placeholder="Contoh: Azzahra Laundry Cabang 1"
+            />
+
+            <FormInput
+              label="Nomor Telepon Owner"
+              icon="phone"
+              name="noHpOwner"
+              value={formInput.noHpOwner || ""}
+              onChange={handleInputChange}
+              placeholder="Contoh: 08524026xxxx"
+            />
+
+            <FormInput
+              label="Nomor Telepon Outlet"
+              icon="phone"
+              name="noHpOutlet"
+              value={formInput.noHpOutlet || ""}
+              onChange={handleInputChange}
+              placeholder="Contoh: 08225247xxxx"
+            />
+
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-emerald-800 uppercase">Kategori Paket Closing</label>
-              <select name="finalisasiClosing" value={formInput.finalisasiClosing || "Basic"} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600 font-black text-gray-800 cursor-pointer">
-                <option value="Basic">Basic</option><option value="Business">Business</option><option value="Pro">Pro</option><option value="Bundling & Alat">Bundling & Alat</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-emerald-800 uppercase">Nama Promo / Skema Tenor</label>
-              <select name="skemaId" value={formInput.skemaId || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600 font-bold text-gray-700 cursor-pointer">
-                {listTenorTersedia.map((skema) => (
-                  <option key={skema.id_skema} value={skema.id_skema}>{skema.nama_promo}</option>
+              <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+                <FieldIcon type="sales" />
+                PIC Sales
+              </label>
+              <select
+                name="pic"
+                value={formInput.pic || "Satria"}
+                onChange={handleInputChange}
+                className="w-full cursor-pointer rounded-xl border bg-white p-2.5 text-xs font-black text-[#C92C1E] focus:outline-none focus:border-[#C92C1E]"
+              >
+                {LIST_PIC.map((pic) => (
+                  <option key={pic} value={pic}>
+                    {pic}
+                  </option>
                 ))}
               </select>
             </div>
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-[10px] font-black text-[#C92C1E] uppercase">Nominal Harga Deal (Terhitung Otomatis Standar Katalog)</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 font-bold text-xs">Rp</span>
-                <input type="text" value={new Intl.NumberFormat("id-ID").format(formInput.nominal || 0)} disabled className="w-full bg-red-50/50 border border-red-200 p-2.5 pl-9 rounded-xl text-sm font-black text-[#C92C1E] cursor-not-allowed focus:outline-none shadow-2xs" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Expired Date / Total Transaksi</label>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" name="expiredDate" value={formInput.expiredDate || ""} onChange={handleInputChange} className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600" />
-                <input type="number" name="totalTransaksi" value={formInput.totalTransaksi || ""} onChange={handleInputChange} className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Scor & Remarks Evaluasi</label>
-              <div className="grid grid-cols-2 gap-2">
-                <select name="scor" value={formInput.scor || 0} onChange={handleInputChange} className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer">
-                  <option value={0}>Scor: 0</option><option value={1}>Scor: 1</option><option value={2}>Scor: 2</option><option value={3}>Scor: 3</option>
-                </select>
-                <select name="remarks" value={formInput.remarks || "0"} onChange={handleInputChange} className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer">
-                  <option value="0">(0) Tidak Merespon</option><option value="1">(1) New Download</option><option value="2">(2) Prospek Potensial</option><option value="3">(3) Berlangganan</option>
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Log Telekomunikasi (Call & Chat)</label>
-              <div className="grid grid-cols-2 gap-2">
-                <select name="callStatus" value={formInput.callStatus || "PENDING"} onChange={handleInputChange} className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer">
-                  <option value="PENDING">CALL: PENDING</option><option value="CONTACTED">CALL: CONTACTED</option><option value="NO CALL">CALL: NO CALL</option>
-                </select>
-                <select name="chatStatus" value={formInput.chatStatus || "PENDING"} onChange={handleInputChange} className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer">
-                  <option value="PENDING">CHAT: PENDING</option><option value="PROSPECT">CHAT: PROSPECT</option><option value="DELIVERED">CHAT: DELIVERED</option>
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Validitas & Sumber Nasabah Media</label>
-              <div className="grid grid-cols-2 gap-2">
-                <select name="validitas" value={formInput.validitas || "VALID"} onChange={handleInputChange} className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none cursor-pointer">
-                  <option value="VALID">VALID</option><option value="INVALID">INVALID</option>
-                </select>
-                
-                {/* 🌟 FIX UTAMA: Mengubah inputan teks manual menjadi select dropdown sesuai gambar */}
-                <select 
-                  name="sumberNasabah" 
-                  value={formInput.sumberNasabah || "Instagram"} 
-                  onChange={handleInputChange} 
-                  className="bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600 font-bold text-gray-700 cursor-pointer"
-                >
-                  <option value="Instagram">Instagram</option>
-                  <option value="Facebook">Facebook</option>
-                  <option value="Tiktok">Tiktok</option>
-                  <option value="Mitra">Mitra</option>
-                  <option value="Playstore">Playstore</option>
-                </select>
-              </div>
-            </div>
-            <div className="md:col-span-2 space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase">Noted / Keterangan Khas Lapangan</label>
-              <input type="text" name="noted" value={formInput.noted || ""} onChange={handleInputChange} className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600" />
-            </div>
           </div>
         </div>
 
-        {/* ACTION ZONE FOOTER */}
-        <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-between border-t border-gray-100 pt-3">
           <div className="text-[11px] font-medium text-gray-400">
-            Penghapusan data sekarang dilakukan dari halaman tabel agar bisa memilih banyak data sekaligus.
+            Data scoring dapat diubah langsung dari dropdown scoring di tabel.
           </div>
-          <button type="submit" className="px-6 py-2.5 bg-[#C92C1E] hover:bg-[#A82216] text-white text-xs font-black rounded-xl transition cursor-pointer shadow-sm">
-            {editId !== null ? "💾 Perbarui Perubahan" : "💾 Daftarkan Data Kelolaan"}
+
+          <button
+            type="submit"
+            className="cursor-pointer rounded-xl bg-[#C92C1E] px-6 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]"
+          >
+            {editId !== null ? "Simpan Perubahan" : "Tambah Customer"}
           </button>
         </div>
-
       </form>
+    </div>
+  );
+}
+
+function FormInput({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  icon = "code",
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+        <FieldIcon type={icon} />
+        {label}
+      </label>
+      <input
+        type="text"
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full rounded-xl border bg-white p-2.5 text-xs font-bold focus:outline-none focus:border-[#C92C1E]"
+      />
     </div>
   );
 }

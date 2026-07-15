@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import GrafikCustomer from "./grafik/page";
 
 interface NasabahItem {
   totalFu: number;
@@ -99,6 +100,7 @@ const DATA_PACKET_MASTER: Record<string, { id_skema: string; nama_promo: string;
   ],
 };
 
+
 const TrashIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -148,11 +150,134 @@ const RefreshIcon = () => (
   </svg>
 );
 
+
+function getQuickSkorBadgeClass(item: NasabahItem) {
+  const value = String(item.remarks ?? item.scor ?? "0");
+
+  if (value === "3") return "bg-blue-100 text-blue-700";
+  if (value === "2") return "bg-yellow-100 text-yellow-800";
+  if (value === "1") return "bg-orange-100 text-orange-800";
+
+  return "bg-red-100 text-red-700";
+}
+
+function QuickPicDropdown({
+  value,
+  options,
+  color = "red",
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  color?: "red" | "green";
+  onChange: (value: string) => void;
+}) {
+  const colorClass =
+    color === "green"
+      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+      : "bg-red-50 border-red-200 text-[#C92C1E]";
+
+  return (
+    <select
+      value={value || ""}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => onChange(event.target.value)}
+      className={`inline-flex max-w-[130px] cursor-pointer appearance-none rounded-full border px-2 py-0.5 text-center text-[10px] font-black uppercase tracking-tight outline-none transition hover:opacity-80 ${colorClass}`}
+      title="Klik untuk ganti PIC"
+    >
+      <option value="">Pilih PIC</option>
+      {options.map((pic) => (
+        <option key={pic} value={pic}>
+          {pic}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function QuickSkorDropdown({
+  item,
+  onChange,
+}: {
+  item: NasabahItem;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={String(item.remarks ?? item.scor ?? "0")}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => onChange(event.target.value)}
+      className={`inline-flex max-w-[170px] cursor-pointer appearance-none rounded-md px-2 py-1 text-center text-[10px] font-black outline-none transition hover:opacity-80 ${getQuickSkorBadgeClass(item)}`}
+      title="Klik untuk ganti scoring"
+    >
+      {LIST_SKOR.map((skor) => (
+        <option key={skor.value} value={skor.value}>
+          {skor.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+
+
+function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "phone" | "sales" }) {
+  const className = "h-4 w-4 text-[#C92C1E]";
+
+  if (type === "code") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h10M7 12h6m-6 5h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+      </svg>
+    );
+  }
+
+  if (type === "user") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" />
+      </svg>
+    );
+  }
+
+  if (type === "brand") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 21V8.25A2.25 2.25 0 016.75 6h10.5a2.25 2.25 0 012.25 2.25V21M8.25 6V3.75h7.5V6M8.25 11.25h.008M12 11.25h.008M15.75 11.25h.008M8.25 15h.008M12 15h.008M15.75 15h.008" />
+      </svg>
+    );
+  }
+
+  if (type === "outlet") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 4l7.5 6.5M6.75 9.5V20.25h10.5V9.5M9.75 20.25v-6h4.5v6" />
+      </svg>
+    );
+  }
+
+  if (type === "phone") {
+    return (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372a1.125 1.125 0 00-.852-1.091l-4.423-1.106a1.125 1.125 0 00-1.173.417l-.97 1.293a1.125 1.125 0 01-1.21.38 12.035 12.035 0 01-7.143-7.143 1.125 1.125 0 01.38-1.21l1.293-.97a1.125 1.125 0 00.417-1.173L6.963 3.102A1.125 1.125 0 005.872 2.25H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM3.75 21a8.25 8.25 0 0116.5 0M18.75 8.25h2.25M19.875 7.125v2.25" />
+    </svg>
+  );
+}
+
+
 export default function DataKelolaanPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
+
   const [viewMode, setViewMode] = useState<"merah" | "hijau">("merah");
   const [filterMode, setFilterMode] = useState<"harian" | "bulanan">("harian");
 
@@ -427,6 +552,30 @@ export default function DataKelolaanPage() {
     localStorage.setItem("piposmart_deleted_nasabah_data", JSON.stringify(nextTrash));
 
     alert("Data dipindahkan ke Riwayat Hapus.");
+  };
+
+  const handleQuickUpdatePic = (id: number, nextPic: string) => {
+    const nextData = dataNasabah.map((item) =>
+      item.no === id ? { ...item, pic: nextPic } : item,
+    );
+
+    saveDataNasabah(nextData);
+  };
+
+  const handleQuickUpdateSkor = (id: number, nextSkor: string) => {
+    const selected = LIST_SKOR.find((item) => item.value === nextSkor);
+
+    const nextData = dataNasabah.map((item) =>
+      item.no === id
+        ? {
+            ...item,
+            remarks: nextSkor,
+            scor: selected?.scor ?? Number(nextSkor) ?? 0,
+          }
+        : item,
+    );
+
+    saveDataNasabah(nextData);
   };
 
   const daftarPicUnik = useMemo(() => {
@@ -930,40 +1079,10 @@ export default function DataKelolaanPage() {
                       </div>
                     </th>
                     <th className="p-3 text-center align-top min-w-[140px]">
-                      <div className="space-y-2">
-                        <span>PIC Sales</span>
-                        <select
-                          value={picFilter}
-                          onChange={(e) => setPicFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
-                        >
-                          <option value="Semua">Semua PIC</option>
-                          {daftarPicUnik.map((pic) => (
-                            <option key={pic} value={pic}>
-                              {pic}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      PIC Sales
                     </th>
                     <th className="p-3 text-center align-top min-w-[160px]">
-                      <div className="space-y-2">
-                        <span>Skor</span>
-                        <select
-                          value={skorFilter}
-                          onChange={(e) => setSkorFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
-                        >
-                          <option value="Semua">Semua Skor</option>
-                          {LIST_SKOR.map((skor) => (
-                            <option key={skor.value} value={skor.value}>
-                              {skor.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      Skor
                     </th>
                     <th className="p-3 text-center align-top">Action</th>
                   </>
@@ -997,42 +1116,12 @@ export default function DataKelolaanPage() {
                       </div>
                     </th>
                     <th className="p-3 text-center align-top min-w-[140px]">
-                      <div className="space-y-2">
-                        <span>PIC Sales</span>
-                        <select
-                          value={picFilter}
-                          onChange={(e) => setPicFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        >
-                          <option value="Semua">Semua PIC</option>
-                          {daftarPicUnik.map((pic) => (
-                            <option key={pic} value={pic}>
-                              {pic}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      PIC Sales
                     </th>
                     <th className="p-3 text-center align-top">Expired Date</th>
                     <th className="p-3 text-center">Total Transaksi</th>
                     <th className="p-3 text-center align-top min-w-[160px]">
-                      <div className="space-y-2">
-                        <span>Skor</span>
-                        <select
-                          value={skorFilter}
-                          onChange={(e) => setSkorFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        >
-                          <option value="Semua">Semua Skor</option>
-                          {LIST_SKOR.map((skor) => (
-                            <option key={skor.value} value={skor.value}>
-                              {skor.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      Skor
                     </th>
                     <th className="p-3">Status Call</th>
                     <th className="p-3">Status Chat</th>
@@ -1108,18 +1197,20 @@ export default function DataKelolaanPage() {
                           {row.outlet || "-"}
                         </td>
 
-                        <td className="p-3 text-center">
-                          <span className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-black rounded-full bg-red-50 border border-red-200 text-[#C92C1E] uppercase tracking-tight whitespace-nowrap">
-                            {row.pic || "-"}
-                          </span>
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <QuickPicDropdown
+                            value={row.pic || ""}
+                            options={daftarPicUnik.length > 0 ? daftarPicUnik : LIST_PIC}
+                            color="red"
+                            onChange={(value) => handleQuickUpdatePic(row.no, value)}
+                          />
                         </td>
 
-                        <td className="p-3 text-center">
-                          <span
-                            className={`inline-flex items-center justify-center px-2 py-1 text-[10px] font-black rounded-md text-center whitespace-normal ${getSkorBadgeClass(row)}`}
-                          >
-                            {getSkorLabel(row)}
-                          </span>
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <QuickSkorDropdown
+                            item={row}
+                            onChange={(value) => handleQuickUpdateSkor(row.no, value)}
+                          />
                         </td>
 
                         <td
@@ -1157,10 +1248,13 @@ export default function DataKelolaanPage() {
                         <td className="p-3 font-black text-gray-900 whitespace-normal break-words">
                           {row.namaOwner || "-"}
                         </td>
-                        <td className="p-3 text-center">
-                          <span className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-black rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 uppercase tracking-tight whitespace-nowrap">
-                            {row.pic || "-"}
-                          </span>
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <QuickPicDropdown
+                            value={row.pic || ""}
+                            options={daftarPicUnik.length > 0 ? daftarPicUnik : LIST_PIC}
+                            color="green"
+                            onChange={(value) => handleQuickUpdatePic(row.no, value)}
+                          />
                         </td>
                         <td className="p-3 text-center font-mono font-bold text-gray-600">
                           {formatTgl(row.expiredDate)}
@@ -1168,12 +1262,11 @@ export default function DataKelolaanPage() {
                         <td className="p-3 text-center font-bold text-gray-900">
                           {row.totalTransaksi}
                         </td>
-                        <td className="p-3 text-center">
-                          <span
-                            className={`inline-flex items-center justify-center px-2 py-1 text-[10px] font-black rounded-md text-center whitespace-normal ${getSkorBadgeClass(row)}`}
-                          >
-                            {getSkorLabel(row)}
-                          </span>
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <QuickSkorDropdown
+                            item={row}
+                            onChange={(value) => handleQuickUpdateSkor(row.no, value)}
+                          />
                         </td>
                         <td className="p-3">
                           <span
@@ -1256,10 +1349,13 @@ export default function DataKelolaanPage() {
         </div>
       </div>
 
+
+      <GrafikCustomer dataNasabah={dataNasabah} />
+
       {/* MODAL EDIT PROFIL / SCORING */}
       {editModalOpen && editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-4xl rounded-3xl border border-gray-200 shadow-2xl overflow-hidden">
+          <div className="bg-white w-full max-w-lg rounded-3xl border border-gray-200 shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between p-5 border-b">
               <div>
                 <h2 className="text-lg font-black text-gray-900">
@@ -1267,7 +1363,7 @@ export default function DataKelolaanPage() {
                 </h2>
                 <p className="text-xs text-gray-400 font-medium">
                   {modalMode === "profil"
-                    ? "Form ini hanya mengubah atribut profil."
+                    ? "Form ini hanya mengubah data utama profil customer."
                     : "Form ini hanya mengubah atribut scoring."}
                 </p>
               </div>
@@ -1287,22 +1383,50 @@ export default function DataKelolaanPage() {
                     Atribut Profil Nasabah
                   </span>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <FormInput label="Kode Owner *" value={editingItem.kodeOwner || ""} onChange={(value) => updateEditingField("kodeOwner", value)} />
-                    <FormInput label="Nama Owner *" value={editingItem.namaOwner || ""} onChange={(value) => updateEditingField("namaOwner", value)} />
-                    <FormSelect label="PIC Sales *" value={editingItem.pic || ""} options={LIST_PIC} onChange={(value) => updateEditingField("pic", value)} />
-                    <FormInput label="Tanggal Follow Up" type="date" value={editingItem.tanggalFu || ""} onChange={(value) => updateEditingField("tanggalFu", value)} />
-                    <FormInput label="Total FU" type="number" value={String(editingItem.totalFu || 0)} onChange={(value) => updateEditingField("totalFu", Number(value) || 0)} />
-                    <FormSelect label="Bulan Laporan" value={editingItem.bulan || "Juni"} options={LIST_BULAN} onChange={(value) => updateEditingField("bulan", value)} />
-                    <FormInput label="Tahun Laporan" value={editingItem.tahun || "2026"} onChange={(value) => updateEditingField("tahun", value)} />
-                    <FormInput label="No. HP Owner" value={editingItem.noHpOwner || ""} onChange={(value) => updateEditingField("noHpOwner", value)} />
-                    <FormSelect label="Status Akun" value={editingItem.statusAkun || "Akun Baru"} options={["Akun Baru", "Outlet Baru", "Referral Mitra"]} onChange={(value) => updateEditingField("statusAkun", value)} />
-                    <FormInput label="Project / Brand" value={editingItem.projectBrand || ""} onChange={(value) => updateEditingField("projectBrand", value)} />
-                    <FormInput label="Nama Outlet" value={editingItem.outlet || ""} onChange={(value) => updateEditingField("outlet", value)} />
-                    <FormInput label="No. HP Outlet" value={editingItem.noHpOutlet || ""} onChange={(value) => updateEditingField("noHpOutlet", value)} />
-                    <FormInput label="Kode Baris" value={editingItem.kodeBaris || ""} onChange={(value) => updateEditingField("kodeBaris", value)} />
-                    <FormInput label="Tanggal Dibagikan" type="date" value={editingItem.tanggalDibagikan || ""} onChange={(value) => updateEditingField("tanggalDibagikan", value)} />
-                    <FormInput label="Create Date Project" type="date" value={editingItem.createDateProject || ""} onChange={(value) => updateEditingField("createDateProject", value)} />
+                  <div className="grid grid-cols-1 gap-3">
+                    <FormInput
+                      label="Kode Owner *"
+                      icon="code"
+                      value={editingItem.kodeOwner || ""}
+                      onChange={(value) => updateEditingField("kodeOwner", value)}
+                    />
+                    <FormInput
+                      label="Nama Owner *"
+                      icon="user"
+                      value={editingItem.namaOwner || ""}
+                      onChange={(value) => updateEditingField("namaOwner", value)}
+                    />
+                    <FormInput
+                      label="Nama Brand"
+                      icon="brand"
+                      value={editingItem.projectBrand || ""}
+                      onChange={(value) => updateEditingField("projectBrand", value)}
+                    />
+                    <FormInput
+                      label="Nama Outlet"
+                      icon="outlet"
+                      value={editingItem.outlet || ""}
+                      onChange={(value) => updateEditingField("outlet", value)}
+                    />
+                    <FormInput
+                      label="Nomor Telepon Owner"
+                      icon="phone"
+                      value={editingItem.noHpOwner || ""}
+                      onChange={(value) => updateEditingField("noHpOwner", value)}
+                    />
+                    <FormInput
+                      label="Nomor Telepon Outlet"
+                      icon="phone"
+                      value={editingItem.noHpOutlet || ""}
+                      onChange={(value) => updateEditingField("noHpOutlet", value)}
+                    />
+                    <FormSelect
+                      label="PIC Sales"
+                      icon="sales"
+                      value={editingItem.pic || ""}
+                      options={LIST_PIC}
+                      onChange={(value) => updateEditingField("pic", value)}
+                    />
                   </div>
                 </div>
               ) : (
@@ -1398,15 +1522,20 @@ function FormInput({
   value,
   onChange,
   type = "text",
+  icon = "code",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-[10px] font-bold text-gray-400 uppercase">{label}</label>
+      <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
+        <FieldIcon type={icon} />
+        {label}
+      </label>
       <input
         type={type}
         value={value}
@@ -1423,16 +1552,21 @@ function FormSelect({
   options,
   onChange,
   getLabel,
+  icon = "sales",
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
   getLabel?: (value: string) => string;
+  icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-[10px] font-bold text-gray-400 uppercase">{label}</label>
+      <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
+        <FieldIcon type={icon} />
+        {label}
+      </label>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
