@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LIST_PIC } from "../dummy/page";
 
 interface NasabahItem {
   totalFu: number;
@@ -35,9 +36,140 @@ interface NasabahItem {
   noted: string;
 }
 
-const LIST_PIC = ["Satria", "Lydia", "Laura", "Fenya", "Sales A", "Sales B", "Sales C"];
 
 const getToday = () => new Date().toISOString().split("T")[0];
+
+const PHONE_COUNTRY_OPTIONS = [
+  { code: "ID", name: "Indonesia", flag: "🇮🇩", dialCode: "+62", placeholder: "812-3456-7890" },
+  { code: "MY", name: "Malaysia", flag: "🇲🇾", dialCode: "+60", placeholder: "12-345-6789" },
+  { code: "SG", name: "Singapore", flag: "🇸🇬", dialCode: "+65", placeholder: "8123-4567" },
+  { code: "TH", name: "Thailand", flag: "🇹🇭", dialCode: "+66", placeholder: "81-234-5678" },
+  { code: "PH", name: "Philippines", flag: "🇵🇭", dialCode: "+63", placeholder: "912-345-6789" },
+  { code: "VN", name: "Vietnam", flag: "🇻🇳", dialCode: "+84", placeholder: "91-234-5678" },
+  { code: "BN", name: "Brunei", flag: "🇧🇳", dialCode: "+673", placeholder: "712-3456" },
+  { code: "KH", name: "Cambodia", flag: "🇰🇭", dialCode: "+855", placeholder: "12-345-678" },
+  { code: "LA", name: "Laos", flag: "🇱🇦", dialCode: "+856", placeholder: "20-1234-5678" },
+  { code: "MM", name: "Myanmar", flag: "🇲🇲", dialCode: "+95", placeholder: "9-123-456789" },
+  { code: "TL", name: "Timor-Leste", flag: "🇹🇱", dialCode: "+670", placeholder: "7721-2345" },
+
+  { code: "US", name: "United States", flag: "🇺🇸", dialCode: "+1", placeholder: "123-456-7890" },
+  { code: "CA", name: "Canada", flag: "🇨🇦", dialCode: "+1", placeholder: "123-456-7890" },
+  { code: "MX", name: "Mexico", flag: "🇲🇽", dialCode: "+52", placeholder: "55-1234-5678" },
+  { code: "BR", name: "Brazil", flag: "🇧🇷", dialCode: "+55", placeholder: "11-91234-5678" },
+  { code: "AR", name: "Argentina", flag: "🇦🇷", dialCode: "+54", placeholder: "9-11-1234-5678" },
+  { code: "CL", name: "Chile", flag: "🇨🇱", dialCode: "+56", placeholder: "9-1234-5678" },
+  { code: "CO", name: "Colombia", flag: "🇨🇴", dialCode: "+57", placeholder: "300-123-4567" },
+
+  { code: "GB", name: "United Kingdom", flag: "🇬🇧", dialCode: "+44", placeholder: "7700-900123" },
+  { code: "FR", name: "France", flag: "🇫🇷", dialCode: "+33", placeholder: "6-12-34-56-78" },
+  { code: "DE", name: "Germany", flag: "🇩🇪", dialCode: "+49", placeholder: "1512-3456789" },
+  { code: "IT", name: "Italy", flag: "🇮🇹", dialCode: "+39", placeholder: "312-345-6789" },
+  { code: "ES", name: "Spain", flag: "🇪🇸", dialCode: "+34", placeholder: "612-345-678" },
+  { code: "NL", name: "Netherlands", flag: "🇳🇱", dialCode: "+31", placeholder: "6-12345678" },
+  { code: "BE", name: "Belgium", flag: "🇧🇪", dialCode: "+32", placeholder: "470-12-34-56" },
+  { code: "CH", name: "Switzerland", flag: "🇨🇭", dialCode: "+41", placeholder: "78-123-45-67" },
+  { code: "SE", name: "Sweden", flag: "🇸🇪", dialCode: "+46", placeholder: "70-123-45-67" },
+  { code: "NO", name: "Norway", flag: "🇳🇴", dialCode: "+47", placeholder: "412-34-567" },
+  { code: "DK", name: "Denmark", flag: "🇩🇰", dialCode: "+45", placeholder: "20-12-34-56" },
+  { code: "FI", name: "Finland", flag: "🇫🇮", dialCode: "+358", placeholder: "40-123-4567" },
+  { code: "IE", name: "Ireland", flag: "🇮🇪", dialCode: "+353", placeholder: "85-123-4567" },
+  { code: "PT", name: "Portugal", flag: "🇵🇹", dialCode: "+351", placeholder: "912-345-678" },
+  { code: "PL", name: "Poland", flag: "🇵🇱", dialCode: "+48", placeholder: "512-345-678" },
+  { code: "TR", name: "Turkey", flag: "🇹🇷", dialCode: "+90", placeholder: "532-123-4567" },
+  { code: "RU", name: "Russia", flag: "🇷🇺", dialCode: "+7", placeholder: "912-345-6789" },
+
+  { code: "CN", name: "China", flag: "🇨🇳", dialCode: "+86", placeholder: "138-0013-8000" },
+  { code: "JP", name: "Japan", flag: "🇯🇵", dialCode: "+81", placeholder: "90-1234-5678" },
+  { code: "KR", name: "South Korea", flag: "🇰🇷", dialCode: "+82", placeholder: "10-1234-5678" },
+  { code: "IN", name: "India", flag: "🇮🇳", dialCode: "+91", placeholder: "98765-43210" },
+  { code: "PK", name: "Pakistan", flag: "🇵🇰", dialCode: "+92", placeholder: "300-1234567" },
+  { code: "BD", name: "Bangladesh", flag: "🇧🇩", dialCode: "+880", placeholder: "1712-345678" },
+  { code: "LK", name: "Sri Lanka", flag: "🇱🇰", dialCode: "+94", placeholder: "71-234-5678" },
+  { code: "SA", name: "Saudi Arabia", flag: "🇸🇦", dialCode: "+966", placeholder: "50-123-4567" },
+  { code: "AE", name: "United Arab Emirates", flag: "🇦🇪", dialCode: "+971", placeholder: "50-123-4567" },
+  { code: "QA", name: "Qatar", flag: "🇶🇦", dialCode: "+974", placeholder: "3312-3456" },
+  { code: "KW", name: "Kuwait", flag: "🇰🇼", dialCode: "+965", placeholder: "500-12345" },
+  { code: "OM", name: "Oman", flag: "🇴🇲", dialCode: "+968", placeholder: "9212-3456" },
+
+  { code: "AU", name: "Australia", flag: "🇦🇺", dialCode: "+61", placeholder: "412-345-678" },
+  { code: "NZ", name: "New Zealand", flag: "🇳🇿", dialCode: "+64", placeholder: "21-123-4567" },
+
+  { code: "ZA", name: "South Africa", flag: "🇿🇦", dialCode: "+27", placeholder: "82-123-4567" },
+  { code: "EG", name: "Egypt", flag: "🇪🇬", dialCode: "+20", placeholder: "100-123-4567" },
+  { code: "NG", name: "Nigeria", flag: "🇳🇬", dialCode: "+234", placeholder: "803-123-4567" },
+  { code: "KE", name: "Kenya", flag: "🇰🇪", dialCode: "+254", placeholder: "712-345-678" },
+  { code: "MA", name: "Morocco", flag: "🇲🇦", dialCode: "+212", placeholder: "612-345678" },
+];
+
+const getPhoneCountryByDialCode = (phone?: string) => {
+  const value = phone?.trim() || "";
+
+  return (
+    PHONE_COUNTRY_OPTIONS.find((country) => value.startsWith(country.dialCode)) ||
+    PHONE_COUNTRY_OPTIONS[0]
+  );
+};
+
+const stripDialCode = (phone?: string, dialCode = "+62") => {
+  const value = phone?.trim() || "";
+
+  if (value.startsWith(dialCode)) {
+    return value.slice(dialCode.length).replace(/\D/g, "");
+  }
+
+  if (dialCode === "+62" && value.startsWith("0")) {
+    return value.slice(1).replace(/\D/g, "");
+  }
+
+  return value.replace(/\D/g, "");
+};
+
+const buildInternationalPhone = (dialCode: string, value: string) => {
+  const digitsOnly = value.replace(/\D/g, "").slice(0, 14);
+  return digitsOnly ? `${dialCode}${digitsOnly}` : dialCode;
+};
+
+const isValidInternationalPhone = (value?: string) => {
+  const phone = value?.trim() || "";
+  return /^\+\d{1,3}\d{6,14}$/.test(phone);
+};
+
+const REQUIRED_PROFILE_FIELDS = [
+  { key: "kodeOwner", label: "Kode Owner" },
+  { key: "namaOwner", label: "Nama Owner" },
+  { key: "projectBrand", label: "Nama Brand" },
+  { key: "outlet", label: "Nama Outlet" },
+  { key: "noHpOwner", label: "Nomor Telepon Owner" },
+  { key: "noHpOutlet", label: "Nomor Telepon Outlet" },
+  { key: "pic", label: "PIC Sales" },
+] as const;
+
+type ProfileFieldKey = (typeof REQUIRED_PROFILE_FIELDS)[number]["key"];
+type ProfileValidationErrors = Partial<Record<ProfileFieldKey, string>>;
+
+const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
+  const errors: ProfileValidationErrors = {};
+
+  REQUIRED_PROFILE_FIELDS.forEach(({ key, label }) => {
+    const value = item[key];
+
+    if (typeof value !== "string" || value.trim() === "") {
+      errors[key] = `${label} wajib diisi.`;
+    }
+  });
+
+  if (!errors.noHpOwner && !isValidInternationalPhone(item.noHpOwner)) {
+    errors.noHpOwner = "Nomor Telepon Owner belum valid. Pilih negara lalu isi nomor telepon.";
+  }
+
+  if (!errors.noHpOutlet && !isValidInternationalPhone(item.noHpOutlet)) {
+    errors.noHpOutlet = "Nomor Telepon Outlet belum valid. Pilih negara lalu isi nomor telepon.";
+  }
+
+  return errors;
+};
+
+
 
 
 function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "phone" | "sales" }) {
@@ -102,7 +234,7 @@ export default function FormInputDummyPage() {
     outlet: "",
     noHpOwner: "",
     noHpOutlet: "",
-    pic: "Satria",
+    pic: "No PIC",
 
     // Default data agar struktur lama tetap aman
     totalFu: 0,
@@ -126,6 +258,7 @@ export default function FormInputDummyPage() {
     nominal: 0,
     noted: "",
   });
+  const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -162,15 +295,39 @@ export default function FormInputDummyPage() {
       ...prev,
       [name]: value,
     }));
+
+    setValidationErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
+  };
+
+  const updateFormField = <K extends keyof NasabahItem>(
+    field: K,
+    value: NasabahItem[K],
+  ) => {
+    setFormInput((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+
+    setValidationErrors((prev) => ({
+      ...prev,
+      [field]: "",
+    }));
   };
 
   const handleSaveData = (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!formInput.kodeOwner || !formInput.namaOwner) {
-      alert("Kode Owner dan Nama Owner wajib diisi.");
+    const errors = getProfileFieldErrors(formInput);
+
+    if (Object.values(errors).some(Boolean)) {
+      setValidationErrors(errors);
       return;
     }
+
+    setValidationErrors({});
 
     const cached = localStorage.getItem("piposmart_nasabah_data");
     let currentList: NasabahItem[] = [];
@@ -305,6 +462,7 @@ export default function FormInputDummyPage() {
               value={formInput.kodeOwner || ""}
               onChange={handleInputChange}
               placeholder="Contoh: 18907"
+              error={validationErrors.kodeOwner}
             />
 
             <FormInput
@@ -314,54 +472,56 @@ export default function FormInputDummyPage() {
               value={formInput.namaOwner || ""}
               onChange={handleInputChange}
               placeholder="Contoh: Amanda Artha"
+              error={validationErrors.namaOwner}
             />
 
             <FormInput
-              label="Nama Brand"
+              label="Nama Brand *"
               icon="brand"
               name="projectBrand"
               value={formInput.projectBrand || ""}
               onChange={handleInputChange}
               placeholder="Contoh: Azzahra Laundry"
+              error={validationErrors.projectBrand}
             />
 
             <FormInput
-              label="Nama Outlet"
+              label="Nama Outlet *"
               icon="outlet"
               name="outlet"
               value={formInput.outlet || ""}
               onChange={handleInputChange}
               placeholder="Contoh: Azzahra Laundry Cabang 1"
+              error={validationErrors.outlet}
             />
 
-            <FormInput
-              label="Nomor Telepon Owner"
-              icon="phone"
-              name="noHpOwner"
+            <PhoneInput
+              label="Nomor Telepon Owner *"
               value={formInput.noHpOwner || ""}
-              onChange={handleInputChange}
-              placeholder="Contoh: 08524026xxxx"
+              onChange={(value) => updateFormField("noHpOwner", value)}
+              error={validationErrors.noHpOwner}
             />
 
-            <FormInput
-              label="Nomor Telepon Outlet"
-              icon="phone"
-              name="noHpOutlet"
+            <PhoneInput
+              label="Nomor Telepon Outlet *"
               value={formInput.noHpOutlet || ""}
-              onChange={handleInputChange}
-              placeholder="Contoh: 08225247xxxx"
+              onChange={(value) => updateFormField("noHpOutlet", value)}
+              error={validationErrors.noHpOutlet}
             />
 
             <div className="space-y-1">
               <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
                 <FieldIcon type="sales" />
-                PIC Sales
+                PIC Sales *
               </label>
               <select
+                required
                 name="pic"
-                value={formInput.pic || "Satria"}
+                value={formInput.pic || "No PIC"}
                 onChange={handleInputChange}
-                className="w-full cursor-pointer rounded-xl border bg-white p-2.5 text-xs font-black text-[#C92C1E] focus:outline-none focus:border-[#C92C1E]"
+                className={`w-full cursor-pointer rounded-xl border bg-white p-2.5 text-xs font-black text-[#C92C1E] focus:outline-none focus:border-[#C92C1E] ${
+                  validationErrors.pic ? "border-red-500 bg-red-50" : "border-gray-200"
+                }`}
               >
                 {LIST_PIC.map((pic) => (
                   <option key={pic} value={pic}>
@@ -369,6 +529,11 @@ export default function FormInputDummyPage() {
                   </option>
                 ))}
               </select>
+              {validationErrors.pic && (
+                <p className="text-[10px] font-bold text-red-600">
+                  {validationErrors.pic}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -390,6 +555,100 @@ export default function FormInputDummyPage() {
   );
 }
 
+
+function PhoneInput({
+  label,
+  value,
+  onChange,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}) {
+  const initialCountry = getPhoneCountryByDialCode(value);
+  const [selectedCountryCode, setSelectedCountryCode] = useState(initialCountry.code);
+
+  const selectedCountry =
+    PHONE_COUNTRY_OPTIONS.find((country) => country.code === selectedCountryCode) ||
+    initialCountry;
+
+  useEffect(() => {
+    if (!value) return;
+
+    const detectedCountry = getPhoneCountryByDialCode(value);
+
+    if (value.startsWith(detectedCountry.dialCode)) {
+      setSelectedCountryCode((currentCode) => currentCode || detectedCountry.code);
+    }
+  }, [value]);
+
+  const nationalNumber = stripDialCode(value, selectedCountry.dialCode);
+
+  const handleCountryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextCountry =
+      PHONE_COUNTRY_OPTIONS.find((country) => country.code === event.target.value) ||
+      PHONE_COUNTRY_OPTIONS[0];
+
+    setSelectedCountryCode(nextCountry.code);
+    onChange(buildInternationalPhone(nextCountry.dialCode, nationalNumber));
+  };
+
+  const handlePhoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(buildInternationalPhone(selectedCountry.dialCode, event.target.value));
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+        <FieldIcon type="phone" />
+        {label}
+      </label>
+
+      <div
+        className={`flex overflow-hidden rounded-xl border bg-white focus-within:border-[#C92C1E] ${
+          error ? "border-red-500 bg-red-50" : "border-gray-200"
+        }`}
+      >
+        <select
+          value={selectedCountry.code}
+          onChange={handleCountryChange}
+          className="w-[110px] cursor-pointer border-r bg-gray-50 px-2.5 py-2.5 text-xs font-black text-gray-700 outline-none"
+          title="Pilih kode negara"
+        >
+          {PHONE_COUNTRY_OPTIONS.map((country) => (
+            <option key={country.code} value={country.code}>
+              {country.flag} {country.dialCode}
+            </option>
+          ))}
+        </select>
+
+        <input
+          required
+          type="tel"
+          value={nationalNumber}
+          onChange={handlePhoneChange}
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder={selectedCountry.placeholder}
+          className="min-w-0 flex-1 bg-white px-3 py-2.5 text-xs font-bold outline-none"
+          title="Pilih negara lalu isi nomor telepon"
+        />
+      </div>
+
+      {error ? (
+        <p className="text-[10px] font-bold text-red-600">{error}</p>
+      ) : (
+        <p className="text-[10px] font-medium text-gray-400">
+          Tersimpan sebagai: {value || `${selectedCountry.dialCode}...`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+
 function FormInput({
   label,
   name,
@@ -397,6 +656,7 @@ function FormInput({
   onChange,
   placeholder,
   icon = "code",
+  error,
 }: {
   label: string;
   name: string;
@@ -404,6 +664,7 @@ function FormInput({
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
+  error?: string;
 }) {
   return (
     <div className="space-y-1">
@@ -412,13 +673,19 @@ function FormInput({
         {label}
       </label>
       <input
+        required
         type="text"
         name={name}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border bg-white p-2.5 text-xs font-bold focus:outline-none focus:border-[#C92C1E]"
+        className={`w-full rounded-xl border bg-white p-2.5 text-xs font-bold focus:outline-none focus:border-[#C92C1E] ${
+          error ? "border-red-500 bg-red-50" : "border-gray-200"
+        }`}
       />
+      {error && (
+        <p className="text-[10px] font-bold text-red-600">{error}</p>
+      )}
     </div>
   );
 }

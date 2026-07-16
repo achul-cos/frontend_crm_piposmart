@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GrafikCustomer from "./grafik/page";
+import { generateDummyCustomers, LIST_PIC } from "./dummy/page";
 
 interface NasabahItem {
   totalFu: number;
@@ -60,7 +61,138 @@ const LIST_SKOR = [
   { value: "3", label: "Langganan (3)", scor: 3 },
 ];
 
-const LIST_PIC = ["Satria", "Lydia", "Laura", "Fenya", "Sales A", "Sales B", "Sales C"];
+
+const PHONE_COUNTRY_OPTIONS = [
+  { code: "ID", name: "Indonesia", flag: "🇮🇩", dialCode: "+62", placeholder: "812-3456-7890" },
+  { code: "MY", name: "Malaysia", flag: "🇲🇾", dialCode: "+60", placeholder: "12-345-6789" },
+  { code: "SG", name: "Singapore", flag: "🇸🇬", dialCode: "+65", placeholder: "8123-4567" },
+  { code: "TH", name: "Thailand", flag: "🇹🇭", dialCode: "+66", placeholder: "81-234-5678" },
+  { code: "PH", name: "Philippines", flag: "🇵🇭", dialCode: "+63", placeholder: "912-345-6789" },
+  { code: "VN", name: "Vietnam", flag: "🇻🇳", dialCode: "+84", placeholder: "91-234-5678" },
+  { code: "BN", name: "Brunei", flag: "🇧🇳", dialCode: "+673", placeholder: "712-3456" },
+  { code: "KH", name: "Cambodia", flag: "🇰🇭", dialCode: "+855", placeholder: "12-345-678" },
+  { code: "LA", name: "Laos", flag: "🇱🇦", dialCode: "+856", placeholder: "20-1234-5678" },
+  { code: "MM", name: "Myanmar", flag: "🇲🇲", dialCode: "+95", placeholder: "9-123-456789" },
+  { code: "TL", name: "Timor-Leste", flag: "🇹🇱", dialCode: "+670", placeholder: "7721-2345" },
+
+  { code: "US", name: "United States", flag: "🇺🇸", dialCode: "+1", placeholder: "123-456-7890" },
+  { code: "CA", name: "Canada", flag: "🇨🇦", dialCode: "+1", placeholder: "123-456-7890" },
+  { code: "MX", name: "Mexico", flag: "🇲🇽", dialCode: "+52", placeholder: "55-1234-5678" },
+  { code: "BR", name: "Brazil", flag: "🇧🇷", dialCode: "+55", placeholder: "11-91234-5678" },
+  { code: "AR", name: "Argentina", flag: "🇦🇷", dialCode: "+54", placeholder: "9-11-1234-5678" },
+  { code: "CL", name: "Chile", flag: "🇨🇱", dialCode: "+56", placeholder: "9-1234-5678" },
+  { code: "CO", name: "Colombia", flag: "🇨🇴", dialCode: "+57", placeholder: "300-123-4567" },
+
+  { code: "GB", name: "United Kingdom", flag: "🇬🇧", dialCode: "+44", placeholder: "7700-900123" },
+  { code: "FR", name: "France", flag: "🇫🇷", dialCode: "+33", placeholder: "6-12-34-56-78" },
+  { code: "DE", name: "Germany", flag: "🇩🇪", dialCode: "+49", placeholder: "1512-3456789" },
+  { code: "IT", name: "Italy", flag: "🇮🇹", dialCode: "+39", placeholder: "312-345-6789" },
+  { code: "ES", name: "Spain", flag: "🇪🇸", dialCode: "+34", placeholder: "612-345-678" },
+  { code: "NL", name: "Netherlands", flag: "🇳🇱", dialCode: "+31", placeholder: "6-12345678" },
+  { code: "BE", name: "Belgium", flag: "🇧🇪", dialCode: "+32", placeholder: "470-12-34-56" },
+  { code: "CH", name: "Switzerland", flag: "🇨🇭", dialCode: "+41", placeholder: "78-123-45-67" },
+  { code: "SE", name: "Sweden", flag: "🇸🇪", dialCode: "+46", placeholder: "70-123-45-67" },
+  { code: "NO", name: "Norway", flag: "🇳🇴", dialCode: "+47", placeholder: "412-34-567" },
+  { code: "DK", name: "Denmark", flag: "🇩🇰", dialCode: "+45", placeholder: "20-12-34-56" },
+  { code: "FI", name: "Finland", flag: "🇫🇮", dialCode: "+358", placeholder: "40-123-4567" },
+  { code: "IE", name: "Ireland", flag: "🇮🇪", dialCode: "+353", placeholder: "85-123-4567" },
+  { code: "PT", name: "Portugal", flag: "🇵🇹", dialCode: "+351", placeholder: "912-345-678" },
+  { code: "PL", name: "Poland", flag: "🇵🇱", dialCode: "+48", placeholder: "512-345-678" },
+  { code: "TR", name: "Turkey", flag: "🇹🇷", dialCode: "+90", placeholder: "532-123-4567" },
+  { code: "RU", name: "Russia", flag: "🇷🇺", dialCode: "+7", placeholder: "912-345-6789" },
+
+  { code: "CN", name: "China", flag: "🇨🇳", dialCode: "+86", placeholder: "138-0013-8000" },
+  { code: "JP", name: "Japan", flag: "🇯🇵", dialCode: "+81", placeholder: "90-1234-5678" },
+  { code: "KR", name: "South Korea", flag: "🇰🇷", dialCode: "+82", placeholder: "10-1234-5678" },
+  { code: "IN", name: "India", flag: "🇮🇳", dialCode: "+91", placeholder: "98765-43210" },
+  { code: "PK", name: "Pakistan", flag: "🇵🇰", dialCode: "+92", placeholder: "300-1234567" },
+  { code: "BD", name: "Bangladesh", flag: "🇧🇩", dialCode: "+880", placeholder: "1712-345678" },
+  { code: "LK", name: "Sri Lanka", flag: "🇱🇰", dialCode: "+94", placeholder: "71-234-5678" },
+  { code: "SA", name: "Saudi Arabia", flag: "🇸🇦", dialCode: "+966", placeholder: "50-123-4567" },
+  { code: "AE", name: "United Arab Emirates", flag: "🇦🇪", dialCode: "+971", placeholder: "50-123-4567" },
+  { code: "QA", name: "Qatar", flag: "🇶🇦", dialCode: "+974", placeholder: "3312-3456" },
+  { code: "KW", name: "Kuwait", flag: "🇰🇼", dialCode: "+965", placeholder: "500-12345" },
+  { code: "OM", name: "Oman", flag: "🇴🇲", dialCode: "+968", placeholder: "9212-3456" },
+
+  { code: "AU", name: "Australia", flag: "🇦🇺", dialCode: "+61", placeholder: "412-345-678" },
+  { code: "NZ", name: "New Zealand", flag: "🇳🇿", dialCode: "+64", placeholder: "21-123-4567" },
+
+  { code: "ZA", name: "South Africa", flag: "🇿🇦", dialCode: "+27", placeholder: "82-123-4567" },
+  { code: "EG", name: "Egypt", flag: "🇪🇬", dialCode: "+20", placeholder: "100-123-4567" },
+  { code: "NG", name: "Nigeria", flag: "🇳🇬", dialCode: "+234", placeholder: "803-123-4567" },
+  { code: "KE", name: "Kenya", flag: "🇰🇪", dialCode: "+254", placeholder: "712-345-678" },
+  { code: "MA", name: "Morocco", flag: "🇲🇦", dialCode: "+212", placeholder: "612-345678" },
+];
+
+const getPhoneCountryByDialCode = (phone?: string) => {
+  const value = phone?.trim() || "";
+
+  return (
+    PHONE_COUNTRY_OPTIONS.find((country) => value.startsWith(country.dialCode)) ||
+    PHONE_COUNTRY_OPTIONS[0]
+  );
+};
+
+const stripDialCode = (phone?: string, dialCode = "+62") => {
+  const value = phone?.trim() || "";
+
+  if (value.startsWith(dialCode)) {
+    return value.slice(dialCode.length).replace(/\D/g, "");
+  }
+
+  if (dialCode === "+62" && value.startsWith("0")) {
+    return value.slice(1).replace(/\D/g, "");
+  }
+
+  return value.replace(/\D/g, "");
+};
+
+const buildInternationalPhone = (dialCode: string, value: string) => {
+  const digitsOnly = value.replace(/\D/g, "").slice(0, 14);
+  return digitsOnly ? `${dialCode}${digitsOnly}` : dialCode;
+};
+
+const isValidInternationalPhone = (value?: string) => {
+  const phone = value?.trim() || "";
+  return /^\+\d{1,3}\d{6,14}$/.test(phone);
+};
+
+const REQUIRED_PROFILE_FIELDS = [
+  { key: "kodeOwner", label: "Kode Owner" },
+  { key: "namaOwner", label: "Nama Owner" },
+  { key: "projectBrand", label: "Nama Brand" },
+  { key: "outlet", label: "Nama Outlet" },
+  { key: "noHpOwner", label: "Nomor Telepon Owner" },
+  { key: "noHpOutlet", label: "Nomor Telepon Outlet" },
+  { key: "pic", label: "PIC Sales" },
+] as const;
+
+type ProfileFieldKey = (typeof REQUIRED_PROFILE_FIELDS)[number]["key"];
+type ProfileValidationErrors = Partial<Record<ProfileFieldKey, string>>;
+
+const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
+  const errors: ProfileValidationErrors = {};
+
+  REQUIRED_PROFILE_FIELDS.forEach(({ key, label }) => {
+    const value = item[key];
+
+    if (typeof value !== "string" || value.trim() === "") {
+      errors[key] = `${label} wajib diisi.`;
+    }
+  });
+
+  if (!errors.noHpOwner && !isValidInternationalPhone(item.noHpOwner)) {
+    errors.noHpOwner = "Nomor Telepon Owner belum valid. Pilih negara lalu isi nomor telepon.";
+  }
+
+  if (!errors.noHpOutlet && !isValidInternationalPhone(item.noHpOutlet)) {
+    errors.noHpOutlet = "Nomor Telepon Outlet belum valid. Pilih negara lalu isi nomor telepon.";
+  }
+
+  return errors;
+};
+
+
 
 const paketOptions = ["", "Basic", "Business", "Pro", "Bundling & Alat"];
 const sumberOptions = ["Instagram", "Facebook", "Tiktok", "Mitra", "Playstore"];
@@ -290,14 +422,21 @@ export default function DataKelolaanPage() {
   const [endMonthFilter, setEndMonthFilter] = useState("");
   const [picFilter, setPicFilter] = useState("Semua");
   const [skorFilter, setSkorFilter] = useState("Semua");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const [selectionMode, setSelectionMode] = useState(false);
+  const [selectionAction, setSelectionAction] = useState<"edit" | "delete" | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [trashCount, setTrashCount] = useState(0);
 
   const [modalMode, setModalMode] = useState<EditModalMode>("profil");
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NasabahItem | null>(null);
+  const [profileValidationErrors, setProfileValidationErrors] = useState<ProfileValidationErrors>({});
+
+  const [bulkPicModalOpen, setBulkPicModalOpen] = useState(false);
+  const [bulkSelectedPic, setBulkSelectedPic] = useState("");
 
   const loggedInUser = "Satria";
   const loggedInRole = "Admin";
@@ -329,100 +468,13 @@ export default function DataKelolaanPage() {
   };
 
   const handleGenerateDummy = () => {
-    const mockExcelData: NasabahItem[] = [
-      {
-        totalFu: 5,
-        tanggalFu: "2026-06-15",
-        tahun: "2026",
-        bulan: "Juni",
-        no: 6,
-        pic: "Satria",
-        tanggalDibagikan: "2026-06-02",
-        statusAkun: "Akun Baru",
-        kodeBaris: "11313",
-        kodeOwner: "18907",
-        namaOwner: "Bubble's~2",
-        projectBrand: "Bubble 2",
-        outlet: "Bubble 2",
-        noHpOwner: "085240267611",
-        noHpOutlet: "",
-        createDateProject: "2026-06-02",
-        expiredDate: "2026-06-16",
-        totalTransaksi: 4,
-        scor: 3,
-        callStatus: "NO CALL",
-        chatStatus: "PROSPECT",
-        validitas: "VALID",
-        remarks: "3",
-        sumberNasabah: "Facebook",
-        finalisasiClosing: "Basic",
-        skemaId: "basic_24",
-        nominal: 1716000,
-        noted: "reminder untuk perpanjangan",
-      },
-      {
-        totalFu: 2,
-        tanggalFu: "2026-03-12",
-        tahun: "2026",
-        bulan: "Maret",
-        no: 7,
-        pic: "Lydia",
-        tanggalDibagikan: "2026-03-02",
-        statusAkun: "Outlet Baru",
-        kodeBaris: "10828",
-        kodeOwner: "18070",
-        namaOwner: "Ramlah 15",
-        projectBrand: "IRA LAUNDRY",
-        outlet: "IRA LAUNDRY",
-        noHpOwner: "085252472966",
-        noHpOutlet: "082252472966",
-        createDateProject: "2026-03-09",
-        expiredDate: "2026-03-23",
-        totalTransaksi: 0,
-        scor: 0,
-        callStatus: "CONTACTED",
-        chatStatus: "NO CHAT",
-        validitas: "INVALID",
-        remarks: "0",
-        sumberNasabah: "Instagram",
-        finalisasiClosing: "",
-        nominal: 0,
-        noted: "Nomor tidak terhubung dengan wa",
-      },
-      {
-        totalFu: 2,
-        tanggalFu: "2026-01-20",
-        tahun: "2026",
-        bulan: "Januari",
-        no: 8,
-        pic: "Satria",
-        tanggalDibagikan: "2026-01-02",
-        statusAkun: "Referral Mitra",
-        kodeBaris: "10850",
-        kodeOwner: "18104",
-        namaOwner: "Sofiah ichwani",
-        projectBrand: "Azzahra laundry",
-        outlet: "Azzahra laundry",
-        noHpOwner: "081269923421",
-        noHpOutlet: "081269923421",
-        createDateProject: "2026-01-14",
-        expiredDate: "2026-01-28",
-        totalTransaksi: 4,
-        scor: 1,
-        callStatus: "CONTACTED",
-        chatStatus: "DELIVERED",
-        validitas: "VALID",
-        remarks: "0",
-        sumberNasabah: "Tiktok",
-        finalisasiClosing: "",
-        nominal: 0,
-        noted: "",
-      },
-    ];
+    const mockExcelData: NasabahItem[] = generateDummyCustomers(1000);
 
     saveDataNasabah(mockExcelData);
     setTrashCount(0);
     localStorage.removeItem("piposmart_deleted_nasabah_data");
+
+    alert("Berhasil inject 1000 data dummy customer.");
   };
 
   const handleExportData = () => {
@@ -468,8 +520,15 @@ export default function DataKelolaanPage() {
     }
   };
 
-  const handleToggleSelectionMode = () => {
-    setSelectionMode((prev) => !prev);
+  const handleStartSelectionMode = (action: "edit" | "delete") => {
+    setSelectionMode(true);
+    setSelectionAction(action);
+    setSelectedIds([]);
+  };
+
+  const handleCancelSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectionAction(null);
     setSelectedIds([]);
   };
 
@@ -562,6 +621,48 @@ export default function DataKelolaanPage() {
     saveDataNasabah(nextData);
   };
 
+  const openBulkPicModal = () => {
+    if (selectedIds.length === 0) {
+      alert("Pilih data customer terlebih dahulu.");
+      return;
+    }
+
+    setBulkSelectedPic("");
+    setBulkPicModalOpen(true);
+  };
+
+  const closeBulkPicModal = () => {
+    setBulkPicModalOpen(false);
+    setBulkSelectedPic("");
+  };
+
+  const handleSaveBulkPic = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (selectedIds.length === 0) {
+      alert("Belum ada data yang dipilih.");
+      return;
+    }
+
+    if (!bulkSelectedPic) {
+      alert("Pilih PIC Sales terlebih dahulu.");
+      return;
+    }
+
+    const selectedSet = new Set(selectedIds);
+    const nextData = dataNasabah.map((item) =>
+      selectedSet.has(item.no) ? { ...item, pic: bulkSelectedPic } : item,
+    );
+
+    saveDataNasabah(nextData);
+    closeBulkPicModal();
+    setSelectedIds([]);
+    setSelectionMode(false);
+    setSelectionAction(null);
+
+    alert(`${selectedSet.size} data berhasil diganti ke PIC ${bulkSelectedPic}.`);
+  };
+
   const handleQuickUpdateSkor = (id: number, nextSkor: string) => {
     const selected = LIST_SKOR.find((item) => item.value === nextSkor);
 
@@ -646,20 +747,50 @@ export default function DataKelolaanPage() {
     filterMode,
   ]);
 
-  const filteredIds = useMemo(() => filteredData.map((item) => item.no), [filteredData]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    viewMode,
+    filterMode,
+    searchKodeOwner,
+    searchNamaOwner,
+    searchNamaOutlet,
+    picFilter,
+    skorFilter,
+    startDateFilter,
+    endDateFilter,
+    startMonthFilter,
+    endMonthFilter,
+    rowsPerPage,
+  ]);
 
-  const isAllFilteredSelected =
-    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startDataIndex = (safeCurrentPage - 1) * rowsPerPage;
+  const endDataIndex = Math.min(startDataIndex + rowsPerPage, filteredData.length);
 
-  const handleToggleSelectAllFiltered = () => {
-    if (filteredIds.length === 0) return;
+  const paginatedData = useMemo(
+    () => filteredData.slice(startDataIndex, endDataIndex),
+    [filteredData, startDataIndex, endDataIndex],
+  );
 
-    if (isAllFilteredSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+  const currentPageIds = useMemo(
+    () => paginatedData.map((item) => item.no),
+    [paginatedData],
+  );
+
+  const isAllCurrentPageSelected =
+    currentPageIds.length > 0 && currentPageIds.every((id) => selectedIds.includes(id));
+
+  const handleToggleSelectAllCurrentPage = () => {
+    if (currentPageIds.length === 0) return;
+
+    if (isAllCurrentPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !currentPageIds.includes(id)));
       return;
     }
 
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...currentPageIds])));
   };
 
   const formatTgl = (str: string) => {
@@ -708,11 +839,13 @@ export default function DataKelolaanPage() {
   const openEditModal = (item: NasabahItem, mode: EditModalMode) => {
     setEditingItem({ ...item });
     setModalMode(mode);
+    setProfileValidationErrors({});
     setEditModalOpen(true);
   };
 
   const closeEditModal = () => {
     setEditingItem(null);
+    setProfileValidationErrors({});
     setEditModalOpen(false);
   };
 
@@ -721,6 +854,11 @@ export default function DataKelolaanPage() {
     value: NasabahItem[K],
   ) => {
     setEditingItem((prev) => (prev ? { ...prev, [field]: value } : prev));
+
+    setProfileValidationErrors((prev) => ({
+      ...prev,
+      [field]: "",
+    }));
   };
 
   const handleSaveEditModal = (event: React.FormEvent) => {
@@ -728,9 +866,15 @@ export default function DataKelolaanPage() {
 
     if (!editingItem) return;
 
-    if (!editingItem.kodeOwner || !editingItem.namaOwner) {
-      alert("Kode Owner dan Nama Owner wajib diisi.");
-      return;
+    if (modalMode === "profil") {
+      const errors = getProfileFieldErrors(editingItem);
+
+      if (Object.values(errors).some(Boolean)) {
+        setProfileValidationErrors(errors);
+        return;
+      }
+
+      setProfileValidationErrors({});
     }
 
     const nextData = dataNasabah.map((item) =>
@@ -838,7 +982,7 @@ export default function DataKelolaanPage() {
             className="px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 transition shadow-xs cursor-pointer flex items-center gap-1.5"
           >
             <RefreshIcon />
-            Inject Dummy
+            Inject 1000 Dummy
           </button>
 
           <Link
@@ -980,37 +1124,72 @@ export default function DataKelolaanPage() {
               Riwayat Hapus ({trashCount})
             </Link>
 
-            <button
-              onClick={handleToggleSelectionMode}
-              className={`px-3.5 py-2 border rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                selectionMode
-                  ? "bg-gray-900 border-gray-900 text-white hover:bg-black"
-                  : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
-              }`}
-            >
-              <TrashIcon className="w-3.5 h-3.5" />
-              {selectionMode ? "Batal Pilih" : "Pilih Data Hapus"}
-            </button>
-
-            {selectionMode && (
+            {!selectionMode ? (
               <>
                 <button
-                  onClick={handleToggleSelectAllFiltered}
-                  disabled={filteredIds.length === 0}
-                  className="px-3.5 py-2 bg-white border border-red-200 text-red-700 rounded-xl text-xs font-black hover:bg-red-50 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => handleStartSelectionMode("edit")}
+                  className="px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1.5"
                 >
-                  {isAllFilteredSelected
-                    ? "Batal Pilih Semua"
-                    : `Pilih Semua Tampilan (${filteredIds.length})`}
+                  <EditIcon className="w-3.5 h-3.5" />
+                  Pilih untuk Edit PIC
                 </button>
 
                 <button
-                  onClick={handleHapusDataTerpilih}
-                  disabled={selectedIds.length === 0}
-                  className="px-3.5 py-2 bg-red-600 border border-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => handleStartSelectionMode("delete")}
+                  className="px-3.5 py-2 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5"
                 >
-                  Hapus Terpilih ({selectedIds.length})
+                  <TrashIcon className="w-3.5 h-3.5" />
+                  Pilih untuk Hapus
                 </button>
+              </>
+            ) : (
+              <>
+                <div
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black ${
+                    selectionAction === "edit"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+                >
+                  Mode: {selectionAction === "edit" ? "Edit PIC" : "Hapus Data"}
+                </div>
+
+                <button
+                  onClick={handleCancelSelectionMode}
+                  className="px-3.5 py-2 bg-gray-900 border border-gray-900 text-white rounded-xl text-xs font-black hover:bg-black transition cursor-pointer"
+                >
+                  Batal Pilih
+                </button>
+
+                <button
+                  onClick={handleToggleSelectAllCurrentPage}
+                  disabled={currentPageIds.length === 0}
+                  className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-black hover:bg-gray-50 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isAllCurrentPageSelected
+                    ? "Batal Pilih Semua"
+                    : `Pilih Semua Halaman Ini (${currentPageIds.length})`}
+                </button>
+
+                {selectionAction === "edit" && (
+                  <button
+                    onClick={openBulkPicModal}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-2 bg-emerald-600 border border-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Edit PIC Terpilih ({selectedIds.length})
+                  </button>
+                )}
+
+                {selectionAction === "delete" && (
+                  <button
+                    onClick={handleHapusDataTerpilih}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-2 bg-red-600 border border-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Hapus Terpilih ({selectedIds.length})
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -1028,10 +1207,10 @@ export default function DataKelolaanPage() {
                   <th className="p-3 text-center">
                     <input
                       type="checkbox"
-                      checked={isAllFilteredSelected}
-                      onChange={handleToggleSelectAllFiltered}
+                      checked={isAllCurrentPageSelected}
+                      onChange={handleToggleSelectAllCurrentPage}
                       className="h-4 w-4 cursor-pointer accent-white"
-                      title="Pilih semua data yang sedang tampil"
+                      title="Pilih semua data di halaman ini"
                     />
                   </th>
                 )}
@@ -1148,7 +1327,7 @@ export default function DataKelolaanPage() {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((row, idx) => (
+                paginatedData.map((row, idx) => (
                   <tr
                     key={row.no || idx}
                     onClick={() => {
@@ -1182,7 +1361,7 @@ export default function DataKelolaanPage() {
                     {viewMode === "merah" ? (
                       <>
                         <td className="p-3 text-center text-gray-400 font-bold">
-                          {idx + 1}
+                          {startDataIndex + idx + 1}
                         </td>
 
                         <td className="p-3 text-center font-mono font-bold text-gray-700 bg-gray-50/20">
@@ -1200,7 +1379,7 @@ export default function DataKelolaanPage() {
                         <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <QuickPicDropdown
                             value={row.pic || ""}
-                            options={daftarPicUnik.length > 0 ? daftarPicUnik : LIST_PIC}
+                            options={LIST_PIC}
                             color="red"
                             onChange={(value) => handleQuickUpdatePic(row.no, value)}
                           />
@@ -1240,7 +1419,7 @@ export default function DataKelolaanPage() {
                     ) : (
                       <>
                         <td className="p-3 text-center text-gray-400 font-bold">
-                          {idx + 1}
+                          {startDataIndex + idx + 1}
                         </td>
                         <td className="p-3 text-center font-mono font-bold text-gray-700">
                           {row.kodeOwner || "-"}
@@ -1251,7 +1430,7 @@ export default function DataKelolaanPage() {
                         <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <QuickPicDropdown
                             value={row.pic || ""}
-                            options={daftarPicUnik.length > 0 ? daftarPicUnik : LIST_PIC}
+                            options={LIST_PIC}
                             color="green"
                             onChange={(value) => handleQuickUpdatePic(row.no, value)}
                           />
@@ -1347,10 +1526,147 @@ export default function DataKelolaanPage() {
             </tbody>
           </table>
         </div>
+
+        <div className="flex flex-col gap-3 border-t border-gray-100 bg-white px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="text-xs font-bold text-gray-500">
+            Menampilkan{" "}
+            <span className="font-black text-gray-900">
+              {filteredData.length === 0 ? 0 : startDataIndex + 1}
+            </span>{" "}
+            -{" "}
+            <span className="font-black text-gray-900">{endDataIndex}</span>{" "}
+            dari{" "}
+            <span className="font-black text-[#C92C1E]">{filteredData.length}</span>{" "}
+            data
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={rowsPerPage}
+              onChange={(event) => setRowsPerPage(Number(event.target.value))}
+              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 outline-none"
+            >
+              <option value={10}>10 / halaman</option>
+              <option value={25}>25 / halaman</option>
+              <option value={50}>50 / halaman</option>
+              <option value={100}>100 / halaman</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage === 1}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Awal
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={safeCurrentPage === 1}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Prev
+            </button>
+
+            <span className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E]">
+              {safeCurrentPage} / {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage === totalPages}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Akhir
+            </button>
+          </div>
+        </div>
       </div>
 
 
       <GrafikCustomer dataNasabah={dataNasabah} />
+
+      {/* MODAL EDIT PIC DATA TERPILIH */}
+      {bulkPicModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b p-5">
+              <div>
+                <h2 className="text-lg font-black text-gray-900">
+                  Edit PIC Data Terpilih
+                </h2>
+                <p className="text-xs font-medium text-gray-400">
+                  Pilih PIC Sales baru untuk {selectedIds.length} data customer yang dicentang.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeBulkPicModal}
+                className="h-9 w-9 rounded-full bg-gray-100 font-black text-gray-600 hover:bg-gray-200"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBulkPic} className="space-y-4 p-5">
+              <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4">
+                <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
+                  <FieldIcon type="sales" />
+                  PIC Sales Baru
+                </label>
+
+                <select
+                  value={bulkSelectedPic}
+                  onChange={(event) => setBulkSelectedPic(event.target.value)}
+                  required
+                  className="w-full cursor-pointer rounded-xl border border-red-100 bg-white p-3 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+                >
+                  <option value="">Pilih PIC Sales</option>
+                  {LIST_PIC.map((pic) => (
+                    <option key={pic} value={pic}>
+                      {pic}
+                    </option>
+                  ))}
+                </select>
+
+                <p className="mt-2 text-[11px] font-medium text-gray-400">
+                  Setelah disimpan, semua data yang dicentang akan berubah ke PIC yang dipilih.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t pt-4">
+                <button
+                  type="button"
+                  onClick={closeBulkPicModal}
+                  className="rounded-xl border px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#C92C1E] px-5 py-2 text-xs font-extrabold text-white shadow-sm hover:bg-[#A82216]"
+                >
+                  Simpan PIC
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODAL EDIT PROFIL / SCORING */}
       {editModalOpen && editingItem && (
@@ -1389,43 +1705,49 @@ export default function DataKelolaanPage() {
                       icon="code"
                       value={editingItem.kodeOwner || ""}
                       onChange={(value) => updateEditingField("kodeOwner", value)}
+                      error={profileValidationErrors.kodeOwner}
                     />
                     <FormInput
                       label="Nama Owner *"
                       icon="user"
                       value={editingItem.namaOwner || ""}
                       onChange={(value) => updateEditingField("namaOwner", value)}
+                      error={profileValidationErrors.namaOwner}
                     />
                     <FormInput
-                      label="Nama Brand"
+                      label="Nama Brand *"
                       icon="brand"
                       value={editingItem.projectBrand || ""}
                       onChange={(value) => updateEditingField("projectBrand", value)}
+                      error={profileValidationErrors.projectBrand}
                     />
                     <FormInput
-                      label="Nama Outlet"
+                      label="Nama Outlet *"
                       icon="outlet"
                       value={editingItem.outlet || ""}
                       onChange={(value) => updateEditingField("outlet", value)}
+                      error={profileValidationErrors.outlet}
                     />
-                    <FormInput
-                      label="Nomor Telepon Owner"
-                      icon="phone"
+                    <PhoneInput
+                      label="Nomor Telepon Owner *"
                       value={editingItem.noHpOwner || ""}
                       onChange={(value) => updateEditingField("noHpOwner", value)}
+                      error={profileValidationErrors.noHpOwner}
                     />
-                    <FormInput
-                      label="Nomor Telepon Outlet"
-                      icon="phone"
+                    <PhoneInput
+                      label="Nomor Telepon Outlet *"
                       value={editingItem.noHpOutlet || ""}
                       onChange={(value) => updateEditingField("noHpOutlet", value)}
+                      error={profileValidationErrors.noHpOutlet}
                     />
                     <FormSelect
-                      label="PIC Sales"
+                      label="PIC Sales *"
                       icon="sales"
+                      required
                       value={editingItem.pic || ""}
                       options={LIST_PIC}
                       onChange={(value) => updateEditingField("pic", value)}
+                      error={profileValidationErrors.pic}
                     />
                   </div>
                 </div>
@@ -1517,19 +1839,117 @@ export default function DataKelolaanPage() {
   );
 }
 
+
+function PhoneInput({
+  label,
+  value,
+  onChange,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}) {
+  const initialCountry = getPhoneCountryByDialCode(value);
+  const [selectedCountryCode, setSelectedCountryCode] = useState(initialCountry.code);
+
+  const selectedCountry =
+    PHONE_COUNTRY_OPTIONS.find((country) => country.code === selectedCountryCode) ||
+    initialCountry;
+
+  useEffect(() => {
+    if (!value) return;
+
+    const detectedCountry = getPhoneCountryByDialCode(value);
+
+    if (value.startsWith(detectedCountry.dialCode)) {
+      setSelectedCountryCode((currentCode) => currentCode || detectedCountry.code);
+    }
+  }, [value]);
+
+  const nationalNumber = stripDialCode(value, selectedCountry.dialCode);
+
+  const handleCountryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextCountry =
+      PHONE_COUNTRY_OPTIONS.find((country) => country.code === event.target.value) ||
+      PHONE_COUNTRY_OPTIONS[0];
+
+    setSelectedCountryCode(nextCountry.code);
+    onChange(buildInternationalPhone(nextCountry.dialCode, nationalNumber));
+  };
+
+  const handlePhoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(buildInternationalPhone(selectedCountry.dialCode, event.target.value));
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+        <FieldIcon type="phone" />
+        {label}
+      </label>
+
+      <div
+        className={`flex overflow-hidden rounded-xl border bg-white focus-within:border-[#C92C1E] ${
+          error ? "border-red-500 bg-red-50" : "border-gray-200"
+        }`}
+      >
+        <select
+          value={selectedCountry.code}
+          onChange={handleCountryChange}
+          className="w-[110px] cursor-pointer border-r bg-gray-50 px-2.5 py-2.5 text-xs font-black text-gray-700 outline-none"
+          title="Pilih kode negara"
+        >
+          {PHONE_COUNTRY_OPTIONS.map((country) => (
+            <option key={country.code} value={country.code}>
+              {country.flag} {country.dialCode}
+            </option>
+          ))}
+        </select>
+
+        <input
+          required
+          type="tel"
+          value={nationalNumber}
+          onChange={handlePhoneChange}
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder={selectedCountry.placeholder}
+          className="min-w-0 flex-1 bg-white px-3 py-2.5 text-xs font-bold outline-none"
+          title="Pilih negara lalu isi nomor telepon"
+        />
+      </div>
+
+      {error ? (
+        <p className="text-[10px] font-bold text-red-600">{error}</p>
+      ) : (
+        <p className="text-[10px] font-medium text-gray-400">
+          Tersimpan sebagai: {value || `${selectedCountry.dialCode}...`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+
 function FormInput({
   label,
   value,
   onChange,
   type = "text",
   icon = "code",
+  error,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
+  error?: string;
 }) {
+  const isRequired = label.includes("*");
+
   return (
     <div className="space-y-1">
       <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
@@ -1537,11 +1957,17 @@ function FormInput({
         {label}
       </label>
       <input
+        required={isRequired}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold"
+        className={`w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold ${
+          error ? "border-red-500 bg-red-50" : "border-gray-200"
+        }`}
       />
+      {error && (
+        <p className="text-[10px] font-bold text-red-600">{error}</p>
+      )}
     </div>
   );
 }
@@ -1553,6 +1979,8 @@ function FormSelect({
   onChange,
   getLabel,
   icon = "sales",
+  required = false,
+  error,
 }: {
   label: string;
   value: string;
@@ -1560,6 +1988,8 @@ function FormSelect({
   onChange: (value: string) => void;
   getLabel?: (value: string) => string;
   icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
+  required?: boolean;
+  error?: string;
 }) {
   return (
     <div className="space-y-1">
@@ -1568,9 +1998,12 @@ function FormSelect({
         {label}
       </label>
       <select
+        required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold text-gray-700 cursor-pointer"
+        className={`w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold text-gray-700 cursor-pointer ${
+          error ? "border-red-500 bg-red-50" : "border-gray-200"
+        }`}
       >
         {options.map((option) => (
           <option key={option || "empty-option"} value={option}>
@@ -1578,6 +2011,9 @@ function FormSelect({
           </option>
         ))}
       </select>
+      {error && (
+        <p className="text-[10px] font-bold text-red-600">{error}</p>
+      )}
     </div>
   );
 }
