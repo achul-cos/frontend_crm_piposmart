@@ -49,16 +49,43 @@ const LIST_BULAN = [
 ];
 
 type TrendRangeMode = "default4bulan" | "harian" | "bulanan" | "tahunan";
+type ChartFilterMode = "total" | "harian" | "bulanan" | "tahunan";
+
+interface ChartFilterState {
+  mode: ChartFilterMode;
+  startDate: string;
+  endDate: string;
+  startMonth: string;
+  endMonth: string;
+  monthYear: string;
+  startYear: string;
+  endYear: string;
+}
+
 
 
 const SKOR_MASTER = [
   { key: "0", label: "Tidak Potensial (0)", color: "#C92C1E" },
-  { key: "1", label: "Kemungkinan Potensial", color: "#F0783E" },
-  { key: "2", label: "Potensial (2)", color: "#F6B84B" },
-  { key: "3", label: "Langganan (3)", color: "#3A7D8A" },
+  { key: "1", label: "Kemungkinan Potensial", color: "#E24A3B" },
+  { key: "2", label: "Potensial (2)", color: "#F0783E" },
+  { key: "3", label: "Langganan (3)", color: "#F6B84B" },
 ];
 
-const SUMBER_COLORS = ["#C92C1E", "#F0783E", "#F6B84B", "#3A7D8A", "#8E7DC3", "#6B7280"];
+const SUMBER_COLORS = ["#C92C1E", "#E24A3B", "#F0783E"];
+
+const SUMBER_MASTER = [
+  { key: "Facebook", label: "Facebook", color: "#C92C1E" },
+  { key: "Instagram", label: "Instagram", color: "#E24A3B" },
+  { key: "Tiktok", label: "Tiktok", color: "#F0783E" },
+];
+
+const KEMITRAAN_MASTER = [
+  { key: "Non Mitra", label: "Non Mitra", color: "#C92C1E" },
+  { key: "Referal", label: "Referal", color: "#E24A3B" },
+  { key: "Partnership", label: "Partnership", color: "#F0783E" },
+  { key: "Regional", label: "Regional", color: "#F6B84B" },
+];
+
 
 const monthIndexMap: Record<string, number> = LIST_BULAN.reduce(
   (acc, month, index) => {
@@ -137,6 +164,31 @@ function getSkorBadgeClass(item: NasabahItem) {
   return "bg-red-100 text-red-700 border-red-200";
 }
 
+function getSumberKey(item: NasabahItem) {
+  const sumber = String(item.sumberNasabah || "").toLowerCase();
+
+  if (sumber.includes("facebook") || sumber.includes("fb")) return "Facebook";
+  if (sumber.includes("instagram") || sumber.includes("ig")) return "Instagram";
+  if (sumber.includes("tiktok") || sumber.includes("tik tok")) return "Tiktok";
+
+  return "Facebook";
+}
+
+function getKemitraanKey(item: NasabahItem) {
+  const sumber = String(item.sumberNasabah || "").toLowerCase();
+  const status = String(item.statusAkun || "").toLowerCase();
+  const noted = String(item.noted || "").toLowerCase();
+  const combined = `${sumber} ${status} ${noted}`;
+
+  if (combined.includes("regional")) return "Regional";
+  if (combined.includes("non mitra") || combined.includes("non-mitra")) return "Non Mitra";
+  if (combined.includes("partnership") || combined.includes("partner")) return "Partnership";
+  if (combined.includes("referal") || combined.includes("referral")) return "Referal";
+  if (combined.includes("mitra")) return "Partnership";
+
+  return "Non Mitra";
+}
+
 function formatTgl(str?: string) {
   if (!str || str.trim() === "") return "-";
 
@@ -177,6 +229,20 @@ function buildPieData(
     label: labelMap?.[key] || key,
     value,
     color: colorMap?.[key] || fallbackColors[index % fallbackColors.length],
+  }));
+}
+
+function completePieDataWithMaster(
+  data: { key: string; label: string; value: number; color: string }[],
+  master: { key: string; label: string; color: string }[],
+) {
+  const valueMap = new Map(data.map((item) => [item.key, item.value]));
+
+  return master.map((item) => ({
+    key: item.key,
+    label: item.label,
+    value: valueMap.get(item.key) || 0,
+    color: item.color,
   }));
 }
 
@@ -221,9 +287,9 @@ function PieChartCard({
           Belum ada data untuk diagram ini.
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_180px]">
-          <div className="flex justify-center">
-            <svg viewBox="0 0 260 260" className="h-[260px] w-[260px]">
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(260px,1fr)_220px]">
+          <div className="flex justify-center overflow-x-auto">
+            <svg viewBox="0 0 260 260" className="h-[240px] w-[240px] min-w-[240px] sm:h-[260px] sm:w-[260px] sm:min-w-[260px]">
               {data.map((item) => {
                 const percentage = item.value / total;
                 const angle = percentage * 360;
@@ -255,17 +321,19 @@ function PieChartCard({
             </svg>
           </div>
 
-          <div className="space-y-2 self-center">
+          <div className="grid gap-2 self-center sm:grid-cols-2 xl:grid-cols-1">
             {data.map((item) => {
               const percentage = total ? (item.value / total) * 100 : 0;
 
               return (
-                <div key={item.key} className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3">
+                <div key={item.key} className="min-w-0 rounded-2xl border border-gray-100 bg-gray-50/60 p-3">
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                    <p className="text-xs font-black text-gray-800">{item.label}</p>
+                    <p className="min-w-0 truncate text-xs font-black text-gray-800" title={item.label}>
+                      {item.label}
+                    </p>
                   </div>
-                  <p className="mt-1 text-[11px] font-bold text-gray-400">
+                  <p className="mt-1 whitespace-nowrap text-[11px] font-bold text-gray-400">
                     {item.value} customer • {percentage.toFixed(1)}%
                   </p>
                 </div>
@@ -290,6 +358,124 @@ function toInputDate(date: Date) {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function createDefaultChartFilter(today = new Date()): ChartFilterState {
+  return {
+    mode: "total",
+    startDate: toInputDate(addDays(today, -7)),
+    endDate: toInputDate(today),
+    startMonth: LIST_BULAN[Math.max(0, today.getMonth() - 3)],
+    endMonth: LIST_BULAN[today.getMonth()],
+    monthYear: String(today.getFullYear()),
+    startYear: String(today.getFullYear() - 2),
+    endYear: String(today.getFullYear()),
+  };
+}
+
+function filterDataByChartRange(data: NasabahItem[], filter: ChartFilterState) {
+  if (filter.mode === "total") return data;
+
+  if (filter.mode === "harian") {
+    const rawStart = filter.startDate || "1900-01-01";
+    const rawEnd = filter.endDate || "2999-12-31";
+    const start = rawStart <= rawEnd ? rawStart : rawEnd;
+    const end = rawStart <= rawEnd ? rawEnd : rawStart;
+
+    return data.filter((item) => {
+      const currentDate = getItemDate(item);
+      return currentDate >= start && currentDate <= end;
+    });
+  }
+
+  if (filter.mode === "bulanan") {
+    const year = Number(filter.monthYear) || new Date().getFullYear();
+    const startIndex = filter.startMonth ? LIST_BULAN.indexOf(filter.startMonth) : 0;
+    const endIndex = filter.endMonth ? LIST_BULAN.indexOf(filter.endMonth) : 11;
+    const minMonth = Math.max(0, Math.min(startIndex === -1 ? 0 : startIndex, endIndex === -1 ? 11 : endIndex));
+    const maxMonth = Math.min(11, Math.max(startIndex === -1 ? 0 : startIndex, endIndex === -1 ? 11 : endIndex));
+
+    return data.filter((item) => {
+      return getItemYear(item) === year && getItemMonthIndex(item) >= minMonth && getItemMonthIndex(item) <= maxMonth;
+    });
+  }
+
+  const rawStartYear = Number(filter.startYear) || new Date().getFullYear() - 2;
+  const rawEndYear = Number(filter.endYear) || new Date().getFullYear();
+  const startYear = Math.min(rawStartYear, rawEndYear);
+  const endYear = Math.max(rawStartYear, rawEndYear);
+
+  return data.filter((item) => {
+    const year = getItemYear(item);
+    return year >= startYear && year <= endYear;
+  });
+}
+
+function buildTrendDataByChartFilter(data: NasabahItem[], filter: ChartFilterState) {
+  if (filter.mode === "total") {
+    const buckets = new Map<string, NasabahItem[]>();
+
+    data.forEach((item) => {
+      const year = getItemYear(item);
+      const month = getItemMonthIndex(item);
+      const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const current = buckets.get(key) || [];
+      current.push(item);
+      buckets.set(key, current);
+    });
+
+    return Array.from(buckets.entries())
+      .sort(([first], [second]) => first.localeCompare(second))
+      .map(([key, group]) => {
+        const [, month] = key.split("-");
+        const monthIndex = Number(month) - 1;
+
+        return {
+          label: `${LIST_BULAN[monthIndex]} ${key.slice(0, 4)}`,
+          total: group.length,
+          "0": group.filter((item) => getSkorKey(item) === "0").length,
+          "1": group.filter((item) => getSkorKey(item) === "1").length,
+          "2": group.filter((item) => getSkorKey(item) === "2").length,
+          "3": group.filter((item) => getSkorKey(item) === "3").length,
+        };
+      });
+  }
+
+  return buildTrendData(data, filter.mode, {
+    startDate: filter.startDate,
+    endDate: filter.endDate,
+    startMonth: filter.startMonth,
+    endMonth: filter.endMonth,
+    monthYear: filter.monthYear,
+    startYear: filter.startYear,
+    endYear: filter.endYear,
+  });
+}
+
+function buildPackageDataByChartFilter(data: NasabahItem[], filter: ChartFilterState) {
+  if (filter.mode === "total") {
+    const subscribedGroup = data.filter((item) => getPackageKey(item) !== "lainnya");
+
+    return [
+      {
+        label: "Total",
+        total: subscribedGroup.length,
+        basic: subscribedGroup.filter((item) => getPackageKey(item) === "basic").length,
+        business: subscribedGroup.filter((item) => getPackageKey(item) === "business").length,
+        pro: subscribedGroup.filter((item) => getPackageKey(item) === "pro").length,
+      },
+    ];
+  }
+
+  return buildPackageTrendData(data, filter.mode, {
+    startDate: filter.startDate,
+    endDate: filter.endDate,
+    startMonth: filter.startMonth,
+    endMonth: filter.endMonth,
+    monthYear: filter.monthYear,
+    startYear: filter.startYear,
+    endYear: filter.endYear,
+  });
 }
 
 function formatShortDate(dateStr: string) {
@@ -430,10 +616,10 @@ function TrendChartCard({
 
   const series = [
     { key: "total", label: "Total", color: "#C92C1E" },
-    { key: "0", label: "Tidak Potensial (0)", color: "#991B1B" },
-    { key: "1", label: "Kemungkinan (1)", color: "#F0783E" },
-    { key: "2", label: "Potensial (2)", color: "#F6B84B" },
-    { key: "3", label: "Langganan (3)", color: "#3A7D8A" },
+    { key: "0", label: "Tidak Potensial (0)", color: "#A82216" },
+    { key: "1", label: "Kemungkinan (1)", color: "#E24A3B" },
+    { key: "2", label: "Potensial (2)", color: "#F0783E" },
+    { key: "3", label: "Langganan (3)", color: "#F6B84B" },
   ] as const;
 
   const maxValue = Math.max(
@@ -639,9 +825,9 @@ function PackageBarChartCard({
 
   const series = [
     { key: "total", label: "Total", color: "#C92C1E" },
-    { key: "basic", label: "Basic", color: "#F0783E" },
-    { key: "business", label: "Business", color: "#F6B84B" },
-    { key: "pro", label: "Pro", color: "#3A7D8A" },
+    { key: "basic", label: "Basic", color: "#E24A3B" },
+    { key: "business", label: "Business", color: "#F0783E" },
+    { key: "pro", label: "Pro", color: "#F6B84B" },
   ] as const;
 
   const maxValue = Math.max(
@@ -755,6 +941,109 @@ function PackageBarChartCard({
 }
 
 
+function ChartFilterControls({
+  value,
+  onChange,
+}: {
+  value: ChartFilterState;
+  onChange: (nextValue: ChartFilterState) => void;
+}) {
+  const updateFilter = (patch: Partial<ChartFilterState>) => {
+    onChange({ ...value, ...patch });
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={value.mode}
+          onChange={(event) => updateFilter({ mode: event.target.value as ChartFilterMode })}
+          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E] sm:w-auto"
+        >
+          <option value="total">Total Customer</option>
+          <option value="harian">Rentang Hari</option>
+          <option value="bulanan">Rentang Bulan</option>
+          <option value="tahunan">Rentang Tahun</option>
+        </select>
+
+        {value.mode === "harian" && (
+          <>
+            <input
+              type="date"
+              value={value.startDate}
+              onChange={(event) => updateFilter({ startDate: event.target.value })}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+            />
+            <span className="text-xs font-black text-gray-300">s/d</span>
+            <input
+              type="date"
+              value={value.endDate}
+              onChange={(event) => updateFilter({ endDate: event.target.value })}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+            />
+          </>
+        )}
+
+        {value.mode === "bulanan" && (
+          <>
+            <select
+              value={value.startMonth}
+              onChange={(event) => updateFilter({ startMonth: event.target.value })}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+            >
+              {LIST_BULAN.map((month) => (
+                <option key={`filter-start-${month}`} value={month}>
+                  Dari {month}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={value.endMonth}
+              onChange={(event) => updateFilter({ endMonth: event.target.value })}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+            >
+              {LIST_BULAN.map((month) => (
+                <option key={`filter-end-${month}`} value={month}>
+                  Sampai {month}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="number"
+              value={value.monthYear}
+              onChange={(event) => updateFilter({ monthYear: event.target.value })}
+              className="w-28 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              placeholder="Tahun"
+            />
+          </>
+        )}
+
+        {value.mode === "tahunan" && (
+          <>
+            <input
+              type="number"
+              value={value.startYear}
+              onChange={(event) => updateFilter({ startYear: event.target.value })}
+              className="w-28 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              placeholder="Dari tahun"
+            />
+            <span className="text-xs font-black text-gray-300">s/d</span>
+            <input
+              type="number"
+              value={value.endYear}
+              onChange={(event) => updateFilter({ endYear: event.target.value })}
+              className="w-28 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              placeholder="Sampai tahun"
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChartToggleIcon({ open }: { open: boolean }) {
   return (
     <svg
@@ -865,17 +1154,15 @@ function CollapsibleChartSection({
 
 export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahItem[] }) {
   const today = new Date();
-  const [trendMode, setTrendMode] = useState<TrendRangeMode>("default4bulan");
-  const [trendStartDate, setTrendStartDate] = useState(toInputDate(addDays(today, -7)));
-  const [trendEndDate, setTrendEndDate] = useState(toInputDate(today));
-  const [trendStartMonth, setTrendStartMonth] = useState(LIST_BULAN[Math.max(0, today.getMonth() - 3)]);
-  const [trendEndMonth, setTrendEndMonth] = useState(LIST_BULAN[today.getMonth()]);
-  const [trendMonthYear, setTrendMonthYear] = useState(String(today.getFullYear()));
-  const [trendStartYear, setTrendStartYear] = useState(String(today.getFullYear() - 2));
-  const [trendEndYear, setTrendEndYear] = useState(String(today.getFullYear()));
+  const [skorChartFilter, setSkorChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));
+  const [sumberChartFilter, setSumberChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));
+  const [kemitraanChartFilter, setKemitraanChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));
+  const [pertumbuhanChartFilter, setPertumbuhanChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));
+  const [paketChartFilter, setPaketChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));
   const [openedCharts, setOpenedCharts] = useState({
     skor: false,
     sumber: false,
+    kemitraan: false,
     pertumbuhan: false,
     paket: false,
   });
@@ -886,6 +1173,31 @@ export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahIt
       [key]: !prev[key],
     }));
   };
+
+  const skorFilteredData = useMemo(
+    () => filterDataByChartRange(dataNasabah, skorChartFilter),
+    [dataNasabah, skorChartFilter],
+  );
+
+  const sumberFilteredData = useMemo(
+    () => filterDataByChartRange(dataNasabah, sumberChartFilter),
+    [dataNasabah, sumberChartFilter],
+  );
+
+  const kemitraanFilteredData = useMemo(
+    () => filterDataByChartRange(dataNasabah, kemitraanChartFilter),
+    [dataNasabah, kemitraanChartFilter],
+  );
+
+  const pertumbuhanFilteredData = useMemo(
+    () => filterDataByChartRange(dataNasabah, pertumbuhanChartFilter),
+    [dataNasabah, pertumbuhanChartFilter],
+  );
+
+  const paketFilteredData = useMemo(
+    () => filterDataByChartRange(dataNasabah, paketChartFilter),
+    [dataNasabah, paketChartFilter],
+  );
 
   const skorPieData = useMemo(() => {
     const colorMap = SKOR_MASTER.reduce((acc, item) => {
@@ -898,65 +1210,47 @@ export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahIt
       return acc;
     }, {} as Record<string, string>);
 
-    return buildPieData(dataNasabah, getSkorKey, labelMap, colorMap);
-  }, [dataNasabah]);
+    return buildPieData(skorFilteredData, getSkorKey, labelMap, colorMap);
+  }, [skorFilteredData]);
 
   const sumberPieData = useMemo(() => {
-    return buildPieData(
-      dataNasabah,
-      (item) => item.sumberNasabah || "Tidak Diketahui",
-      undefined,
-      undefined,
-      SUMBER_COLORS,
-    );
-  }, [dataNasabah]);
+    const colorMap = SUMBER_MASTER.reduce((acc, item) => {
+      acc[item.key] = item.color;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const labelMap = SUMBER_MASTER.reduce((acc, item) => {
+      acc[item.key] = item.label;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const rawData = buildPieData(sumberFilteredData, getSumberKey, labelMap, colorMap, SUMBER_COLORS);
+    return completePieDataWithMaster(rawData, SUMBER_MASTER);
+  }, [sumberFilteredData]);
+
+  const kemitraanPieData = useMemo(() => {
+    const colorMap = KEMITRAAN_MASTER.reduce((acc, item) => {
+      acc[item.key] = item.color;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const labelMap = KEMITRAAN_MASTER.reduce((acc, item) => {
+      acc[item.key] = item.label;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const rawData = buildPieData(kemitraanFilteredData, getKemitraanKey, labelMap, colorMap);
+    return completePieDataWithMaster(rawData, KEMITRAAN_MASTER);
+  }, [kemitraanFilteredData]);
 
   const trendData = useMemo(
-    () =>
-      buildTrendData(dataNasabah, trendMode, {
-        startDate: trendStartDate,
-        endDate: trendEndDate,
-        startMonth: trendStartMonth,
-        endMonth: trendEndMonth,
-        monthYear: trendMonthYear,
-        startYear: trendStartYear,
-        endYear: trendEndYear,
-      }),
-    [
-      dataNasabah,
-      trendMode,
-      trendStartDate,
-      trendEndDate,
-      trendStartMonth,
-      trendEndMonth,
-      trendMonthYear,
-      trendStartYear,
-      trendEndYear,
-    ],
+    () => buildTrendDataByChartFilter(pertumbuhanFilteredData, pertumbuhanChartFilter),
+    [pertumbuhanFilteredData, pertumbuhanChartFilter],
   );
 
   const packageTrendData = useMemo(
-    () =>
-      buildPackageTrendData(dataNasabah, trendMode, {
-        startDate: trendStartDate,
-        endDate: trendEndDate,
-        startMonth: trendStartMonth,
-        endMonth: trendEndMonth,
-        monthYear: trendMonthYear,
-        startYear: trendStartYear,
-        endYear: trendEndYear,
-      }),
-    [
-      dataNasabah,
-      trendMode,
-      trendStartDate,
-      trendEndDate,
-      trendStartMonth,
-      trendEndMonth,
-      trendMonthYear,
-      trendStartYear,
-      trendEndYear,
-    ],
+    () => buildPackageDataByChartFilter(paketFilteredData, paketChartFilter),
+    [paketFilteredData, paketChartFilter],
   );
 
   return (
@@ -965,21 +1259,42 @@ export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahIt
         <CollapsibleChartSection
           title="Diagram Customer Berdasarkan Skor"
           description="Menampilkan pembagian customer berdasarkan kategori skor, mulai dari tidak potensial sampai berlangganan."
-          badge={`${dataNasabah.length} customer`}
+          badge={`${skorFilteredData.length} customer`}
           open={openedCharts.skor}
           onToggle={() => toggleChart("skor")}
         >
-          <PieChartCard title="Diagram Customer Berdasarkan Skor" data={skorPieData} />
+          <div className="space-y-4">
+            <ChartFilterControls value={skorChartFilter} onChange={setSkorChartFilter} />
+            <PieChartCard title="Diagram Customer Berdasarkan Skor" data={skorPieData} />
+          </div>
         </CollapsibleChartSection>
 
         <CollapsibleChartSection
           title="Perbandingan Customer Berdasarkan Sumber"
-          description="Menunjukkan dari mana customer berasal, seperti Instagram, Facebook, TikTok, Mitra, Playstore, atau sumber lainnya."
-          badge="Sumber data"
+          description="Menunjukkan dari mana customer berasal, yaitu Facebook, Instagram, dan Tiktok."
+          badge={`${sumberFilteredData.length} customer`}
           open={openedCharts.sumber}
           onToggle={() => toggleChart("sumber")}
         >
-          <PieChartCard title="Perbandingan Customer Berdasarkan Sumber" data={sumberPieData} />
+          <div className="space-y-4">
+            <ChartFilterControls value={sumberChartFilter} onChange={setSumberChartFilter} />
+            <PieChartCard title="Perbandingan Customer Berdasarkan Sumber" data={sumberPieData} />
+          </div>
+        </CollapsibleChartSection>
+      </div>
+
+      <div className="grid items-start gap-4">
+        <CollapsibleChartSection
+          title="Diagram Customer Berdasarkan Sumber Kemitraan"
+          description="Menampilkan persebaran customer berdasarkan sumber kemitraan seperti Non Mitra, Referal, Partnership, dan Regional."
+          badge={`${kemitraanFilteredData.length} customer`}
+          open={openedCharts.kemitraan}
+          onToggle={() => toggleChart("kemitraan")}
+        >
+          <div className="space-y-4">
+            <ChartFilterControls value={kemitraanChartFilter} onChange={setKemitraanChartFilter} />
+            <PieChartCard title="Diagram Customer Berdasarkan Sumber Kemitraan" data={kemitraanPieData} />
+          </div>
         </CollapsibleChartSection>
       </div>
 
@@ -987,100 +1302,12 @@ export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahIt
         <CollapsibleChartSection
           title="Diagram Tren Pertumbuhan Customer"
           description="Melihat perkembangan jumlah customer berdasarkan waktu. Grafik ini bisa difilter berdasarkan hari, bulan, atau tahun."
-          badge="Tren customer"
+          badge={`${pertumbuhanFilteredData.length} customer`}
           open={openedCharts.pertumbuhan}
           onToggle={() => toggleChart("pertumbuhan")}
         >
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={trendMode}
-                onChange={(event) => setTrendMode(event.target.value as TrendRangeMode)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none sm:w-auto"
-              >
-                <option value="default4bulan">Default 4 Bulan Terakhir</option>
-                <option value="harian">Rentang Hari</option>
-                <option value="bulanan">Rentang Bulan</option>
-                <option value="tahunan">Rentang Tahun</option>
-              </select>
-
-              {trendMode === "harian" && (
-                <>
-                  <input
-                    type="date"
-                    value={trendStartDate}
-                    onChange={(event) => setTrendStartDate(event.target.value)}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none"
-                  />
-                  <span className="text-xs font-black text-gray-300">s/d</span>
-                  <input
-                    type="date"
-                    value={trendEndDate}
-                    onChange={(event) => setTrendEndDate(event.target.value)}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none"
-                  />
-                </>
-              )}
-
-              {(trendMode === "bulanan" || trendMode === "default4bulan") && (
-                <>
-                  <select
-                    value={trendStartMonth}
-                    onChange={(event) => setTrendStartMonth(event.target.value)}
-                    disabled={trendMode === "default4bulan"}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none disabled:opacity-60"
-                  >
-                    {LIST_BULAN.map((month) => (
-                      <option key={`start-${month}`} value={month}>
-                        Dari {month}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={trendEndMonth}
-                    onChange={(event) => setTrendEndMonth(event.target.value)}
-                    disabled={trendMode === "default4bulan"}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none disabled:opacity-60"
-                  >
-                    {LIST_BULAN.map((month) => (
-                      <option key={`end-${month}`} value={month}>
-                        Sampai {month}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    type="number"
-                    value={trendMonthYear}
-                    onChange={(event) => setTrendMonthYear(event.target.value)}
-                    disabled={trendMode === "default4bulan"}
-                    className="w-28 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none disabled:opacity-60"
-                    placeholder="Tahun"
-                  />
-                </>
-              )}
-
-              {trendMode === "tahunan" && (
-                <>
-                  <input
-                    type="number"
-                    value={trendStartYear}
-                    onChange={(event) => setTrendStartYear(event.target.value)}
-                    className="w-28 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none"
-                    placeholder="Dari tahun"
-                  />
-                  <span className="text-xs font-black text-gray-300">s/d</span>
-                  <input
-                    type="number"
-                    value={trendEndYear}
-                    onChange={(event) => setTrendEndYear(event.target.value)}
-                    className="w-28 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 focus:outline-none"
-                    placeholder="Sampai tahun"
-                  />
-                </>
-              )}
-            </div>
+            <ChartFilterControls value={pertumbuhanChartFilter} onChange={setPertumbuhanChartFilter} />
 
             <TrendChartCard data={trendData} />
           </div>
@@ -1089,11 +1316,14 @@ export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahIt
         <CollapsibleChartSection
           title="Diagram Perbandingan Paket Langganan Customer"
           description="Membandingkan jumlah customer berdasarkan paket langganan seperti Basic, Business, Pro, dan Bundling."
-          badge="Paket customer"
+          badge={`${paketFilteredData.length} customer`}
           open={openedCharts.paket}
           onToggle={() => toggleChart("paket")}
         >
-          <PackageBarChartCard data={packageTrendData} />
+          <div className="space-y-4">
+            <ChartFilterControls value={paketChartFilter} onChange={setPaketChartFilter} />
+            <PackageBarChartCard data={packageTrendData} />
+          </div>
         </CollapsibleChartSection>
       </div>
     </div>
