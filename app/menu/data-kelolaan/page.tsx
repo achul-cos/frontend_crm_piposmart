@@ -36,9 +36,27 @@ interface NasabahItem {
   skemaId?: string;
   nominal: number;
   noted: string;
+  callHistories?: {
+    waktuCall: string;
+    picSales: string;
+    remark: string;
+    conclusion?: string;
+  }[];
+  trainingSessions?: string[];
+  trainingHistories?: {
+    waktuTraining: string;
+    lokasiTraining: string;
+  }[];
+  purchaseHistories?: {
+    paket: string;
+    waktuMulai: string;
+    waktuBerakhir: string;
+    hargaAktual: number;
+  }[];
 }
 
 type EditModalMode = "profil" | "scoring";
+type DeleteTargetMode = "selected" | "page" | "filtered" | "custom";
 
 const LIST_BULAN = [
   "Januari",
@@ -62,6 +80,59 @@ const LIST_SKOR = [
   { value: "3", label: "Langganan (3)", scor: 3 },
 ];
 
+const getSkorValueFromItem = (item?: Partial<NasabahItem> | null) => {
+  const remarksValue = String(item?.remarks ?? "").trim();
+
+  if (LIST_SKOR.some((skor) => skor.value === remarksValue)) {
+    return remarksValue;
+  }
+
+  const scorValue = String(item?.scor ?? "0").trim();
+
+  if (LIST_SKOR.some((skor) => skor.value === scorValue)) {
+    return scorValue;
+  }
+
+  return "0";
+};
+
+const getLatestRemarkScore = (item?: Partial<NasabahItem> | null) => {
+  const latestCall = item?.callHistories?.[item.callHistories.length - 1];
+  const latestRemark = String(latestCall?.remark || item?.remarks || "").trim();
+  const remarkScore = latestRemark.match(/\((\d)\)/)?.[1];
+
+  if (remarkScore && LIST_SKOR.some((skor) => skor.value === remarkScore)) {
+    return remarkScore;
+  }
+
+  return getSkorValueFromItem(item);
+};
+
+const isInvalidPic = (pic?: string) => {
+  const normalizedPic = String(pic || "").trim().toLowerCase();
+
+  return (
+    normalizedPic === "" ||
+    normalizedPic === "-" ||
+    normalizedPic === "invalid" ||
+    normalizedPic.includes("invalid") ||
+    normalizedPic === "no pic"
+  );
+};
+
+const isTrialPackage = (value?: string) => String(value || "").toLowerCase().includes("trial");
+
+const isSubscribedCustomer = (item: Partial<NasabahItem>) => {
+  const activePurchase = item.purchaseHistories?.some((purchase) => !isTrialPackage(purchase.paket));
+
+  if (activePurchase) return true;
+
+  const statusAkun = String(item.statusAkun || "").toLowerCase();
+
+  return statusAkun.includes("berlangganan") || statusAkun.includes("pro") || statusAkun.includes("business") || statusAkun.includes("basic");
+};
+
+const formatPercentValue = (value: number) => `${Math.round(value)}%`;
 
 const PHONE_COUNTRY_OPTIONS = [
   { code: "ID", name: "Indonesia", flag: "🇮🇩", dialCode: "+62", placeholder: "812-3456-7890" },
@@ -316,7 +387,7 @@ const CallIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
 
 
 function getQuickSkorBadgeClass(item: NasabahItem) {
-  const value = String(item.remarks ?? item.scor ?? "0");
+  const value = getSkorValueFromItem(item);
 
   if (value === "3") return "bg-blue-100 text-blue-700";
   if (value === "2") return "bg-yellow-100 text-yellow-800";
@@ -348,15 +419,10 @@ function PicBadge({
 }
 
 function getSkorLabelFromItem(item: NasabahItem) {
-  const remarksValue = String(item.remarks ?? "");
-  const skor = LIST_SKOR.find((row) => row.value === remarksValue);
-  if (skor) return skor.label;
+  const skorValue = getSkorValueFromItem(item);
+  const skor = LIST_SKOR.find((row) => row.value === skorValue);
 
-  if (item.scor === 3) return "Langganan (3)";
-  if (item.scor === 2) return "Potensial (2)";
-  if (item.scor === 1) return "Kemungkinan Potensial (1)";
-
-  return "Tidak Potensial (0)";
+  return skor?.label || "Tidak Potensial (0)";
 }
 
 function SkorBadge({ item }: { item: NasabahItem }) {
@@ -423,6 +489,38 @@ function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "pho
 }
 
 
+
+function SummaryMetricCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string | number;
+  description: string;
+}) {
+  return (
+    <div className="group relative overflow-hidden rounded-[28px] border-2 border-red-100 bg-gradient-to-br from-white via-red-50/80 to-[#FFF3EF] px-5 py-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#C92C1E]/40 hover:shadow-lg">
+      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[#C92C1E]/10 transition-all duration-200 group-hover:scale-125" />
+      <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-[#FDE2DD]" />
+
+      <div className="relative z-10">
+        <p className="min-h-[34px] text-center text-sm font-black leading-tight text-[#8F2118]">
+          {title}
+        </p>
+
+        <p className="mt-2 text-center text-[52px] font-black leading-none tracking-tight text-[#C92C1E] drop-shadow-sm">
+          {value}
+        </p>
+
+        <p className="mx-auto mt-3 min-h-[34px] max-w-[210px] rounded-2xl bg-white/70 px-3 py-2 text-center text-[10px] font-bold leading-snug text-[#9F4A42]">
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function DataKelolaanPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -447,6 +545,8 @@ export default function DataKelolaanPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectionAction, setSelectionAction] = useState<"edit" | "delete" | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [deleteTargetMode, setDeleteTargetMode] = useState<DeleteTargetMode>("selected");
+  const [deleteCustomLimit, setDeleteCustomLimit] = useState("25");
   const [trashCount, setTrashCount] = useState(0);
 
   const [modalMode, setModalMode] = useState<EditModalMode>("profil");
@@ -458,10 +558,16 @@ export default function DataKelolaanPage() {
   const [bulkPicModalOpen, setBulkPicModalOpen] = useState(false);
   const [bulkSelectedPic, setBulkSelectedPic] = useState("");
 
-  const loggedInUser = "Satria";
-  const loggedInRole = "Admin";
+  const [loggedInUser, setLoggedInUser] = useState("Satria");
+  const [loggedInRole, setLoggedInRole] = useState("Developer");
 
   useEffect(() => {
+    const userName = localStorage.getItem("piposmart_user_name");
+    const userRole = localStorage.getItem("piposmart_user_role");
+
+    if (userName) setLoggedInUser(userName);
+    if (userRole) setLoggedInRole(userRole);
+
     const cached = localStorage.getItem("piposmart_nasabah_data");
     if (cached) {
       try {
@@ -544,6 +650,11 @@ export default function DataKelolaanPage() {
     setSelectionMode(true);
     setSelectionAction(action);
     setSelectedIds([]);
+
+    if (action === "delete") {
+      setDeleteTargetMode("page");
+      setDeleteCustomLimit(String(Math.min(rowsPerPage, filteredData.length || 1)));
+    }
   };
 
   const handleCancelSelectionMode = () => {
@@ -560,21 +671,14 @@ export default function DataKelolaanPage() {
     );
   };
 
-  const handleHapusDataTerpilih = () => {
-    if (selectedIds.length === 0) {
+  const moveItemsToTrash = (itemsToDelete: NasabahItem[]) => {
+    if (itemsToDelete.length === 0) {
       alert("Belum ada data yang dipilih untuk dihapus.");
       return;
     }
 
-    const yakin = confirm(
-      `Yakin ingin memindahkan ${selectedIds.length} data yang dipilih ke Riwayat Hapus? Data masih bisa dipulihkan dari halaman Trash.`,
-    );
-
-    if (!yakin) return;
-
-    const selectedSet = new Set(selectedIds);
-    const deletedItems = dataNasabah.filter((item) => selectedSet.has(item.no));
-    const nextData = dataNasabah.filter((item) => !selectedSet.has(item.no));
+    const deleteIds = new Set(itemsToDelete.map((item) => item.no));
+    const nextData = dataNasabah.filter((item) => !deleteIds.has(item.no));
 
     const oldTrashRaw = localStorage.getItem("piposmart_deleted_nasabah_data");
     let oldTrash: NasabahItem[] = [];
@@ -590,7 +694,7 @@ export default function DataKelolaanPage() {
 
     const oldTrashIds = new Set(oldTrash.map((item) => item.no));
     const nextTrash = [
-      ...deletedItems.filter((item) => !oldTrashIds.has(item.no)),
+      ...itemsToDelete.filter((item) => !oldTrashIds.has(item.no)),
       ...oldTrash,
     ];
 
@@ -600,8 +704,59 @@ export default function DataKelolaanPage() {
 
     setSelectedIds([]);
     setSelectionMode(false);
+    setSelectionAction(null);
 
-    alert(`${deletedItems.length} data dipindahkan ke Riwayat Hapus.`);
+    alert(`${itemsToDelete.length} data dipindahkan ke Riwayat Hapus.`);
+  };
+
+  const prepareDeleteTarget = () => {
+    setDeleteTargetMode(selectedIds.length > 0 ? "selected" : "filtered");
+    setDeleteCustomLimit(String(Math.min(rowsPerPage, filteredData.length || 1)));
+  };
+
+  const getCustomDeleteLimit = () => {
+    const parsedLimit = Number(deleteCustomLimit);
+
+    if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+      return 0;
+    }
+
+    return Math.min(Math.floor(parsedLimit), filteredData.length);
+  };
+
+  const getDeleteTargetItems = () => {
+    if (deleteTargetMode === "selected") {
+      const selectedSet = new Set(selectedIds);
+      return dataNasabah.filter((item) => selectedSet.has(item.no));
+    }
+
+    if (deleteTargetMode === "page") {
+      const pageSet = new Set(currentPageIds);
+      return dataNasabah.filter((item) => pageSet.has(item.no));
+    }
+
+    if (deleteTargetMode === "custom") {
+      return filteredData.slice(0, getCustomDeleteLimit());
+    }
+
+    return filteredData;
+  };
+
+  const handleConfirmDeleteBulk = () => {
+    const targetItems = getDeleteTargetItems();
+
+    if (targetItems.length === 0) {
+      alert("Belum ada data yang masuk ke pilihan hapus.");
+      return;
+    }
+
+    const yakin = confirm(
+      `Yakin ingin memindahkan ${targetItems.length} data ke Riwayat Hapus? Data masih bisa dipulihkan dari halaman Trash.`,
+    );
+
+    if (!yakin) return;
+
+    moveItemsToTrash(targetItems);
   };
 
   const handleHapusSatuData = (item: NasabahItem) => {
@@ -708,6 +863,39 @@ export default function DataKelolaanPage() {
     });
 
     return Array.from(setPic).sort();
+  }, [dataNasabah]);
+
+  const summaryData = useMemo(() => {
+    const totalCustomer = dataNasabah.length;
+
+    const totalCustomerPotensi = dataNasabah.filter((item) => {
+      const latestScore = getLatestRemarkScore(item);
+      const hasTraining =
+        (item.trainingSessions?.length || 0) > 0 ||
+        (item.trainingHistories?.length || 0) > 0 ||
+        String(item.noted || "").toLowerCase().includes("training");
+
+      return latestScore === "2" || hasTraining;
+    }).length;
+
+    const totalCustomerKemungkinan = dataNasabah.filter((item) => {
+      const latestScore = getLatestRemarkScore(item);
+
+      return latestScore === "1" && !isInvalidPic(item.pic);
+    }).length;
+
+    const totalCustomerBerlangganan = dataNasabah.filter(isSubscribedCustomer).length;
+
+    const perbandinganBerlangganan =
+      totalCustomer === 0 ? 0 : (totalCustomerBerlangganan / totalCustomer) * 100;
+
+    return {
+      totalCustomer,
+      totalCustomerPotensi,
+      totalCustomerKemungkinan,
+      totalCustomerBerlangganan,
+      perbandinganBerlangganan,
+    };
   }, [dataNasabah]);
 
   const filteredData = useMemo(() => {
@@ -818,6 +1006,10 @@ export default function DataKelolaanPage() {
     }
 
     setSelectedIds((prev) => Array.from(new Set([...prev, ...currentPageIds])));
+
+    if (selectionAction === "delete") {
+      setDeleteTargetMode("selected");
+    }
   };
 
   const formatTgl = (str: string) => {
@@ -842,19 +1034,14 @@ export default function DataKelolaanPage() {
   };
 
   const getSkorLabel = (item: NasabahItem) => {
-    const remarksValue = String(item.remarks ?? "");
-    const skor = LIST_SKOR.find((row) => row.value === remarksValue);
-    if (skor) return skor.label;
+    const skorValue = getSkorValueFromItem(item);
+    const skor = LIST_SKOR.find((row) => row.value === skorValue);
 
-    if (item.scor === 3) return "Langganan (3)";
-    if (item.scor === 2) return "Potensial (2)";
-    if (item.scor === 1) return "Kemungkinan Potensial (1)";
-
-    return "Tidak Potensial (0)";
+    return skor?.label || "Tidak Potensial (0)";
   };
 
   const getSkorBadgeClass = (item: NasabahItem) => {
-    const value = String(item.remarks ?? item.scor ?? "0");
+    const value = getSkorValueFromItem(item);
 
     if (value === "3") return "bg-blue-100 text-blue-700";
     if (value === "2") return "bg-yellow-100 text-yellow-800";
@@ -888,6 +1075,20 @@ export default function DataKelolaanPage() {
     }));
   };
 
+  const updateEditingSkor = (value: string) => {
+    const selected = LIST_SKOR.find((item) => item.value === value) || LIST_SKOR[0];
+
+    setEditingItem((prev) =>
+      prev
+        ? {
+            ...prev,
+            remarks: selected.value,
+            scor: selected.scor,
+          }
+        : prev,
+    );
+  };
+
   const handleSaveEditModal = (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -904,8 +1105,17 @@ export default function DataKelolaanPage() {
       setProfileValidationErrors({});
     }
 
+    const selectedSkorValue = getSkorValueFromItem(editingItem);
+    const selectedSkor = LIST_SKOR.find((item) => item.value === selectedSkorValue) || LIST_SKOR[0];
+
+    const normalizedEditingItem: NasabahItem = {
+      ...editingItem,
+      remarks: selectedSkor.value,
+      scor: selectedSkor.scor,
+    };
+
     const nextData = dataNasabah.map((item) =>
-      item.no === editingItem.no ? editingItem : item,
+      item.no === normalizedEditingItem.no ? normalizedEditingItem : item,
     );
 
     saveDataNasabah(nextData);
@@ -1020,6 +1230,39 @@ export default function DataKelolaanPage() {
             Tambah Data Manual
           </Link>
         </div>
+      </div>
+
+      {/* SUMMARY CUSTOMER */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <SummaryMetricCard
+          title="Total Customer"
+          value={summaryData.totalCustomer}
+          description="Jumlah semua customer yang masuk ke data kelolaan."
+        />
+
+        <SummaryMetricCard
+          title="Total Customer Potensi"
+          value={summaryData.totalCustomerPotensi}
+          description="Customer skor 2, remark terakhir 2, atau sedang/akan training."
+        />
+
+        <SummaryMetricCard
+          title="Total Customer Kemungkinan"
+          value={summaryData.totalCustomerKemungkinan}
+          description="Customer dengan PIC valid dan skor/remark terakhir 1."
+        />
+
+        <SummaryMetricCard
+          title="Total Customer Berlangganan"
+          value={summaryData.totalCustomerBerlangganan}
+          description="Customer berlangganan aktif selain trial."
+        />
+
+        <SummaryMetricCard
+          title="Perbandingan Customer Berlangganan"
+          value={formatPercentValue(summaryData.perbandinganBerlangganan)}
+          description="Total berlangganan dibanding total customer."
+        />
       </div>
 
       {/* PANEL FILTER & SEARCHING */}
@@ -1188,16 +1431,6 @@ export default function DataKelolaanPage() {
                   Batal Pilih
                 </button>
 
-                <button
-                  onClick={handleToggleSelectAllCurrentPage}
-                  disabled={currentPageIds.length === 0}
-                  className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-black hover:bg-gray-50 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isAllCurrentPageSelected
-                    ? "Batal Pilih Semua"
-                    : `Pilih Semua Halaman Ini (${currentPageIds.length})`}
-                </button>
-
                 {selectionAction === "edit" && (
                   <button
                     onClick={openBulkPicModal}
@@ -1209,13 +1442,54 @@ export default function DataKelolaanPage() {
                 )}
 
                 {selectionAction === "delete" && (
-                  <button
-                    onClick={handleHapusDataTerpilih}
-                    disabled={selectedIds.length === 0}
-                    className="px-3.5 py-2 bg-red-600 border border-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Hapus Terpilih ({selectedIds.length})
-                  </button>
+                  <>
+                    <select
+                      value={deleteTargetMode}
+                      onChange={(event) => setDeleteTargetMode(event.target.value as DeleteTargetMode)}
+                      className="px-3.5 py-2 bg-white border border-red-200 text-red-700 rounded-xl text-xs font-black outline-none focus:border-red-500 cursor-pointer"
+                    >
+                      <option value="selected">
+                        Yang dicentang ({selectedIds.length})
+                      </option>
+                      <option value="page">
+                        Halaman ini ({currentPageIds.length})
+                      </option>
+                      <option value="filtered">
+                        Semua hasil filter ({filteredData.length})
+                      </option>
+                      <option value="custom">
+                        Jumlah tertentu
+                      </option>
+                    </select>
+
+                    {deleteTargetMode === "custom" && (
+                      <input
+                        type="number"
+                        min={1}
+                        max={filteredData.length}
+                        value={deleteCustomLimit}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) => {
+                          const rawValue = event.target.value.replace(/\D/g, "");
+                          setDeleteCustomLimit(rawValue);
+                        }}
+                        onBlur={() => {
+                          const safeLimit = getCustomDeleteLimit();
+                          setDeleteCustomLimit(safeLimit > 0 ? String(safeLimit) : "1");
+                        }}
+                        className="w-24 px-3 py-2 bg-white border border-red-200 text-red-700 rounded-xl text-xs font-black outline-none focus:border-red-500"
+                        title="Jumlah data dari hasil filter"
+                      />
+                    )}
+
+                    <button
+                      onClick={handleConfirmDeleteBulk}
+                      disabled={filteredData.length === 0 || getDeleteTargetItems().length === 0}
+                      className="px-3.5 py-2 bg-red-600 border border-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Hapus {getDeleteTargetItems().length} Data
+                    </button>
+                  </>
                 )}
               </>
             )}
@@ -1845,14 +2119,10 @@ export default function DataKelolaanPage() {
                     <FormSelect
                       label="Skor / Remarks *"
                       icon="sales"
-                      value={String(editingItem.remarks ?? "0")}
+                      value={getSkorValueFromItem(editingItem)}
                       options={LIST_SKOR.map((item) => item.value)}
                       getLabel={(value) => LIST_SKOR.find((item) => item.value === value)?.label || value}
-                      onChange={(value) => {
-                        const selected = LIST_SKOR.find((item) => item.value === value);
-                        updateEditingField("remarks", value);
-                        updateEditingField("scor", selected?.scor ?? 0);
-                      }}
+                      onChange={updateEditingSkor}
                     />
                   </div>
                 </div>
@@ -1867,14 +2137,10 @@ export default function DataKelolaanPage() {
                     <FormInput label="Total Transaksi" type="number" value={String(editingItem.totalTransaksi || 0)} onChange={(value) => updateEditingField("totalTransaksi", Number(value) || 0)} />
                     <FormSelect
                       label="Skor / Remarks"
-                      value={String(editingItem.remarks ?? "0")}
+                      value={getSkorValueFromItem(editingItem)}
                       options={LIST_SKOR.map((item) => item.value)}
                       getLabel={(value) => LIST_SKOR.find((item) => item.value === value)?.label || value}
-                      onChange={(value) => {
-                        const selected = LIST_SKOR.find((item) => item.value === value);
-                        updateEditingField("remarks", value);
-                        updateEditingField("scor", selected?.scor ?? 0);
-                      }}
+                      onChange={updateEditingSkor}
                     />
                     <FormSelect label="Validitas" value={editingItem.validitas || "VALID"} options={validitasOptions} onChange={(value) => updateEditingField("validitas", value)} />
                     <FormSelect label="Call Status" value={editingItem.callStatus || "PENDING"} options={callOptions} onChange={(value) => updateEditingField("callStatus", value)} />
