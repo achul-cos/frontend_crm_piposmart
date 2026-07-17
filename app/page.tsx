@@ -1,241 +1,507 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { 
-  XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, CartesianGrid
-} from "recharts";
 
-interface ReportItem {
-  id: number;
-  bulan: string;
-  tanggal: string;
-  pic: string;
-  totalRespon: number;
-  totalNoRespon: number;
-  grandTotal: number;
-}
+type NasabahItem = {
+  no: number;
+  pic?: string;
+  tanggalFu?: string;
+  tanggalDibagikan?: string;
+  createDateProject?: string;
+  statusAkun?: string;
+  callStatus?: string;
+  chatStatus?: string;
+  remarks?: string;
+  scor?: number;
+  nominal?: number;
+  finalisasiClosing?: string;
+  totalFu?: number;
+};
 
-const ALL_MONTHS = [
-  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+const LIST_SKOR = [
+  { value: "0", label: "Tidak Potensial" },
+  { value: "1", label: "Kemungkinan Potensial" },
+  { value: "2", label: "Potensial" },
+  { value: "3", label: "Langganan" },
 ];
 
-export default function LandingDashboard() {
-  const [totalKelolaan, setTotalKelolaan] = useState<string>("Loading...");
-  const [totalReportLog, setTotalReportLog] = useState<string>("Loading...");
-  const [reportData, setReportData] = useState<ReportItem[]>([]);
-  const [loadingCharts, setLoadingCharts] = useState<boolean>(true);
-  
-  const [loggedInUser, setLoggedInUser] = useState<string>("Satria");
-  const [userRole, setUserRole] = useState<string>("Sales");
+const getToday = () => new Date().toISOString().split("T")[0];
 
-  const currentYear = new Date().getFullYear();
-  const [startMonth, setStartMonth] = useState("Januari");
-  const [endMonth, setEndMonth] = useState("Desember");
+const getCustomerDate = (item: NasabahItem) => {
+  return item.tanggalFu || item.createDateProject || item.tanggalDibagikan || "";
+};
 
-  // Ambil data session user
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedPic = localStorage.getItem("user_pic");
-      const savedRole = localStorage.getItem("user_role");
-      if (savedPic) setLoggedInUser(savedPic.split(" ")[0]);
-      if (savedRole) setUserRole(savedRole);
-    }
-  }, []);
+const formatRupiah = (value: number) => {
+  if (!value) return "Rp0";
 
-  // Fetch statistik gabungan secara Real-Time dari Backend Go kamu
-  const fetchDashboardStats = async () => {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-    try {
-      setLoadingCharts(true);
-      
-      // 1. Ambil data Kelolaan Akun
-      const resKelolaan = await fetch(`${baseUrl}/api/kelolaan`);
-      if (resKelolaan.ok) {
-        const data = await resKelolaan.json();
-        setTotalKelolaan(`${data?.length || 0} Akun`);
-      } else {
-        setTotalKelolaan("0 Akun");
-      }
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+};
 
-      // 2. Ambil data Report Log Harian
-      const resReport = await fetch(`${baseUrl}/api/report`);
-      if (resReport.ok) {
-        const data = await resReport.json();
-        setReportData(data || []);
-        setTotalReportLog(`${data?.length || 0} Log Aktivitas`);
-      } else {
-        setTotalReportLog("0 Log");
-      }
-    } catch (error) {
-      setTotalKelolaan("Offline");
-      setTotalReportLog("Offline");
-    } finally {
-      setLoadingCharts(false);
-    }
-  };
+const formatCompactRupiah = (value: number) => {
+  if (!value) return "Rp0";
 
-  useEffect(() => {
-    fetchDashboardStats();
-  }, []);
+  if (value >= 1_000_000_000) {
+    return `Rp${(value / 1_000_000_000).toLocaleString("id-ID", {
+      maximumFractionDigits: 2,
+    })} M`;
+  }
 
-  // Filter bulan aktif berdasarkan pilihan user
-  const visibleMonths = useMemo(() => {
-    const startIdx = ALL_MONTHS.indexOf(startMonth);
-    const endIdx = ALL_MONTHS.indexOf(endMonth);
-    if (startIdx <= endIdx) return ALL_MONTHS.slice(startIdx, endIdx + 1);
-    return ALL_MONTHS.slice(endIdx, startIdx + 1);
-  }, [startMonth, endMonth]);
+  if (value >= 1_000_000) {
+    return `Rp${(value / 1_000_000).toLocaleString("id-ID", {
+      maximumFractionDigits: 2,
+    })} Jt`;
+  }
 
-  // Agregasi Data Grafik Batang: Akumulasi per-bulan dari log report
-  const dataGrafikBar = useMemo(() => {
-    const rekap: Record<string, { name: string; "Respon Positif": number; "Tidak Merespon": number }> = {};
-    
-    visibleMonths.forEach(m => {
-      rekap[m] = { name: m, "Respon Positif": 0, "Tidak Merespon": 0 };
-    });
+  if (value >= 1_000) {
+    return `Rp${(value / 1_000).toLocaleString("id-ID", {
+      maximumFractionDigits: 1,
+    })} Rb`;
+  }
 
-    reportData.forEach((item: any) => {
-      const bln = item.bulan || "Januari";
-      if (rekap[bln]) {
-        rekap[bln]["Respon Positif"] += item.totalRespon || 0;
-        rekap[bln]["Tidak Merespon"] += item.totalNoRespon || 0;
-      }
-    });
+  return formatRupiah(value);
+};
 
-    return Object.values(rekap);
-  }, [reportData, visibleMonths]);
+const getRoleBadgeClass = (role: string) => {
+  if (role === "Developer") return "border-red-100 bg-red-50 text-[#C92C1E]";
+  if (role === "Supervisor") return "border-amber-100 bg-amber-50 text-amber-700";
+  return "border-gray-100 bg-gray-50 text-gray-600";
+};
 
-  // Hitung total akumulasi untuk box summary atas
-  const akumulasiMetriks = useMemo(() => {
-    let totalRespon = 0;
-    let totalNoRespon = 0;
-    reportData.forEach((item: any) => {
-      if (visibleMonths.includes(item.bulan)) {
-        totalRespon += item.totalRespon || 0;
-        totalNoRespon += item.totalNoRespon || 0;
-      }
-    });
-    return { totalRespon, totalNoRespon };
-  }, [reportData, visibleMonths]);
+const canAccessAllData = (role: string) => {
+  return role === "Developer" || role === "Supervisor" || role === "Admin";
+};
+
+const normalizePicName = (value?: string) => {
+  return String(value || "")
+    .replace(/\(.*?\)/g, "")
+    .trim()
+    .toLowerCase();
+};
+
+const isValidPicName = (value?: string) => {
+  const normalized = normalizePicName(value);
 
   return (
-    <div className="space-y-8 bg-[#FAF9F6] min-h-screen text-[#1C1C1E]">
-      
-      {/* WELCOME BANNER LANDING */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight">CRM Pusat Kontrol</h1>
-          <p className="text-xs text-gray-500 mt-1 font-medium">PT. PIPOSMART DIGITAL INDONESIA • Panel Utama Monitoring Data Kelolaan & Kinerja Lapangan.</p>
-          <div className="text-xs text-gray-400 font-bold mt-3 flex items-center gap-2">
-            <svg className="w-3.5 h-3.5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-            Logged in: <span className="text-sm font-black text-[#C92C1E]">{loggedInUser}</span>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full border border-red-100 bg-red-50 text-[#C92C1E] uppercase">{userRole}</span>
+    normalized !== "" &&
+    normalized !== "invalid" &&
+    normalized !== "no pic" &&
+    normalized !== "nop ic" &&
+    normalized !== "-"
+  );
+};
+
+export default function DashboardOverviewPage() {
+  const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
+  const [userName, setUserName] = useState("User");
+  const [userRole, setUserRole] = useState("Sales");
+
+  useEffect(() => {
+    const cached = localStorage.getItem("piposmart_nasabah_data");
+    const savedUserName = localStorage.getItem("piposmart_user_name");
+    const savedUserRole = localStorage.getItem("piposmart_user_role");
+
+    if (savedUserName) setUserName(savedUserName);
+    if (savedUserRole) setUserRole(savedUserRole);
+
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setDataNasabah(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setDataNasabah([]);
+      }
+    }
+  }, []);
+
+  const isAllAccess = canAccessAllData(userRole);
+
+  const visibleData = useMemo(() => {
+    if (isAllAccess) return dataNasabah;
+
+    const normalizedUserName = normalizePicName(userName);
+
+    return dataNasabah.filter((item) => {
+      const normalizedPic = normalizePicName(item.pic);
+
+      return (
+        normalizedPic === normalizedUserName ||
+        normalizedPic.includes(normalizedUserName) ||
+        normalizedUserName.includes(normalizedPic)
+      );
+    });
+  }, [dataNasabah, isAllAccess, userName]);
+
+  const stats = useMemo(() => {
+    const today = getToday();
+
+    const todayCustomers = visibleData.filter((item) => getCustomerDate(item) === today);
+    const prospectCustomers = visibleData.filter((item) => String(item.remarks ?? item.scor ?? "0") === "2");
+    const closingCustomers = visibleData.filter((item) => String(item.remarks ?? item.scor ?? "0") === "3");
+    const contactedCustomers = visibleData.filter((item) => item.callStatus === "CONTACTED");
+    const pendingFollowUp = visibleData.filter(
+      (item) =>
+        item.callStatus === "PENDING" ||
+        item.chatStatus === "PENDING" ||
+        item.callStatus === "NO CALL",
+    );
+
+    const totalFollowUp = visibleData.reduce(
+      (total, item) => total + Number(item.totalFu || 0),
+      0,
+    );
+
+    const totalClosing = visibleData.reduce(
+      (total, item) => total + Number(item.nominal || 0),
+      0,
+    );
+
+    const picSummary = visibleData.reduce<Record<string, number>>((result, item) => {
+      if (!isValidPicName(item.pic)) return result;
+
+      const pic = item.pic || "-";
+      result[pic] = (result[pic] || 0) + 1;
+      return result;
+    }, {});
+
+    const topPic = Object.entries(picSummary)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    const allFollowUpRanking = Object.entries(
+      dataNasabah.reduce<Record<string, { totalFollowUp: number; contacted: number }>>(
+        (result, item) => {
+          if (!isValidPicName(item.pic)) return result;
+
+          const pic = item.pic || "-";
+
+          if (!result[pic]) {
+            result[pic] = {
+              totalFollowUp: 0,
+              contacted: 0,
+            };
+          }
+
+          result[pic].totalFollowUp += Number(item.totalFu || 0);
+
+          if (item.callStatus === "CONTACTED") {
+            result[pic].contacted += 1;
+          }
+
+          return result;
+        },
+        {},
+      ),
+    )
+      .map(([pic, value]) => ({
+        pic,
+        totalFollowUp: value.totalFollowUp,
+        contacted: value.contacted,
+      }))
+      .sort((a, b) => b.totalFollowUp - a.totalFollowUp);
+
+    const currentUserRankIndex = allFollowUpRanking.findIndex(
+      (item) => normalizePicName(item.pic) === normalizePicName(userName),
+    );
+
+    const currentUserRanking =
+      currentUserRankIndex >= 0
+        ? {
+            ...allFollowUpRanking[currentUserRankIndex],
+            rank: currentUserRankIndex + 1,
+          }
+        : null;
+
+    const followUpRanking = allFollowUpRanking.slice(0, 5).map((item, index) => ({
+      ...item,
+      rank: index + 1,
+    }));
+
+    const isCurrentUserInTopFive =
+      currentUserRanking !== null &&
+      followUpRanking.some(
+        (item) => normalizePicName(item.pic) === normalizePicName(userName),
+      );
+
+    const visibleFollowUpRanking =
+      !isAllAccess && currentUserRanking && !isCurrentUserInTopFive
+        ? [...followUpRanking.slice(0, 4), currentUserRanking]
+        : followUpRanking;
+
+    const skorSummary = LIST_SKOR.map((skor) => ({
+      ...skor,
+      total: visibleData.filter(
+        (item) => String(item.remarks ?? item.scor ?? "0") === skor.value,
+      ).length,
+    }));
+
+    return {
+      totalCustomer: visibleData.length,
+      todayCustomer: todayCustomers.length,
+      prospectCustomers: prospectCustomers.length,
+      closingCustomers: closingCustomers.length,
+      contactedCustomers: contactedCustomers.length,
+      pendingFollowUp: pendingFollowUp.length,
+      totalFollowUp,
+      totalClosing,
+      topPic,
+      followUpRanking: visibleFollowUpRanking,
+      skorSummary,
+    };
+  }, [visibleData]);
+
+  const cardItems = [
+    {
+      title: isAllAccess ? "Total Customer" : "Total Input Saya",
+      value: stats.totalCustomer,
+      desc: isAllAccess ? "Seluruh data kelolaan tim" : `Data dengan PIC ${userName}`,
+    },
+    {
+      title: "Customer Hari Ini",
+      value: stats.todayCustomer,
+      desc: "Berdasarkan tanggal FU / dibuat",
+    },
+    {
+      title: "Potensial",
+      value: stats.prospectCustomers,
+      desc: "Customer skor potensial",
+    },
+    {
+      title: "Langganan",
+      value: stats.closingCustomers,
+      desc: "Customer skor langganan",
+    },
+  ];
+
+  return (
+    <div className="space-y-6 font-sans text-[#1C1C1E]">
+      <section className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-sm">
+        <div className="relative p-6 md:p-8">
+          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[80px] bg-red-50" />
+
+          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${getRoleBadgeClass(userRole)}`}>
+                {userRole}
+              </div>
+              <h1 className="mt-4 text-3xl font-black tracking-tight text-gray-950">
+                Dashboard Overview
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-gray-500">
+                Halo {userName}, ini ringkasan performa data kelolaan CRM Piposmart.
+                {isAllAccess
+                  ? " Kamu memiliki akses untuk melihat seluruh data tim."
+                  : " Akun Sales hanya melihat total data input dan follow up milik sendiri."}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/menu/data-kelolaan"
+                className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm hover:bg-[#A82216]"
+              >
+                Buka Data Kelolaan
+              </Link>
+
+              {isAllAccess && (
+                <Link
+                  href="/menu/report"
+                  className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-xs font-black text-gray-700 hover:bg-gray-50"
+                >
+                  Lihat Report
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {cardItems.map((item) => (
+          <div
+            key={item.title}
+            className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+          >
+            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+              {item.title}
+            </p>
+            <p className="mt-3 text-3xl font-black text-gray-950">{item.value}</p>
+            <p className="mt-1 text-xs font-medium text-gray-400">{item.desc}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-4">
+            <div>
+              <p className="text-sm font-black text-gray-900">
+                Ringkasan Follow Up
+              </p>
+              <p className="text-xs font-medium text-gray-400">
+                {isAllAccess
+                  ? "Status call dan chat dari seluruh data customer."
+                  : "Status call dan chat dari data customer milik kamu."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="min-w-0 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+              <p className="text-[10px] font-black uppercase text-emerald-700">
+                Contacted
+              </p>
+              <p className="mt-2 truncate text-2xl font-black leading-tight text-emerald-700">
+                {stats.contactedCustomers}
+              </p>
+            </div>
+
+            <div className="min-w-0 rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+              <p className="text-[10px] font-black uppercase text-amber-700">
+                Pending Follow Up
+              </p>
+              <p className="mt-2 truncate text-2xl font-black leading-tight text-amber-700">
+                {stats.pendingFollowUp}
+              </p>
+            </div>
+
+            <div className="min-w-0 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+              <p className="text-[10px] font-black uppercase text-blue-700">
+                Total Follow Up
+              </p>
+              <p className="mt-2 truncate text-2xl font-black leading-tight text-blue-700">
+                {stats.totalFollowUp}
+              </p>
+            </div>
+
+            <div className="min-w-0 rounded-2xl border border-red-100 bg-red-50/60 p-4">
+              <p className="text-[10px] font-black uppercase text-[#C92C1E]">
+                Nominal Closing
+              </p>
+              <p
+                className="mt-2 truncate text-2xl font-black leading-tight text-[#C92C1E]"
+                title={formatRupiah(stats.totalClosing)}
+              >
+                {formatCompactRupiah(stats.totalClosing)}
+              </p>
+              <p className="mt-1 truncate text-[10px] font-bold text-red-400" title={formatRupiah(stats.totalClosing)}>
+                {formatRupiah(stats.totalClosing)}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* CONTROLLER FILTER TREN BULANAN */}
-        <div className="flex items-center gap-2 bg-[#F2F2F7] p-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 w-full lg:w-auto justify-between lg:justify-end">
-          <span className="text-[10px] font-black text-gray-400 uppercase ml-1">Tren Visual:</span>
-          <div className="flex items-center gap-1.5">
-            <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="bg-white border rounded p-1 text-gray-700 focus:outline-none cursor-pointer">
-              {ALL_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <span className="text-gray-400 font-medium">s/d</span>
-            <select value={endMonth} onChange={(e) => setEndMonth(e.target.value)} className="bg-white border rounded p-1 text-gray-700 focus:outline-none cursor-pointer">
-              {ALL_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-sm font-black text-gray-900">Distribusi Skor</p>
+          <p className="text-xs font-medium text-gray-400">
+            {isAllAccess
+              ? "Jumlah customer berdasarkan skor seluruh tim."
+              : "Jumlah customer berdasarkan skor data kamu."}
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {stats.skorSummary.map((item) => (
+              <div key={item.value}>
+                <div className="mb-1 flex items-center justify-between text-xs font-bold text-gray-500">
+                  <span>{item.label}</span>
+                  <span>{item.total}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-[#C92C1E]"
+                    style={{
+                      width: `${stats.totalCustomer ? (item.total / stats.totalCustomer) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* METRICS CARDS ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <Link href="/menu/data-kelolaan" className="block group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:border-gray-400 transition-all">
-          <dt className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Data Kelolaan</dt>
-          <dd className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-gray-900 group-hover:text-[#C92C1E] transition-colors">{totalKelolaan}</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded text-gray-600">Database Profil</span>
-          </dd>
-        </Link>
-
-        <Link href="/menu/report" className="block group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:border-gray-400 transition-all">
-          <dt className="text-xs font-bold text-gray-400 uppercase tracking-wider">Aktivitas Laporan Harian</dt>
-          <dd className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-gray-900 group-hover:text-[#C92C1E] transition-colors">{totalReportLog}</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded text-gray-600">Log Terinput</span>
-          </dd>
-        </Link>
-
-        <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
-          <dt className="text-xs font-bold text-gray-400 uppercase tracking-wider">Respon Positif Terakumulasi</dt>
-          <dd className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-emerald-600">{akumulasiMetriks.totalRespon} Call/Chat</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded">Closing Leads</span>
-          </dd>
+      <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-2 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-black text-gray-900">
+              Peringkat Follow Up Sales
+            </p>
+            <p className="text-xs font-medium text-gray-400">
+              Sales bisa melihat posisi mereka dengan jelas. User Invalid / No PIC tidak ditampilkan di peringkat ini.
+              Angka yang ditampilkan adalah total follow up, bukan total seluruh data customer.
+            </p>
+          </div>
+          <Link
+            href="/menu/data-kelolaan"
+            className="text-xs font-black text-[#C92C1E] hover:underline"
+          >
+            Kelola customer →
+          </Link>
         </div>
 
-        <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
-          <dt className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Mengabaikan (No Respon)</dt>
-          <dd className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-red-600">{akumulasiMetriks.totalNoRespon} Tele-log</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-red-50 text-red-700 rounded">Dropped/Pending</span>
-          </dd>
-        </div>
-      </div>
-
-      {/* TREN GRAFIK UTAMA */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col space-y-4">
-        <div>
-          <h3 className="text-md font-black uppercase tracking-tight text-gray-900">📊 Grafik Tren Efektivitas Tele-Marketing Tim Hunter ({currentYear})</h3>
-          <p className="text-[11px] text-gray-400 font-medium">Visualisasi perbandingan volume calon nasabah yang merespon positif vs tidak merespon di setiap bulan buku.</p>
-        </div>
-
-        <div className="w-full h-80">
-          {loadingCharts ? (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm font-bold animate-pulse">Memuat matriks tren analitik...</div>
-          ) : dataGrafikBar.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">Tidak ada rekaman log aktivitas pada periode bulan terpilih.</div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {stats.followUpRanking.length === 0 ? (
+            <div className="col-span-full rounded-2xl border border-dashed border-gray-200 p-6 text-center text-xs font-bold text-gray-400">
+              Belum ada data follow up. Silakan input follow up terlebih dahulu.
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dataGrafikBar} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F2F2F7" />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="#1C1C1E" style={{ fontSize: "11px", fontWeight: "bold" }} />
-                <YAxis stroke="#8E8E93" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", fontWeight: "bold" }} />
-                <Bar dataKey="Respon Positif" fill="#34C759" radius={[4, 4, 0, 0]} maxBarSize={25} />
-                <Bar dataKey="Tidak Merespon" fill="#C92C1E" radius={[4, 4, 0, 0]} maxBarSize={25} />
-              </BarChart>
-            </ResponsiveContainer>
+            stats.followUpRanking.map((item) => {
+              const isMe = normalizePicName(item.pic) === normalizePicName(userName);
+
+              return (
+                <div
+                  key={`${item.pic}-${item.rank}`}
+                  className={`relative overflow-hidden rounded-2xl border p-4 ${
+                    isMe
+                      ? "border-2 border-[#C92C1E] bg-red-50 shadow-md shadow-red-100"
+                      : "border-gray-100 bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
+                        item.rank === 1
+                          ? "bg-[#C92C1E] text-white"
+                          : isMe
+                            ? "bg-white text-[#C92C1E]"
+                            : "bg-white text-gray-500"
+                      }`}
+                    >
+                      Rank #{item.rank}
+                    </p>
+
+                    {isMe && (
+                      <span className="rounded-full bg-[#C92C1E] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">
+                        Posisi Kamu
+                      </span>
+                    )}
+                  </div>
+
+                  <p className={`mt-3 truncate text-sm font-black ${isMe ? "text-[#C92C1E]" : "text-gray-900"}`}>
+                    {item.pic}
+                  </p>
+
+                  <p className={`mt-2 text-4xl font-black leading-none ${isMe ? "text-[#C92C1E]" : "text-gray-900"}`}>
+                    {item.totalFollowUp}
+                  </p>
+
+                  <p className="mt-1 text-[10px] font-black uppercase text-gray-400">
+                    Total Follow Up
+                  </p>
+
+                  <p className="mt-2 text-[11px] font-bold text-gray-500">
+                    Contacted: {item.contacted}
+                  </p>
+                </div>
+              );
+            })
           )}
         </div>
-      </div>
-
-      {/* 🧭 AKSES DIRECT QUICK NAVIGASI */}
-      <div className="space-y-4">
-        <h3 className="text-md font-black uppercase tracking-tight text-gray-900">🧭 Akses Cepat Menu Utama</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Link href="/menu/data-kelolaan" className="group block border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:border-[#C92C1E] transition-all">
-            <div className="w-9 h-9 rounded-xl bg-gray-50 text-gray-600 flex items-center justify-center mb-3">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-            </div>
-            <h4 className="font-bold text-[#1D1D1F] group-hover:text-[#C92C1E] transition-colors text-sm uppercase">Kelola Database Utama</h4>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed">Kelola profil data kemitraan, bank kualifikasi, filter wilayah, dan kelengkapan email legalitas.</p>
-          </Link>
-
-          <Link href="/menu/report" className="group block border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:border-[#C92C1E] transition-all">
-            <div className="w-9 h-9 rounded-xl bg-red-50 text-[#C92C1E] flex items-center justify-center mb-3">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-            </div>
-            <h4 className="font-bold text-[#1D1D1F] group-hover:text-[#C92C1E] transition-colors text-sm uppercase">Buka Log Perform Report</h4>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed">Buka tabel log performa tele-marketing harian, import matriks berkas Excel massal, atau tambah data manual.</p>
-          </Link>
-        </div>
-      </div>
-
+      </section>
     </div>
   );
 }
