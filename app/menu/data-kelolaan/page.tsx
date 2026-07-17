@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GrafikCustomer from "./grafik/page";
 import { generateDummyCustomers, LIST_PIC } from "./dummy/page";
+import CallPage, { CallFormResult, openWhatsAppCustomer } from "./call/page";
 
 interface NasabahItem {
   totalFu: number;
@@ -200,6 +201,26 @@ const callOptions = ["PENDING", "CONTACTED", "NO CALL"];
 const chatOptions = ["PENDING", "PROSPECT", "DELIVERED", "NO CHAT"];
 const validitasOptions = ["VALID", "INVALID"];
 
+const getCustomerFilterDate = (item: Partial<NasabahItem>) => {
+  return (
+    item.tanggalFu ||
+    item.createDateProject ||
+    item.tanggalDibagikan ||
+    ""
+  );
+};
+
+const getCustomerFilterMonth = (item: Partial<NasabahItem>) => {
+  const dateValue = getCustomerFilterDate(item);
+
+  if (dateValue && dateValue.includes("-")) {
+    const monthIndex = Number(dateValue.split("-")[1]) - 1;
+    return LIST_BULAN[monthIndex] || item.bulan || "";
+  }
+
+  return item.bulan || "";
+};
+
 const DATA_PACKET_MASTER: Record<string, { id_skema: string; nama_promo: string; total_penjualan: number }[]> = {
   Basic: [
     { id_skema: "basic_24", nama_promo: "24 Bulan Basic", total_penjualan: 1716000 },
@@ -283,6 +304,17 @@ const RefreshIcon = () => (
 );
 
 
+const CallIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M2.25 6.75c0 8.284 6.716 15 15 15h1.5A2.25 2.25 0 0021 19.5v-1.066a1.5 1.5 0 00-1.033-1.428l-4.2-1.4a1.5 1.5 0 00-1.64.43l-.826.826a11.25 11.25 0 01-6.164-6.164l.826-.826a1.5 1.5 0 00.43-1.64l-1.4-4.2A1.5 1.5 0 005.566 3H4.5A2.25 2.25 0 002.25 5.25v1.5z"
+    />
+  </svg>
+);
+
+
 function getQuickSkorBadgeClass(item: NasabahItem) {
   const value = String(item.remarks ?? item.scor ?? "0");
 
@@ -293,16 +325,12 @@ function getQuickSkorBadgeClass(item: NasabahItem) {
   return "bg-red-100 text-red-700";
 }
 
-function QuickPicDropdown({
+function PicBadge({
   value,
-  options,
   color = "red",
-  onChange,
 }: {
   value: string;
-  options: string[];
   color?: "red" | "green";
-  onChange: (value: string) => void;
 }) {
   const colorClass =
     color === "green"
@@ -310,44 +338,35 @@ function QuickPicDropdown({
       : "bg-red-50 border-red-200 text-[#C92C1E]";
 
   return (
-    <select
-      value={value || ""}
-      onClick={(event) => event.stopPropagation()}
-      onChange={(event) => onChange(event.target.value)}
-      className={`inline-flex max-w-[130px] cursor-pointer appearance-none rounded-full border px-2 py-0.5 text-center text-[10px] font-black uppercase tracking-tight outline-none transition hover:opacity-80 ${colorClass}`}
-      title="Klik untuk ganti PIC"
+    <span
+      className={`inline-flex max-w-[150px] items-center justify-center rounded-full border px-2.5 py-1 text-center text-[10px] font-black uppercase tracking-tight ${colorClass}`}
+      title={value || "-"}
     >
-      <option value="">Pilih PIC</option>
-      {options.map((pic) => (
-        <option key={pic} value={pic}>
-          {pic}
-        </option>
-      ))}
-    </select>
+      <span className="truncate">{value || "-"}</span>
+    </span>
   );
 }
 
-function QuickSkorDropdown({
-  item,
-  onChange,
-}: {
-  item: NasabahItem;
-  onChange: (value: string) => void;
-}) {
+function getSkorLabelFromItem(item: NasabahItem) {
+  const remarksValue = String(item.remarks ?? "");
+  const skor = LIST_SKOR.find((row) => row.value === remarksValue);
+  if (skor) return skor.label;
+
+  if (item.scor === 3) return "Langganan (3)";
+  if (item.scor === 2) return "Potensial (2)";
+  if (item.scor === 1) return "Kemungkinan Potensial (1)";
+
+  return "Tidak Potensial (0)";
+}
+
+function SkorBadge({ item }: { item: NasabahItem }) {
   return (
-    <select
-      value={String(item.remarks ?? item.scor ?? "0")}
-      onClick={(event) => event.stopPropagation()}
-      onChange={(event) => onChange(event.target.value)}
-      className={`inline-flex max-w-[170px] cursor-pointer appearance-none rounded-md px-2 py-1 text-center text-[10px] font-black outline-none transition hover:opacity-80 ${getQuickSkorBadgeClass(item)}`}
-      title="Klik untuk ganti scoring"
+    <span
+      className={`inline-flex max-w-[180px] items-center justify-center rounded-md px-2 py-1 text-center text-[10px] font-black ${getQuickSkorBadgeClass(item)}`}
+      title={getSkorLabelFromItem(item)}
     >
-      {LIST_SKOR.map((skor) => (
-        <option key={skor.value} value={skor.value}>
-          {skor.label}
-        </option>
-      ))}
-    </select>
+      <span className="truncate">{getSkorLabelFromItem(item)}</span>
+    </span>
   );
 }
 
@@ -434,6 +453,7 @@ export default function DataKelolaanPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NasabahItem | null>(null);
   const [profileValidationErrors, setProfileValidationErrors] = useState<ProfileValidationErrors>({});
+  const [callModalItem, setCallModalItem] = useState<NasabahItem | null>(null);
 
   const [bulkPicModalOpen, setBulkPicModalOpen] = useState(false);
   const [bulkSelectedPic, setBulkSelectedPic] = useState("");
@@ -613,12 +633,29 @@ export default function DataKelolaanPage() {
     alert("Data dipindahkan ke Riwayat Hapus.");
   };
 
-  const handleQuickUpdatePic = (id: number, nextPic: string) => {
+  const handleOpenCallAction = (item: NasabahItem) => {
+    openWhatsAppCustomer(item.noHpOwner || item.noHpOutlet);
+    setCallModalItem(item);
+  };
+
+  const handleSaveCallResult = (result: CallFormResult) => {
     const nextData = dataNasabah.map((item) =>
-      item.no === id ? { ...item, pic: nextPic } : item,
+      item.no === result.customerId
+        ? {
+            ...item,
+            callStatus: result.callStatus,
+            chatStatus: result.chatStatus,
+            tanggalFu: result.followUpDate,
+            totalFu: Number(item.totalFu || 0) + 1,
+            noted: result.note,
+          }
+        : item,
     );
 
     saveDataNasabah(nextData);
+    setCallModalItem(null);
+
+    alert("Hasil call berhasil disimpan.");
   };
 
   const openBulkPicModal = () => {
@@ -663,22 +700,6 @@ export default function DataKelolaanPage() {
     alert(`${selectedSet.size} data berhasil diganti ke PIC ${bulkSelectedPic}.`);
   };
 
-  const handleQuickUpdateSkor = (id: number, nextSkor: string) => {
-    const selected = LIST_SKOR.find((item) => item.value === nextSkor);
-
-    const nextData = dataNasabah.map((item) =>
-      item.no === id
-        ? {
-            ...item,
-            remarks: nextSkor,
-            scor: selected?.scor ?? Number(nextSkor) ?? 0,
-          }
-        : item,
-    );
-
-    saveDataNasabah(nextData);
-  };
-
   const daftarPicUnik = useMemo(() => {
     const setPic = new Set<string>();
 
@@ -711,11 +732,17 @@ export default function DataKelolaanPage() {
       let matchesFilter = true;
 
       if (filterMode === "harian") {
-        if (startDateFilter && item.tanggalFu < startDateFilter) matchesFilter = false;
-        if (endDateFilter && item.tanggalFu > endDateFilter) matchesFilter = false;
+        const itemDate = getCustomerFilterDate(item);
+
+        if (!itemDate) {
+          matchesFilter = false;
+        }
+
+        if (startDateFilter && itemDate < startDateFilter) matchesFilter = false;
+        if (endDateFilter && itemDate > endDateFilter) matchesFilter = false;
       } else {
         if (startMonthFilter || endMonthFilter) {
-          const itemMonthIndex = LIST_BULAN.indexOf(item.bulan);
+          const itemMonthIndex = LIST_BULAN.indexOf(getCustomerFilterMonth(item));
           const startIndex = startMonthFilter
             ? LIST_BULAN.indexOf(startMonthFilter)
             : 0;
@@ -1257,11 +1284,41 @@ export default function DataKelolaanPage() {
                         />
                       </div>
                     </th>
-                    <th className="p-3 text-center align-top min-w-[140px]">
-                      PIC Sales
+                    <th className="p-3 text-center align-top min-w-[150px]">
+                      <div className="space-y-2">
+                        <span>PIC Sales</span>
+                        <select
+                          value={picFilter}
+                          onChange={(e) => setPicFilter(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
+                        >
+                          <option value="Semua">Semua PIC</option>
+                          {LIST_PIC.map((pic) => (
+                            <option key={pic} value={pic}>
+                              {pic}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </th>
-                    <th className="p-3 text-center align-top min-w-[160px]">
-                      Skor
+                    <th className="p-3 text-center align-top min-w-[170px]">
+                      <div className="space-y-2">
+                        <span>Skor</span>
+                        <select
+                          value={skorFilter}
+                          onChange={(e) => setSkorFilter(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
+                        >
+                          <option value="Semua">Semua Skor</option>
+                          {LIST_SKOR.map((skor) => (
+                            <option key={skor.value} value={skor.value}>
+                              {skor.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </th>
                     <th className="p-3 text-center align-top">Action</th>
                   </>
@@ -1294,13 +1351,43 @@ export default function DataKelolaanPage() {
                         />
                       </div>
                     </th>
-                    <th className="p-3 text-center align-top min-w-[140px]">
-                      PIC Sales
+                    <th className="p-3 text-center align-top min-w-[150px]">
+                      <div className="space-y-2">
+                        <span>PIC Sales</span>
+                        <select
+                          value={picFilter}
+                          onChange={(e) => setPicFilter(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                        >
+                          <option value="Semua">Semua PIC</option>
+                          {LIST_PIC.map((pic) => (
+                            <option key={pic} value={pic}>
+                              {pic}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </th>
                     <th className="p-3 text-center align-top">Expired Date</th>
                     <th className="p-3 text-center">Total Transaksi</th>
-                    <th className="p-3 text-center align-top min-w-[160px]">
-                      Skor
+                    <th className="p-3 text-center align-top min-w-[170px]">
+                      <div className="space-y-2">
+                        <span>Skor</span>
+                        <select
+                          value={skorFilter}
+                          onChange={(e) => setSkorFilter(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                        >
+                          <option value="Semua">Semua Skor</option>
+                          {LIST_SKOR.map((skor) => (
+                            <option key={skor.value} value={skor.value}>
+                              {skor.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </th>
                     <th className="p-3">Status Call</th>
                     <th className="p-3">Status Chat</th>
@@ -1376,20 +1463,12 @@ export default function DataKelolaanPage() {
                           {row.outlet || "-"}
                         </td>
 
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <QuickPicDropdown
-                            value={row.pic || ""}
-                            options={LIST_PIC}
-                            color="red"
-                            onChange={(value) => handleQuickUpdatePic(row.no, value)}
-                          />
+                        <td className="p-3 text-center">
+                          <PicBadge value={row.pic || ""} color="red" />
                         </td>
 
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <QuickSkorDropdown
-                            item={row}
-                            onChange={(value) => handleQuickUpdateSkor(row.no, value)}
-                          />
+                        <td className="p-3 text-center">
+                          <SkorBadge item={row} />
                         </td>
 
                         <td
@@ -1397,6 +1476,14 @@ export default function DataKelolaanPage() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCallAction(row)}
+                              className="text-gray-600 hover:text-green-600 hover:scale-110 transition"
+                              title="Call via WhatsApp"
+                            >
+                              <CallIcon className="w-5 h-5" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => openEditModal(row, "profil")}
@@ -1427,13 +1514,8 @@ export default function DataKelolaanPage() {
                         <td className="p-3 font-black text-gray-900 whitespace-normal break-words">
                           {row.namaOwner || "-"}
                         </td>
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <QuickPicDropdown
-                            value={row.pic || ""}
-                            options={LIST_PIC}
-                            color="green"
-                            onChange={(value) => handleQuickUpdatePic(row.no, value)}
-                          />
+                        <td className="p-3 text-center">
+                          <PicBadge value={row.pic || ""} color="green" />
                         </td>
                         <td className="p-3 text-center font-mono font-bold text-gray-600">
                           {formatTgl(row.expiredDate)}
@@ -1441,11 +1523,8 @@ export default function DataKelolaanPage() {
                         <td className="p-3 text-center font-bold text-gray-900">
                           {row.totalTransaksi}
                         </td>
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <QuickSkorDropdown
-                            item={row}
-                            onChange={(value) => handleQuickUpdateSkor(row.no, value)}
-                          />
+                        <td className="p-3 text-center">
+                          <SkorBadge item={row} />
                         </td>
                         <td className="p-3">
                           <span
@@ -1500,6 +1579,14 @@ export default function DataKelolaanPage() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCallAction(row)}
+                              className="text-gray-600 hover:text-green-600 hover:scale-110 transition"
+                              title="Call via WhatsApp"
+                            >
+                              <CallIcon className="w-5 h-5" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => openEditModal(row, "scoring")}
@@ -1597,6 +1684,12 @@ export default function DataKelolaanPage() {
 
 
       <GrafikCustomer dataNasabah={dataNasabah} />
+
+      <CallPage
+        customer={callModalItem}
+        onClose={() => setCallModalItem(null)}
+        onSave={handleSaveCallResult}
+      />
 
       {/* MODAL EDIT PIC DATA TERPILIH */}
       {bulkPicModalOpen && (
@@ -1748,6 +1841,18 @@ export default function DataKelolaanPage() {
                       options={LIST_PIC}
                       onChange={(value) => updateEditingField("pic", value)}
                       error={profileValidationErrors.pic}
+                    />
+                    <FormSelect
+                      label="Skor / Remarks *"
+                      icon="sales"
+                      value={String(editingItem.remarks ?? "0")}
+                      options={LIST_SKOR.map((item) => item.value)}
+                      getLabel={(value) => LIST_SKOR.find((item) => item.value === value)?.label || value}
+                      onChange={(value) => {
+                        const selected = LIST_SKOR.find((item) => item.value === value);
+                        updateEditingField("remarks", value);
+                        updateEditingField("scor", selected?.scor ?? 0);
+                      }}
                     />
                   </div>
                 </div>
