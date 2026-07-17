@@ -39,6 +39,34 @@ interface NasabahItem {
 
 const getToday = () => new Date().toISOString().split("T")[0];
 
+const getCurrentMonthName = () => {
+  const bulanIndonesia = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+
+  return bulanIndonesia[new Date().getMonth()];
+};
+
+const getCurrentYear = () => String(new Date().getFullYear());
+
+const LIST_SKOR = [
+  { value: "0", label: "Tidak Potensial (0)", scor: 0 },
+  { value: "1", label: "Kemungkinan Potensial (1)", scor: 1 },
+  { value: "2", label: "Potensial (2)", scor: 2 },
+  { value: "3", label: "Langganan (3)", scor: 3 },
+];
+
 const PHONE_COUNTRY_OPTIONS = [
   { code: "ID", name: "Indonesia", flag: "🇮🇩", dialCode: "+62", placeholder: "812-3456-7890" },
   { code: "MY", name: "Malaysia", flag: "🇲🇾", dialCode: "+60", placeholder: "12-345-6789" },
@@ -238,13 +266,13 @@ export default function FormInputDummyPage() {
 
     // Default data agar struktur lama tetap aman
     totalFu: 0,
-    tanggalFu: "",
-    tahun: "2026",
-    bulan: "Juni",
-    tanggalDibagikan: "",
+    tanggalFu: getToday(),
+    tahun: getCurrentYear(),
+    bulan: getCurrentMonthName(),
+    tanggalDibagikan: getToday(),
     statusAkun: "Akun Baru",
     kodeBaris: "",
-    createDateProject: "",
+    createDateProject: getToday(),
     expiredDate: "",
     totalTransaksi: 0,
     scor: 0,
@@ -317,6 +345,16 @@ export default function FormInputDummyPage() {
     }));
   };
 
+  const updateSkorField = (value: string) => {
+    const selected = LIST_SKOR.find((item) => item.value === value);
+
+    setFormInput((prev) => ({
+      ...prev,
+      remarks: value,
+      scor: selected?.scor ?? 0,
+    }));
+  };
+
   const handleSaveData = (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -353,6 +391,13 @@ export default function FormInputDummyPage() {
               noHpOwner: formInput.noHpOwner || "",
               noHpOutlet: formInput.noHpOutlet || "",
               pic: formInput.pic || "Satria",
+              remarks: formInput.remarks || "0",
+              scor: Number(formInput.scor ?? 0),
+              tanggalFu: getToday(),
+              tahun: getCurrentYear(),
+              bulan: getCurrentMonthName(),
+              tanggalDibagikan: getToday(),
+              createDateProject: getToday(),
             }
           : item,
       );
@@ -366,9 +411,9 @@ export default function FormInputDummyPage() {
 
       const itemBaru: NasabahItem = {
         totalFu: 0,
-        tanggalFu: "",
-        tahun: "2026",
-        bulan: "Juni",
+        tanggalFu: getToday(),
+        tahun: getCurrentYear(),
+        bulan: getCurrentMonthName(),
         no: nextNo,
         pic: formInput.pic || "Satria",
         tanggalDibagikan: getToday(),
@@ -383,11 +428,11 @@ export default function FormInputDummyPage() {
         createDateProject: getToday(),
         expiredDate: "",
         totalTransaksi: 0,
-        scor: 0,
+        scor: Number(formInput.scor ?? 0),
         callStatus: "PENDING",
         chatStatus: "PENDING",
         validitas: "VALID",
-        remarks: "0",
+        remarks: formInput.remarks || "0",
         sumberNasabah: "Instagram",
         finalisasiClosing: "",
         skemaId: "",
@@ -534,6 +579,25 @@ export default function FormInputDummyPage() {
                   {validationErrors.pic}
                 </p>
               )}
+            </div>
+
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+                <FieldIcon type="sales" />
+                Skor / Remarks
+              </label>
+              <select
+                name="remarks"
+                value={String(formInput.remarks ?? "0")}
+                onChange={(event) => updateSkorField(event.target.value)}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 bg-white p-2.5 text-xs font-black text-gray-700 focus:outline-none focus:border-[#C92C1E]"
+              >
+                {LIST_SKOR.map((skor) => (
+                  <option key={skor.value} value={skor.value}>
+                    {skor.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
