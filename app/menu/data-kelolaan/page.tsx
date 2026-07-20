@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GrafikCustomer from "./grafik/page";
 import { generateDummyCustomers, LIST_PIC } from "./dummy/page";
-import CallPage, { CallFormResult, openWhatsAppCustomer } from "./call/page";
+import CallPage, { CallFormResult } from "./call/page";
 
 interface NasabahItem {
   totalFu: number;
@@ -816,7 +816,6 @@ export default function DataKelolaanPage() {
   };
 
   const handleOpenCallAction = (item: NasabahItem) => {
-    openWhatsAppCustomer(item.noHpOwner || item.noHpOutlet);
     setCallModalItem(item);
   };
 
@@ -833,7 +832,7 @@ export default function DataKelolaanPage() {
     saveDataNasabah(nextData);
     setCallModalItem(null);
 
-    alert("Hasil call berhasil disimpan.");
+    alert("Hasil Call & Chat berhasil disimpan.");
   };
 
   const openBulkPicModal = () => {
