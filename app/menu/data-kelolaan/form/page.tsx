@@ -67,6 +67,23 @@ const LIST_SKOR = [
   { value: "3", label: "Langganan (3)", scor: 3 },
 ];
 
+const SUMBER_NASABAH_OPTIONS = [
+  { value: "Instagram", label: "Instagram", tone: "pink" },
+  { value: "Facebook", label: "Facebook", tone: "blue" },
+  { value: "Tiktok", label: "Tiktok", tone: "dark" },
+  { value: "Mitra", label: "Mitra", tone: "green" },
+  { value: "Playstore", label: "Playstore", tone: "red" },
+];
+
+const getSumberTagClass = (tone?: string) => {
+  if (tone === "pink") return "border-pink-200 bg-pink-50 text-pink-700";
+  if (tone === "blue") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (tone === "dark") return "border-gray-300 bg-gray-900 text-white";
+  if (tone === "green") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+  return "border-red-200 bg-red-50 text-[#C92C1E]";
+};
+
 const PHONE_COUNTRY_OPTIONS = [
   { code: "ID", name: "Indonesia", flag: "🇮🇩", dialCode: "+62", placeholder: "812-3456-7890" },
   { code: "MY", name: "Malaysia", flag: "🇲🇾", dialCode: "+60", placeholder: "12-345-6789" },
@@ -142,19 +159,51 @@ const stripDialCode = (phone?: string, dialCode = "+62") => {
   const value = phone?.trim() || "";
 
   if (value.startsWith(dialCode)) {
-    return value.slice(dialCode.length).replace(/\D/g, "");
+    return removeLeadingTrunkZero(value.slice(dialCode.length).replace(/\D/g, ""));
   }
 
-  if (dialCode === "+62" && value.startsWith("0")) {
-    return value.slice(1).replace(/\D/g, "");
-  }
+  return removeLeadingTrunkZero(value.replace(/\D/g, ""));
+};
 
-  return value.replace(/\D/g, "");
+const removeLeadingTrunkZero = (value: string) => {
+  return value.replace(/^0+/, "");
 };
 
 const buildInternationalPhone = (dialCode: string, value: string) => {
-  const digitsOnly = value.replace(/\D/g, "").slice(0, 14);
+  const digitsOnly = removeLeadingTrunkZero(value.replace(/\D/g, "")).slice(0, 14);
   return digitsOnly ? `${dialCode}${digitsOnly}` : dialCode;
+};
+
+const getPhonePatternGroups = (placeholder: string) => {
+  return placeholder.split("-").map((group) => group.replace(/\D/g, "").length);
+};
+
+const formatPhoneNumberByCountry = (value: string, placeholder: string) => {
+  const digitsOnly = value.replace(/\D/g, "").slice(0, 14);
+  const groups = getPhonePatternGroups(placeholder);
+
+  if (!digitsOnly) return "";
+
+  const formattedGroups: string[] = [];
+  let cursor = 0;
+
+  groups.forEach((groupLength) => {
+    if (cursor >= digitsOnly.length) return;
+
+    const nextGroup = digitsOnly.slice(cursor, cursor + groupLength);
+
+    if (nextGroup) {
+      formattedGroups.push(nextGroup);
+    }
+
+    cursor += groupLength;
+  });
+
+  if (cursor < digitsOnly.length) {
+    formattedGroups.push(digitsOnly.slice(cursor));
+  }
+
+  return formattedGroups.join("-");
 };
 
 const isValidInternationalPhone = (value?: string) => {
@@ -345,15 +394,6 @@ export default function FormInputDummyPage() {
     }));
   };
 
-  const updateSkorField = (value: string) => {
-    const selected = LIST_SKOR.find((item) => item.value === value);
-
-    setFormInput((prev) => ({
-      ...prev,
-      remarks: value,
-      scor: selected?.scor ?? 0,
-    }));
-  };
 
   const handleSaveData = (event: React.FormEvent) => {
     event.preventDefault();
@@ -391,6 +431,7 @@ export default function FormInputDummyPage() {
               noHpOwner: formInput.noHpOwner || "",
               noHpOutlet: formInput.noHpOutlet || "",
               pic: formInput.pic || "Satria",
+              sumberNasabah: formInput.sumberNasabah || "Instagram",
               remarks: formInput.remarks || "0",
               scor: Number(formInput.scor ?? 0),
               tanggalFu: getToday(),
@@ -433,7 +474,7 @@ export default function FormInputDummyPage() {
         chatStatus: "PENDING",
         validitas: "VALID",
         remarks: formInput.remarks || "0",
-        sumberNasabah: "Instagram",
+        sumberNasabah: formInput.sumberNasabah || "Instagram",
         finalisasiClosing: "",
         skemaId: "",
         nominal: 0,
@@ -469,7 +510,7 @@ export default function FormInputDummyPage() {
             {editId !== null ? "Edit Profil Customer" : "Tambah Profil Customer"}
           </h1>
           <p className="mt-0.5 text-xs text-gray-500">
-            Form ini hanya mengisi data utama customer. Bagian scoring sudah dihapus.
+            Lengkapi data utama customer agar mudah dikelola, dihubungi, dan difollow up oleh tim sales.
           </p>
         </div>
 
@@ -540,6 +581,12 @@ export default function FormInputDummyPage() {
               error={validationErrors.outlet}
             />
 
+            <SourceTagSelect
+              label="Sumber Nasabah"
+              value={formInput.sumberNasabah || "Instagram"}
+              onChange={(value) => updateFormField("sumberNasabah", value)}
+            />
+
             <PhoneInput
               label="Nomor Telepon Owner *"
               value={formInput.noHpOwner || ""}
@@ -581,30 +628,12 @@ export default function FormInputDummyPage() {
               )}
             </div>
 
-            <div className="space-y-1">
-              <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
-                <FieldIcon type="sales" />
-                Skor / Remarks
-              </label>
-              <select
-                name="remarks"
-                value={String(formInput.remarks ?? "0")}
-                onChange={(event) => updateSkorField(event.target.value)}
-                className="w-full cursor-pointer rounded-xl border border-gray-200 bg-white p-2.5 text-xs font-black text-gray-700 focus:outline-none focus:border-[#C92C1E]"
-              >
-                {LIST_SKOR.map((skor) => (
-                  <option key={skor.value} value={skor.value}>
-                    {skor.label}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
 
         <div className="flex items-center justify-between border-t border-gray-100 pt-3">
           <div className="text-[11px] font-medium text-gray-400">
-            Data scoring dapat diubah langsung dari dropdown scoring di tabel.
+            Pastikan data customer sudah benar sebelum disimpan ke Data Kelolaan.
           </div>
 
           <button
@@ -615,6 +644,54 @@ export default function FormInputDummyPage() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+
+function SourceTagSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+        <FieldIcon type="brand" />
+        {label}
+      </label>
+
+      <div className="flex flex-wrap gap-2 rounded-xl border border-red-100 bg-white p-2.5">
+        {SUMBER_NASABAH_OPTIONS.map((option) => {
+          const isActive = value === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={`cursor-pointer rounded-full border px-3 py-1.5 text-[11px] font-black transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.98] ${
+                isActive
+                  ? getSumberTagClass(option.tone)
+                  : "border-gray-200 bg-gray-50 text-gray-500 hover:border-red-100 hover:bg-red-50 hover:text-[#C92C1E]"
+              }`}
+            >
+              #{option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] font-medium text-gray-400">
+        Sumber terpilih:{" "}
+        <span className="font-black text-[#C92C1E]">
+          #{value || "Instagram"}
+        </span>
+      </p>
     </div>
   );
 }
@@ -649,6 +726,10 @@ function PhoneInput({
   }, [value]);
 
   const nationalNumber = stripDialCode(value, selectedCountry.dialCode);
+  const formattedNationalNumber = formatPhoneNumberByCountry(
+    nationalNumber,
+    selectedCountry.placeholder,
+  );
 
   const handleCountryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const nextCountry =
@@ -660,7 +741,8 @@ function PhoneInput({
   };
 
   const handlePhoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(buildInternationalPhone(selectedCountry.dialCode, event.target.value));
+    const rawDigits = removeLeadingTrunkZero(event.target.value.replace(/\D/g, ""));
+    onChange(buildInternationalPhone(selectedCountry.dialCode, rawDigits));
   };
 
   return (
@@ -691,7 +773,7 @@ function PhoneInput({
         <input
           required
           type="tel"
-          value={nationalNumber}
+          value={formattedNationalNumber}
           onChange={handlePhoneChange}
           inputMode="tel"
           autoComplete="tel"
@@ -705,7 +787,7 @@ function PhoneInput({
         <p className="text-[10px] font-bold text-red-600">{error}</p>
       ) : (
         <p className="text-[10px] font-medium text-gray-400">
-          Tersimpan sebagai: {value || `${selectedCountry.dialCode}...`}
+          Tersimpan sebagai: {value || `${selectedCountry.dialCode}...`} · Tampilan: {formattedNationalNumber || selectedCountry.placeholder}
         </p>
       )}
     </div>
