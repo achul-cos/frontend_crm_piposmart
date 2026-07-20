@@ -99,6 +99,7 @@ export default function DashboardOverviewPage() {
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
   const [userName, setUserName] = useState("User");
   const [userRole, setUserRole] = useState("Sales");
+  const [isSopOpen, setIsSopOpen] = useState(true);
 
   useEffect(() => {
     const cached = localStorage.getItem("piposmart_nasabah_data");
@@ -278,7 +279,109 @@ export default function DashboardOverviewPage() {
   ];
 
   return (
-    <div className="space-y-6 font-sans text-[#1C1C1E]">
+    <>
+      {isSopOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-xl">
+            <div className="shrink-0 bg-[#C92C1E] px-6 py-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.25em] text-white/70">
+                    SOP Sales CRM
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black">
+                    Panduan Singkat Sebelum Follow Up
+                  </h2>
+                  <p className="mt-1 text-sm font-medium leading-6 text-white/80">
+                    Baca cepat setiap masuk CRM agar alur follow up tetap konsisten.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSopOpen(false)}
+                  className="rounded-2xl bg-white/15 px-3 py-2 text-xs font-black text-white transition hover:bg-white/25"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <SopPoint
+                  tone="emerald"
+                  title="Nasabah Potensi"
+                  items={[
+                    "Responsif dan interaktif saat trial.",
+                    "Membahas harga, paket, demo, training, atau closing.",
+                    "Ada peningkatan transaksi atau rekomendasi mitra.",
+                  ]}
+                />
+
+                <SopPoint
+                  tone="rose"
+                  title="Nasabah Tidak Potensi"
+                  items={[
+                    "Akun testing/karyawan atau nomor tidak aktif.",
+                    "Follow up maksimal 5 kali tanpa respons.",
+                    "Menolak, minta tidak dihubungi, atau transaksi tidak berkembang.",
+                  ]}
+                />
+
+                <SopPoint
+                  tone="amber"
+                  title="Tugas Utama Sales"
+                  items={[
+                    "Follow up data kelolaan, new download, potensi, dan jatuh tempo.",
+                    "Catat hasil follow up di CRM dengan lengkap.",
+                    "Daily report ke WA Group sesuai data yang dikerjakan.",
+                  ]}
+                />
+
+                <SopPoint
+                  tone="red"
+                  title="Wajib Saat Follow Up"
+                  items={[
+                    "Isi Status Call dan Status Chat sesuai kondisi nyata.",
+                    "Pilih remarks dengan benar, jangan asal skor.",
+                    "Tulis kesimpulan singkat agar progres mudah dipantau.",
+                  ]}
+                />
+
+                <SopPoint
+                  tone="indigo"
+                  title="Modul CS"
+                  items={[
+                    "Follow up nasabah existing, jatuh tempo, dan berlangganan.",
+                    "Pantau nasabah non-registrasi, user temp, dan unsubscribe.",
+                    "Gunakan modul Call & Chat sesuai kondisi komunikasi customer.",
+                  ]}
+                />
+              </div>
+
+              <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+                <p className="text-sm font-black text-[#C92C1E]">
+                  Ingat
+                </p>
+                <p className="mt-1 text-xs font-bold leading-5 text-red-700">
+                  Follow up dianggap valid kalau status, remarks, dan kesimpulan sudah terisi. Gunakan SOP lengkap di menu SOP Operasional jika butuh detail modul Call & Chat.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsSopOpen(false)}
+                className="w-full rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-[#A82216]"
+              >
+                Saya Mengerti, Mulai Kerja
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-6 font-sans text-[#1C1C1E]">
       <section className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-sm">
         <div className="relative p-6 md:p-8">
           <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[80px] bg-red-50" />
@@ -307,14 +410,7 @@ export default function DashboardOverviewPage() {
                 Buka Data Kelolaan
               </Link>
 
-              {isAllAccess && (
-                <Link
-                  href="/menu/report"
-                  className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-xs font-black text-gray-700 hover:bg-gray-50"
-                >
-                  Lihat Report
-                </Link>
-              )}
+
             </div>
           </div>
         </div>
@@ -502,6 +598,60 @@ export default function DashboardOverviewPage() {
           )}
         </div>
       </section>
+      </div>
+    </>
+  );
+}
+
+function SopPoint({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: "emerald" | "rose" | "amber" | "red" | "indigo";
+}) {
+  const toneClass = {
+    emerald: {
+      card: "border-emerald-100 bg-emerald-50/60",
+      title: "text-emerald-800",
+      dot: "bg-emerald-500",
+    },
+    rose: {
+      card: "border-rose-100 bg-rose-50/70",
+      title: "text-rose-800",
+      dot: "bg-rose-500",
+    },
+    amber: {
+      card: "border-amber-100 bg-amber-50/70",
+      title: "text-amber-900",
+      dot: "bg-amber-500",
+    },
+    red: {
+      card: "border-red-100 bg-red-50/70",
+      title: "text-[#C92C1E]",
+      dot: "bg-[#C92C1E]",
+    },
+    indigo: {
+      card: "border-indigo-100 bg-indigo-50/70",
+      title: "text-indigo-800",
+      dot: "bg-indigo-500",
+    },
+  }[tone];
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClass.card}`}>
+      <p className={`text-sm font-black ${toneClass.title}`}>{title}</p>
+
+      <ul className="mt-3 space-y-2">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-2 text-xs font-bold leading-5 text-gray-600">
+            <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${toneClass.dot}`} />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

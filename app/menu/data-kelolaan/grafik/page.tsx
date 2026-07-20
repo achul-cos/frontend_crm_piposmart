@@ -64,26 +64,41 @@ interface ChartFilterState {
 
 
 
+const PIPO_CHART_COLORS = {
+  primary: "#C92C1E",
+  dark: "#8F1F16",
+  coral: "#E24A3B",
+  orange: "#F0783E",
+  amber: "#F6B84B",
+  cream: "#FFF8F6",
+  soft: "#FDE2DD",
+  grid: "#F4C7C1",
+};
+
 const SKOR_MASTER = [
-  { key: "0", label: "Tidak Potensial (0)", color: "#C92C1E" },
-  { key: "1", label: "Kemungkinan Potensial", color: "#E24A3B" },
-  { key: "2", label: "Potensial (2)", color: "#F0783E" },
-  { key: "3", label: "Langganan (3)", color: "#F6B84B" },
+  { key: "0", label: "Tidak Potensial (0)", color: PIPO_CHART_COLORS.dark },
+  { key: "1", label: "Kemungkinan Potensial", color: PIPO_CHART_COLORS.primary },
+  { key: "2", label: "Potensial (2)", color: PIPO_CHART_COLORS.orange },
+  { key: "3", label: "Langganan (3)", color: PIPO_CHART_COLORS.amber },
 ];
 
-const SUMBER_COLORS = ["#C92C1E", "#E24A3B", "#F0783E"];
+const SUMBER_COLORS = [
+  PIPO_CHART_COLORS.primary,
+  PIPO_CHART_COLORS.coral,
+  PIPO_CHART_COLORS.orange,
+];
 
 const SUMBER_MASTER = [
-  { key: "Facebook", label: "Facebook", color: "#C92C1E" },
-  { key: "Instagram", label: "Instagram", color: "#E24A3B" },
-  { key: "Tiktok", label: "Tiktok", color: "#F0783E" },
+  { key: "Facebook", label: "Facebook", color: PIPO_CHART_COLORS.primary },
+  { key: "Instagram", label: "Instagram", color: PIPO_CHART_COLORS.coral },
+  { key: "Tiktok", label: "Tiktok", color: PIPO_CHART_COLORS.orange },
 ];
 
 const KEMITRAAN_MASTER = [
-  { key: "Non Mitra", label: "Non Mitra", color: "#C92C1E" },
-  { key: "Referal", label: "Referal", color: "#E24A3B" },
-  { key: "Partnership", label: "Partnership", color: "#F0783E" },
-  { key: "Regional", label: "Regional", color: "#F6B84B" },
+  { key: "Non Mitra", label: "Non Mitra", color: PIPO_CHART_COLORS.dark },
+  { key: "Referal", label: "Referal", color: PIPO_CHART_COLORS.primary },
+  { key: "Partnership", label: "Partnership", color: PIPO_CHART_COLORS.orange },
+  { key: "Regional", label: "Regional", color: PIPO_CHART_COLORS.amber },
 ];
 
 
@@ -279,8 +294,8 @@ function PieChartCard({
   let currentAngle = 0;
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-black text-gray-700">{title}</h2>
+    <div className="rounded-3xl border border-red-100 bg-gradient-to-br from-white via-red-50/40 to-[#FFF8F6] p-5 shadow-sm">
+      <h2 className="text-lg font-black text-[#8F1F16]">{title}</h2>
 
       {total === 0 ? (
         <div className="py-14 text-center text-xs font-bold italic text-gray-400">
@@ -312,10 +327,10 @@ function PieChartCard({
               })}
 
               <circle cx={130} cy={130} r={42} fill="white" />
-              <text x={130} y={126} textAnchor="middle" className="fill-gray-500 text-[10px] font-black">
+              <text x={130} y={126} textAnchor="middle" className="fill-[#C92C1E] text-[10px] font-black">
                 TOTAL
               </text>
-              <text x={130} y={146} textAnchor="middle" className="fill-gray-900 text-[18px] font-black">
+              <text x={130} y={146} textAnchor="middle" className="fill-[#8F1F16] text-[18px] font-black">
                 {total}
               </text>
             </svg>
@@ -326,14 +341,14 @@ function PieChartCard({
               const percentage = total ? (item.value / total) * 100 : 0;
 
               return (
-                <div key={item.key} className="min-w-0 rounded-2xl border border-gray-100 bg-gray-50/60 p-3">
+                <div key={item.key} className="min-w-0 rounded-2xl border border-red-100 bg-white/80 p-3 shadow-xs">
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                    <p className="min-w-0 truncate text-xs font-black text-gray-800" title={item.label}>
+                    <p className="min-w-0 truncate text-xs font-black text-[#8F1F16]" title={item.label}>
                       {item.label}
                     </p>
                   </div>
-                  <p className="mt-1 whitespace-nowrap text-[11px] font-bold text-gray-400">
+                  <p className="mt-1 whitespace-nowrap text-[11px] font-bold text-[#B7645C]">
                     {item.value} customer • {percentage.toFixed(1)}%
                   </p>
                 </div>
@@ -615,11 +630,11 @@ function TrendChartCard({
   const innerHeight = height - padding.top - padding.bottom;
 
   const series = [
-    { key: "total", label: "Total", color: "#C92C1E" },
-    { key: "0", label: "Tidak Potensial (0)", color: "#A82216" },
-    { key: "1", label: "Kemungkinan (1)", color: "#E24A3B" },
-    { key: "2", label: "Potensial (2)", color: "#F0783E" },
-    { key: "3", label: "Langganan (3)", color: "#F6B84B" },
+    { key: "total", label: "Total", color: PIPO_CHART_COLORS.primary },
+    { key: "0", label: "Tidak Potensial (0)", color: PIPO_CHART_COLORS.dark },
+    { key: "1", label: "Kemungkinan (1)", color: PIPO_CHART_COLORS.coral },
+    { key: "2", label: "Potensial (2)", color: PIPO_CHART_COLORS.orange },
+    { key: "3", label: "Langganan (3)", color: PIPO_CHART_COLORS.amber },
   ] as const;
 
   const maxValue = Math.max(
@@ -658,18 +673,18 @@ function TrendChartCard({
   };
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-3xl border border-red-100 bg-gradient-to-br from-white via-red-50/40 to-[#FFF8F6] p-5 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-lg font-black text-gray-700">Tren Jumlah Customer Berdasarkan Skor</h2>
-          <p className="mt-1 text-[11px] font-medium text-gray-400">
+          <h2 className="text-lg font-black text-[#8F1F16]">Tren Jumlah Customer Berdasarkan Skor</h2>
+          <p className="mt-1 text-[11px] font-medium text-[#B7645C]">
             Menampilkan jumlah customer sesuai rentang bulan dan tahun yang dipilih.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {series.map((serie) => (
-            <div key={serie.key} className="flex items-center gap-1 text-[11px] font-bold text-gray-600">
+            <div key={serie.key} className="flex items-center gap-1 text-[11px] font-bold text-[#8F1F16]">
               <span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: serie.color }} />
               {serie.label}
             </div>
@@ -689,10 +704,10 @@ function TrendChartCard({
                   y1={y}
                   x2={width - padding.right}
                   y2={y}
-                  stroke="#E5E7EB"
+                  stroke={PIPO_CHART_COLORS.grid}
                   strokeWidth={1}
                 />
-                <text x={padding.left - 12} y={y + 4} textAnchor="end" className="fill-gray-500 text-[11px] font-bold">
+                <text x={padding.left - 12} y={y + 4} textAnchor="end" className="fill-[#B7645C] text-[11px] font-bold">
                   {tick}
                 </text>
               </g>
@@ -705,7 +720,7 @@ function TrendChartCard({
               x={getX(index)}
               y={height - 14}
               textAnchor="middle"
-              className="fill-gray-600 text-[11px] font-bold"
+              className="fill-[#8F1F16] text-[11px] font-bold"
             >
               {item.label}
             </text>
@@ -824,10 +839,10 @@ function PackageBarChartCard({
   const innerHeight = height - padding.top - padding.bottom;
 
   const series = [
-    { key: "total", label: "Total", color: "#C92C1E" },
-    { key: "basic", label: "Basic", color: "#E24A3B" },
-    { key: "business", label: "Business", color: "#F0783E" },
-    { key: "pro", label: "Pro", color: "#F6B84B" },
+    { key: "total", label: "Total", color: PIPO_CHART_COLORS.primary },
+    { key: "basic", label: "Basic", color: PIPO_CHART_COLORS.coral },
+    { key: "business", label: "Business", color: PIPO_CHART_COLORS.orange },
+    { key: "pro", label: "Pro", color: PIPO_CHART_COLORS.amber },
   ] as const;
 
   const maxValue = Math.max(
@@ -853,20 +868,20 @@ function PackageBarChartCard({
   };
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-3xl border border-red-100 bg-gradient-to-br from-white via-red-50/40 to-[#FFF8F6] p-5 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-lg font-black text-gray-700">
+          <h2 className="text-lg font-black text-[#8F1F16]">
             Perbandingan Customer Langganan Berdasarkan Paket
           </h2>
-          <p className="mt-1 text-[11px] font-medium text-gray-400">
+          <p className="mt-1 text-[11px] font-medium text-[#B7645C]">
             Membandingkan customer langganan berdasarkan paket Basic, Business, dan Pro.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {series.map((serie) => (
-            <div key={serie.key} className="flex items-center gap-1 text-[11px] font-bold text-gray-600">
+            <div key={serie.key} className="flex items-center gap-1 text-[11px] font-bold text-[#8F1F16]">
               <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: serie.color }} />
               {serie.label}
             </div>
@@ -886,14 +901,14 @@ function PackageBarChartCard({
                   y1={y}
                   x2={width - padding.right}
                   y2={y}
-                  stroke="#E5E7EB"
+                  stroke={PIPO_CHART_COLORS.grid}
                   strokeWidth={1}
                 />
                 <text
                   x={padding.left - 12}
                   y={y + 4}
                   textAnchor="end"
-                  className="fill-gray-500 text-[11px] font-bold"
+                  className="fill-[#B7645C] text-[11px] font-bold"
                 >
                   {tick}
                 </text>
@@ -928,7 +943,7 @@ function PackageBarChartCard({
                 x={padding.left + groupIndex * groupWidth + groupWidth / 2}
                 y={height - 16}
                 textAnchor="middle"
-                className="fill-gray-700 text-[12px] font-bold"
+                className="fill-[#8F1F16] text-[12px] font-bold"
               >
                 {item.label}
               </text>
@@ -953,12 +968,12 @@ function ChartFilterControls({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3">
+    <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={value.mode}
           onChange={(event) => updateFilter({ mode: event.target.value as ChartFilterMode })}
-          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E] sm:w-auto"
+          className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E] sm:w-auto"
         >
           <option value="total">Total Customer</option>
           <option value="harian">Rentang Hari</option>
@@ -972,14 +987,14 @@ function ChartFilterControls({
               type="date"
               value={value.startDate}
               onChange={(event) => updateFilter({ startDate: event.target.value })}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              className="rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E]"
             />
             <span className="text-xs font-black text-gray-300">s/d</span>
             <input
               type="date"
               value={value.endDate}
               onChange={(event) => updateFilter({ endDate: event.target.value })}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              className="rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E]"
             />
           </>
         )}
@@ -989,7 +1004,7 @@ function ChartFilterControls({
             <select
               value={value.startMonth}
               onChange={(event) => updateFilter({ startMonth: event.target.value })}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              className="rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E]"
             >
               {LIST_BULAN.map((month) => (
                 <option key={`filter-start-${month}`} value={month}>
@@ -1001,7 +1016,7 @@ function ChartFilterControls({
             <select
               value={value.endMonth}
               onChange={(event) => updateFilter({ endMonth: event.target.value })}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              className="rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E]"
             >
               {LIST_BULAN.map((month) => (
                 <option key={`filter-end-${month}`} value={month}>
@@ -1014,7 +1029,7 @@ function ChartFilterControls({
               type="number"
               value={value.monthYear}
               onChange={(event) => updateFilter({ monthYear: event.target.value })}
-              className="w-28 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              className="w-28 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E]"
               placeholder="Tahun"
             />
           </>
@@ -1026,7 +1041,7 @@ function ChartFilterControls({
               type="number"
               value={value.startYear}
               onChange={(event) => updateFilter({ startYear: event.target.value })}
-              className="w-28 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              className="w-28 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E]"
               placeholder="Dari tahun"
             />
             <span className="text-xs font-black text-gray-300">s/d</span>
@@ -1034,7 +1049,7 @@ function ChartFilterControls({
               type="number"
               value={value.endYear}
               onChange={(event) => updateFilter({ endYear: event.target.value })}
-              className="w-28 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+              className="w-28 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E]"
               placeholder="Sampai tahun"
             />
           </>
@@ -1078,14 +1093,14 @@ function CollapsibleChartSection({
       className={`h-fit overflow-hidden rounded-3xl border shadow-sm transition-all duration-300 ${
         open
           ? "border-red-100 bg-red-50/40 shadow-md"
-          : "border-gray-200 bg-white hover:border-red-100 hover:bg-red-50/20"
+          : "border-red-100 bg-white hover:border-[#C92C1E]/30 hover:bg-red-50/20"
       }`}
     >
       <button
         type="button"
         onClick={onToggle}
         className={`flex w-full flex-col gap-4 p-4 text-left transition sm:p-5 md:flex-row md:items-center md:justify-between ${
-          open ? "bg-red-50/70" : "bg-gradient-to-r from-white to-gray-50/60"
+          open ? "bg-red-50/70" : "bg-gradient-to-r from-white to-[#FFF8F6]"
         }`}
       >
         <div className="flex min-w-0 items-start gap-3">
@@ -1111,20 +1126,20 @@ function CollapsibleChartSection({
 
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <h2 className="text-xs font-black uppercase leading-snug text-gray-900 sm:text-sm">
+              <h2 className="text-xs font-black uppercase leading-snug text-[#8F1F16] sm:text-sm">
                 {title}
               </h2>
               <span
                 className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wide sm:text-[10px] ${
                   open
                     ? "bg-white text-[#C92C1E] ring-1 ring-red-100"
-                    : "bg-gray-100 text-gray-500"
+                    : "bg-red-50 text-[#C92C1E]"
                 }`}
               >
                 {badge}
               </span>
             </div>
-            <p className="text-[11px] font-medium leading-relaxed text-gray-500 sm:text-xs">
+            <p className="text-[11px] font-medium leading-relaxed text-[#B7645C] sm:text-xs">
               {description}
             </p>
           </div>

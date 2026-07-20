@@ -42,21 +42,6 @@ const SettingIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
   </svg>
 );
 
-const CallChatIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2.4}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M7.5 8.25h9m-9 3h5.25M21 12c0 4.142-4.03 7.5-9 7.5a10.7 10.7 0 01-3.58-.61L3 20.25l1.58-4.11A6.93 6.93 0 013 12c0-4.142 4.03-7.5 9-7.5s9 3.358 9 7.5z"
-    />
-  </svg>
-);
 
 export default function RootLayout({
   children,
@@ -149,33 +134,6 @@ export default function RootLayout({
         </svg>
       ),
     },
-    {
-      text: "Call & Chat",
-      href: "/menu/call-chat",
-      colorClass: "text-[#C92C1E]",
-      icon: (className: string) => <CallChatIcon className={className} />,
-    },
-    {
-      text: "Report",
-      href: "/menu/report",
-      colorClass: "text-[#C92C1E]",
-      icon: (className: string) => (
-        <svg
-          className={className}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-          />
-        </svg>
-      ),
-    },
-
   ];
 
   const handleLogout = () => {

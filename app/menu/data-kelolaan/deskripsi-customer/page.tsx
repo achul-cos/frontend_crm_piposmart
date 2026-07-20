@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 type CallHistoryItem = {
@@ -31,6 +32,7 @@ type NasabahItem = {
   noHpOwner?: string;
   noHpOutlet?: string;
   sumberCustomer?: string;
+  sumberNasabah?: string;
   pic?: string;
   remarks?: string;
   scor?: number;
@@ -126,6 +128,36 @@ const getToneClass = (text: string) => {
   return "border-gray-100 bg-gray-100 text-gray-700";
 };
 
+const getSumberCustomerValue = (item: NasabahItem) => {
+  return item.sumberCustomer || (item as NasabahItem & { sumberNasabah?: string }).sumberNasabah || "-";
+};
+
+const getSumberTagClass = (value?: string) => {
+  const lower = String(value || "").toLowerCase();
+
+  if (lower.includes("instagram") || lower.includes("ig")) {
+    return "border-pink-200 bg-pink-50 text-pink-700";
+  }
+
+  if (lower.includes("facebook") || lower.includes("fb")) {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (lower.includes("tiktok") || lower.includes("tik tok")) {
+    return "border-gray-300 bg-gray-900 text-white";
+  }
+
+  if (lower.includes("mitra")) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (lower.includes("playstore") || lower.includes("play store")) {
+    return "border-red-200 bg-red-50 text-[#C92C1E]";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-600";
+};
+
 const normalizePhone = (phone?: string) => {
   const digitsOnly = String(phone || "").replace(/\D/g, "");
 
@@ -209,6 +241,29 @@ function Badge({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+
+function SourceTag({ value }: { value?: string }) {
+  const safeValue = value && value.trim() ? value.trim() : "-";
+
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-[10px] font-black uppercase tracking-wide text-gray-500">
+        Sumber Customer
+      </span>
+
+      <div className="rounded-lg border border-red-100 bg-white px-2.5 py-2">
+        <span
+          className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black ${getSumberTagClass(
+            safeValue,
+          )}`}
+        >
+          #{safeValue}
+        </span>
+      </div>
+    </label>
+  );
+}
+
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -364,6 +419,24 @@ export default function DeskripsiLanggananPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 rounded-[28px] border border-red-100 bg-[#FFF8F6] p-4 text-gray-900 shadow-sm">
+      <div className="flex items-center justify-end">
+        <Link
+          href="/menu/data-kelolaan"
+          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#C92C1E] bg-[#C92C1E] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#A82216] hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
+        >
+          <svg
+            className="h-4 w-4 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.8}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+          Kembali
+        </Link>
+      </div>
+
       <section className="flex flex-col gap-4 rounded-2xl border border-red-100 bg-white p-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex gap-4">
           <div className="flex h-24 w-20 shrink-0 items-center justify-center rounded-2xl border border-red-100 bg-red-50 text-[#C92C1E]">
@@ -443,7 +516,7 @@ export default function DeskripsiLanggananPage() {
             </button>
           }
         />
-        <InfoInput label="Sumber Customer" value={customer.sumberCustomer || "Tiktok"} />
+        <SourceTag value={getSumberCustomerValue(customer)} />
       </section>
 
       <SectionTitle>Detail Mitra</SectionTitle>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GrafikCustomer from "./grafik/page";
 import { generateDummyCustomers, LIST_PIC } from "./dummy/page";
-import CallPage, { CallFormResult, openWhatsAppCustomer } from "./call/page";
+import CallPage, { CallFormResult } from "./call/page";
 
 interface NasabahItem {
   totalFu: number;
@@ -72,6 +72,15 @@ const LIST_BULAN = [
   "November",
   "Desember",
 ];
+
+const getTodayInputDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
 
 const LIST_SKOR = [
   { value: "0", label: "Tidak Potensial (0)", scor: 0 },
@@ -533,8 +542,8 @@ export default function DataKelolaanPage() {
   const [searchKodeOwner, setSearchKodeOwner] = useState("");
   const [searchNamaOwner, setSearchNamaOwner] = useState("");
   const [searchNamaOutlet, setSearchNamaOutlet] = useState("");
-  const [startDateFilter, setStartDateFilter] = useState("");
-  const [endDateFilter, setEndDateFilter] = useState("");
+  const [startDateFilter, setStartDateFilter] = useState(() => getTodayInputDate());
+  const [endDateFilter, setEndDateFilter] = useState(() => getTodayInputDate());
   const [startMonthFilter, setStartMonthFilter] = useState("");
   const [endMonthFilter, setEndMonthFilter] = useState("");
   const [picFilter, setPicFilter] = useState("Semua");
@@ -560,6 +569,7 @@ export default function DataKelolaanPage() {
 
   const [loggedInUser, setLoggedInUser] = useState("Satria");
   const [loggedInRole, setLoggedInRole] = useState("Developer");
+  const [activeTodayDate, setActiveTodayDate] = useState(() => getTodayInputDate());
 
   useEffect(() => {
     const userName = localStorage.getItem("piposmart_user_name");
@@ -587,6 +597,23 @@ export default function DataKelolaanPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const today = getTodayInputDate();
+
+      if (today !== activeTodayDate) {
+        setActiveTodayDate(today);
+
+        if (filterMode === "harian") {
+          setStartDateFilter(today);
+          setEndDateFilter(today);
+        }
+      }
+    }, 60000);
+
+    return () => window.clearInterval(interval);
+  }, [activeTodayDate, filterMode]);
 
   const saveDataNasabah = (nextData: NasabahItem[]) => {
     setDataNasabah(nextData);
@@ -789,7 +816,6 @@ export default function DataKelolaanPage() {
   };
 
   const handleOpenCallAction = (item: NasabahItem) => {
-    openWhatsAppCustomer(item.noHpOwner || item.noHpOutlet);
     setCallModalItem(item);
   };
 
@@ -798,11 +824,7 @@ export default function DataKelolaanPage() {
       item.no === result.customerId
         ? {
             ...item,
-            callStatus: result.callStatus,
-            chatStatus: result.chatStatus,
-            tanggalFu: result.followUpDate,
-            totalFu: Number(item.totalFu || 0) + 1,
-            noted: result.note,
+            ...result.nextCustomer,
           }
         : item,
     );
@@ -810,7 +832,7 @@ export default function DataKelolaanPage() {
     saveDataNasabah(nextData);
     setCallModalItem(null);
 
-    alert("Hasil call berhasil disimpan.");
+    alert("Hasil Call & Chat berhasil disimpan.");
   };
 
   const openBulkPicModal = () => {
@@ -921,13 +943,16 @@ export default function DataKelolaanPage() {
 
       if (filterMode === "harian") {
         const itemDate = getCustomerFilterDate(item);
+        const today = getTodayInputDate();
+        const activeStartDate = startDateFilter || today;
+        const activeEndDate = endDateFilter || activeStartDate;
 
         if (!itemDate) {
           matchesFilter = false;
         }
 
-        if (startDateFilter && itemDate < startDateFilter) matchesFilter = false;
-        if (endDateFilter && itemDate > endDateFilter) matchesFilter = false;
+        if (activeStartDate && itemDate < activeStartDate) matchesFilter = false;
+        if (activeEndDate && itemDate > activeEndDate) matchesFilter = false;
       } else {
         if (startMonthFilter || endMonthFilter) {
           const itemMonthIndex = LIST_BULAN.indexOf(getCustomerFilterMonth(item));
@@ -1075,19 +1100,6 @@ export default function DataKelolaanPage() {
     }));
   };
 
-  const updateEditingSkor = (value: string) => {
-    const selected = LIST_SKOR.find((item) => item.value === value) || LIST_SKOR[0];
-
-    setEditingItem((prev) =>
-      prev
-        ? {
-            ...prev,
-            remarks: selected.value,
-            scor: selected.scor,
-          }
-        : prev,
-    );
-  };
 
   const handleSaveEditModal = (event: React.FormEvent) => {
     event.preventDefault();
@@ -1271,7 +1283,11 @@ export default function DataKelolaanPage() {
           <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner">
             <button
               onClick={() => {
+                const today = getTodayInputDate();
+
                 setFilterMode("harian");
+                setStartDateFilter(today);
+                setEndDateFilter(today);
                 setStartMonthFilter("");
                 setEndMonthFilter("");
               }}
@@ -2046,8 +2062,8 @@ export default function DataKelolaanPage() {
                 </h2>
                 <p className="text-xs text-gray-400 font-medium">
                   {modalMode === "profil"
-                    ? "Form ini hanya mengubah data utama profil customer."
-                    : "Form ini hanya mengubah atribut scoring."}
+                    ? "Form ini hanya mengubah data utama profil customer. Skor tidak bisa diedit manual."
+                    : "Form ini hanya mengubah atribut closing. Skor tetap mengikuti hasil Call & Chat."}
                 </p>
               </div>
               <button
@@ -2065,6 +2081,13 @@ export default function DataKelolaanPage() {
                   <span className="text-[10px] font-black text-[#C92C1E] uppercase tracking-wider block">
                     Atribut Profil Nasabah
                   </span>
+
+                  <div className="rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#C92C1E]">
+                    Skor Customer: {getSkorLabel(editingItem)}
+                    <span className="ml-2 text-[10px] font-bold text-gray-400">
+                      Tidak bisa diedit manual
+                    </span>
+                  </div>
 
                   <div className="grid grid-cols-1 gap-3">
                     <FormInput
@@ -2116,14 +2139,6 @@ export default function DataKelolaanPage() {
                       onChange={(value) => updateEditingField("pic", value)}
                       error={profileValidationErrors.pic}
                     />
-                    <FormSelect
-                      label="Skor / Remarks *"
-                      icon="sales"
-                      value={getSkorValueFromItem(editingItem)}
-                      options={LIST_SKOR.map((item) => item.value)}
-                      getLabel={(value) => LIST_SKOR.find((item) => item.value === value)?.label || value}
-                      onChange={updateEditingSkor}
-                    />
                   </div>
                 </div>
               ) : (
@@ -2132,16 +2147,16 @@ export default function DataKelolaanPage() {
                     Atribut Scoring & Closing
                   </span>
 
+                  <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs font-black text-emerald-700">
+                    Skor Customer: {getSkorLabel(editingItem)}
+                    <span className="ml-2 text-[10px] font-bold text-gray-400">
+                      Otomatis dari Call & Chat
+                    </span>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FormInput label="Expired Date" type="date" value={editingItem.expiredDate || ""} onChange={(value) => updateEditingField("expiredDate", value)} />
                     <FormInput label="Total Transaksi" type="number" value={String(editingItem.totalTransaksi || 0)} onChange={(value) => updateEditingField("totalTransaksi", Number(value) || 0)} />
-                    <FormSelect
-                      label="Skor / Remarks"
-                      value={getSkorValueFromItem(editingItem)}
-                      options={LIST_SKOR.map((item) => item.value)}
-                      getLabel={(value) => LIST_SKOR.find((item) => item.value === value)?.label || value}
-                      onChange={updateEditingSkor}
-                    />
                     <FormSelect label="Validitas" value={editingItem.validitas || "VALID"} options={validitasOptions} onChange={(value) => updateEditingField("validitas", value)} />
                     <FormSelect label="Call Status" value={editingItem.callStatus || "PENDING"} options={callOptions} onChange={(value) => updateEditingField("callStatus", value)} />
                     <FormSelect label="Chat Status" value={editingItem.chatStatus || "PENDING"} options={chatOptions} onChange={(value) => updateEditingField("chatStatus", value)} />
