@@ -95,11 +95,15 @@ const isValidPicName = (value?: string) => {
   );
 };
 
+const SOP_READ_DELAY_SECONDS = 5;
+
 export default function DashboardOverviewPage() {
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
   const [userName, setUserName] = useState("User");
   const [userRole, setUserRole] = useState("Sales");
-  const [isSopOpen, setIsSopOpen] = useState(true);
+  const [isSopOpen, setIsSopOpen] = useState(false);
+  const [isSopReady, setIsSopReady] = useState(false);
+  const [sopCountdown, setSopCountdown] = useState(SOP_READ_DELAY_SECONDS);
 
   useEffect(() => {
     const cached = localStorage.getItem("piposmart_nasabah_data");
@@ -118,6 +122,53 @@ export default function DashboardOverviewPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const savedUserName = localStorage.getItem("piposmart_user_name") || "User";
+    const sopSeenKey = `piposmart_sop_seen_${savedUserName}`;
+    const hasSeenSopThisLogin = sessionStorage.getItem(sopSeenKey);
+
+    if (!hasSeenSopThisLogin) {
+      setIsSopOpen(true);
+      setIsSopReady(false);
+      setSopCountdown(SOP_READ_DELAY_SECONDS);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isSopOpen) return;
+
+    setIsSopReady(false);
+    setSopCountdown(SOP_READ_DELAY_SECONDS);
+
+    const countdownTimer = window.setInterval(() => {
+      setSopCountdown((current) => {
+        if (current <= 1) {
+          window.clearInterval(countdownTimer);
+          setIsSopReady(true);
+          return 0;
+        }
+
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(countdownTimer);
+  }, [isSopOpen]);
+
+  const handleCloseSop = () => {
+    if (!isSopReady) return;
+
+    if (typeof window !== "undefined") {
+      const savedUserName = localStorage.getItem("piposmart_user_name") || "User";
+      const sopSeenKey = `piposmart_sop_seen_${savedUserName}`;
+      sessionStorage.setItem(sopSeenKey, "true");
+    }
+
+    setIsSopOpen(false);
+  };
 
   const isAllAccess = canAccessAllData(userRole);
 
@@ -281,100 +332,147 @@ export default function DashboardOverviewPage() {
   return (
     <>
       {isSopOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-xl">
-            <div className="shrink-0 bg-[#C92C1E] px-6 py-5 text-white">
-              <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/35 p-4">
+          <div className="relative my-4 flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-red-100 bg-white shadow-2xl sm:rounded-[24px]">
+            <div className="absolute -right-20 -top-20 h-52 w-52 rounded-full bg-[#C92C1E]/10" />
+            <div className="absolute -bottom-24 -left-24 h-60 w-60 rounded-full bg-orange-100/70" />
+
+            <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-[#C92C1E] via-[#E54837] to-[#FF8A65] px-4 py-4 text-white sm:px-5">
+              <div className="absolute right-6 top-6 hidden h-20 w-20 rounded-[24px] border border-white/20 bg-white/10 md:block" />
+              <div className="absolute right-12 top-12 hidden h-9 w-9 rounded-2xl bg-white/20 md:block" />
+
+              <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.25em] text-white/70">
-                    SOP Sales CRM
-                  </p>
-                  <h2 className="mt-2 text-2xl font-black">
-                    Panduan Singkat Sebelum Follow Up
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] sm:text-[11px]">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                    SOP Operasional CRM
+                  </div>
+
+                  <h2 className="text-lg font-black leading-tight tracking-tight sm:text-xl">
+                    Baca SOP Sebelum Masuk Dashboard
                   </h2>
-                  <p className="mt-1 text-sm font-medium leading-6 text-white/80">
-                    Baca cepat setiap masuk CRM agar alur follow up tetap konsisten.
+
+                  <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-5 text-white/85 sm:text-xs">
+                    Pahami klasifikasi owner, kewajiban follow up, to do list, serta modul call & chat sebelum mulai mengelola data.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setIsSopOpen(false)}
-                  className="rounded-2xl bg-white/15 px-3 py-2 text-xs font-black text-white transition hover:bg-white/25"
+                  onClick={handleCloseSop}
+                  disabled={!isSopReady}
+                  className="w-full shrink-0 rounded-2xl bg-white/15 px-4 py-2 text-xs font-black text-white transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
                 >
-                  Tutup
+                  {isSopReady ? "Tutup" : `${sopCountdown}s`}
                 </button>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <SopPoint
-                  tone="emerald"
-                  title="Nasabah Potensi"
-                  items={[
-                    "Responsif dan interaktif saat trial.",
-                    "Membahas harga, paket, demo, training, atau closing.",
-                    "Ada peningkatan transaksi atau rekomendasi mitra.",
-                  ]}
-                />
+            <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="min-w-0 rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-3.5 shadow-sm sm:rounded-2xl">
+                  <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 text-xs font-black text-white sm:h-9 sm:w-9 sm:text-xs">01</div>
+                  <h3 className="text-xs font-black text-gray-900">Kategori Owner Potensi</h3>
+                  <p className="mt-1.5 text-[11px] font-bold leading-4 text-gray-500">
+                    Owner responsif, aktif membahas harga/paket, ada rencana demo atau training, transaksi meningkat, dan progres mengarah ke closing.
+                  </p>
+                </div>
 
-                <SopPoint
-                  tone="rose"
-                  title="Nasabah Tidak Potensi"
-                  items={[
-                    "Akun testing/karyawan atau nomor tidak aktif.",
-                    "Follow up maksimal 5 kali tanpa respons.",
-                    "Menolak, minta tidak dihubungi, atau transaksi tidak berkembang.",
-                  ]}
-                />
+                <div className="min-w-0 rounded-xl border border-red-100 bg-gradient-to-br from-red-50 to-white p-3.5 shadow-sm sm:rounded-2xl">
+                  <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-[#C92C1E] text-xs font-black text-white sm:h-9 sm:w-9 sm:text-xs">02</div>
+                  <h3 className="text-xs font-black text-gray-900">Kewajiban Tim Bisnis</h3>
+                  <p className="mt-1.5 text-[11px] font-bold leading-4 text-gray-500">
+                    Follow up berkala, catat perkembangan pada kolom call & chat, lalu arahkan owner ke proses closing atau upgrade paket.
+                  </p>
+                </div>
 
-                <SopPoint
-                  tone="amber"
-                  title="Tugas Utama Sales"
-                  items={[
-                    "Follow up data kelolaan, new download, potensi, dan jatuh tempo.",
-                    "Catat hasil follow up di CRM dengan lengkap.",
-                    "Daily report ke WA Group sesuai data yang dikerjakan.",
-                  ]}
-                />
+                <div className="min-w-0 rounded-xl border border-rose-100 bg-gradient-to-br from-rose-50 to-white p-3.5 shadow-sm sm:rounded-2xl">
+                  <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-rose-500 text-xs font-black text-white sm:h-9 sm:w-9 sm:text-xs">03</div>
+                  <h3 className="text-xs font-black text-gray-900">Kategori Tidak Potensi</h3>
+                  <p className="mt-1.5 text-[11px] font-bold leading-4 text-gray-500">
+                    Tarik dari daftar aktif jika akun testing/karyawan, follow up maksimal 5 kali tanpa respons, WA centang 1 selama 2–3 hari, nomor tidak aktif, atau owner meminta tidak dihubungi.
+                  </p>
+                </div>
 
-                <SopPoint
-                  tone="red"
-                  title="Wajib Saat Follow Up"
-                  items={[
-                    "Isi Status Call dan Status Chat sesuai kondisi nyata.",
-                    "Pilih remarks dengan benar, jangan asal skor.",
-                    "Tulis kesimpulan singkat agar progres mudah dipantau.",
-                  ]}
-                />
+                <div className="min-w-0 rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-3.5 shadow-sm sm:rounded-2xl">
+                  <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500 text-xs font-black text-white sm:h-9 sm:w-9 sm:text-xs">04</div>
+                  <h3 className="text-xs font-black text-gray-900">To Do List Sales</h3>
+                  <p className="mt-1.5 text-[11px] font-bold leading-4 text-gray-500">
+                    Follow up 50 data kelolaan, new download, owner potensi, data jatuh tempo, mitra kelolaan, rating/logo laundry, dan kirim daily report ke WA Group.
+                  </p>
+                </div>
 
-                <SopPoint
-                  tone="indigo"
-                  title="Modul CS"
-                  items={[
-                    "Follow up nasabah existing, jatuh tempo, dan berlangganan.",
-                    "Pantau nasabah non-registrasi, user temp, dan unsubscribe.",
-                    "Gunakan modul Call & Chat sesuai kondisi komunikasi customer.",
-                  ]}
-                />
+                <div className="min-w-0 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-3.5 shadow-sm sm:rounded-2xl">
+                  <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500 text-xs font-black text-white sm:h-9 sm:w-9 sm:text-xs">05</div>
+                  <h3 className="text-xs font-black text-gray-900">To Do List CS</h3>
+                  <p className="mt-1.5 text-[11px] font-bold leading-4 text-gray-500">
+                    Follow up owner existing, data jatuh tempo, berlangganan, akun non-registrasi atau user temp, serta owner unsubscribe.
+                  </p>
+                </div>
+
+                <div className="min-w-0 rounded-xl border border-purple-100 bg-gradient-to-br from-purple-50 to-white p-3.5 shadow-sm sm:rounded-2xl">
+                  <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500 text-xs font-black text-white sm:h-9 sm:w-9 sm:text-xs">06</div>
+                  <h3 className="text-xs font-black text-gray-900">Modul Call & Chat</h3>
+                  <p className="mt-1.5 max-w-full break-words text-[11px] font-bold leading-4 text-gray-500">
+                    Gunakan status call dan chat sesuai kondisi: contacted, connected, engage, interest, prospek, uninterest, no call, send, delivered, dan no chat.
+                  </p>
+                </div>
+
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-3.5 shadow-sm sm:rounded-2xl sm:col-span-2">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-800 text-xs font-black text-white sm:h-9 sm:w-9 sm:text-xs">07</div>
+                    <div>
+                      <h3 className="text-xs font-black text-gray-900">Reason No Call / No Chat</h3>
+                      <p className="mt-1.5 text-[11px] font-bold leading-4 text-gray-500">
+                        Gunakan reason saat nomor diblokir, WA tidak aktif atau centang 1 selama 2–3 hari, dan owner meminta tidak dihubungi kembali. Jangan biarkan status kosong tanpa alasan yang jelas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
-                <p className="text-sm font-black text-[#C92C1E]">
-                  Ingat
-                </p>
-                <p className="mt-1 text-xs font-bold leading-5 text-red-700">
-                  Follow up dianggap valid kalau status, remarks, dan kesimpulan sudah terisi. Gunakan SOP lengkap di menu SOP Operasional jika butuh detail modul Call & Chat.
-                </p>
+              <div className="min-w-0 rounded-xl border border-red-100 bg-[#FFF8F6] p-4 sm:rounded-3xl sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-[#C92C1E]">Status Baca SOP</p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-red-700">
+                      Tombol akan aktif setelah countdown selesai. Pastikan isi SOP dipahami sebelum mulai mengelola data.
+                    </p>
+                  </div>
+
+                  <div className="shrink-0 rounded-2xl bg-white px-4 py-3 text-center shadow-sm">
+                    <p className="text-[10px] font-black uppercase text-gray-400">Countdown</p>
+                    <p className="text-xl font-black text-[#C92C1E]">{sopCountdown}s</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#C92C1E] to-[#FF8A65] transition-all duration-500"
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        ((SOP_READ_DELAY_SECONDS - sopCountdown) / SOP_READ_DELAY_SECONDS) * 100,
+                      )}%`,
+                    }}
+                  />
+                </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setIsSopOpen(false)}
-                className="w-full rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-[#A82216]"
+                onClick={handleCloseSop}
+                disabled={!isSopReady}
+                className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-3 text-xs font-black text-white shadow-lg shadow-red-100 transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none"
               >
-                Saya Mengerti, Mulai Kerja
+                {isSopReady ? (
+                  <>
+                    Saya Mengerti, Mulai Kerja
+                    <span className="transition group-hover:translate-x-1">→</span>
+                  </>
+                ) : (
+                  `Baca SOP dulu ${sopCountdown}s`
+                )}
               </button>
             </div>
           </div>
@@ -435,7 +533,7 @@ export default function DashboardOverviewPage() {
         <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-4">
             <div>
-              <p className="text-sm font-black text-gray-900">
+              <p className="text-xs font-black text-gray-900">
                 Ringkasan Follow Up
               </p>
               <p className="text-xs font-medium text-gray-400">
@@ -447,7 +545,7 @@ export default function DashboardOverviewPage() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="min-w-0 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+            <div className="min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
               <p className="text-[10px] font-black uppercase text-emerald-700">
                 Contacted
               </p>
@@ -456,7 +554,7 @@ export default function DashboardOverviewPage() {
               </p>
             </div>
 
-            <div className="min-w-0 rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+            <div className="min-w-0 rounded-xl border border-amber-100 bg-amber-50/70 p-4">
               <p className="text-[10px] font-black uppercase text-amber-700">
                 Pending Follow Up
               </p>
@@ -465,7 +563,7 @@ export default function DashboardOverviewPage() {
               </p>
             </div>
 
-            <div className="min-w-0 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+            <div className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
               <p className="text-[10px] font-black uppercase text-blue-700">
                 Total Follow Up
               </p>
@@ -474,7 +572,7 @@ export default function DashboardOverviewPage() {
               </p>
             </div>
 
-            <div className="min-w-0 rounded-2xl border border-red-100 bg-red-50/60 p-4">
+            <div className="min-w-0 rounded-xl border border-red-100 bg-red-50/60 p-4">
               <p className="text-[10px] font-black uppercase text-[#C92C1E]">
                 Nominal Closing
               </p>
@@ -492,7 +590,7 @@ export default function DashboardOverviewPage() {
         </div>
 
         <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-black text-gray-900">Distribusi Skor</p>
+          <p className="text-xs font-black text-gray-900">Distribusi Skor</p>
           <p className="text-xs font-medium text-gray-400">
             {isAllAccess
               ? "Jumlah customer berdasarkan skor seluruh tim."
@@ -523,7 +621,7 @@ export default function DashboardOverviewPage() {
       <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-2 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-black text-gray-900">
+            <p className="text-xs font-black text-gray-900">
               Peringkat Follow Up Sales
             </p>
             <p className="text-xs font-medium text-gray-400">
@@ -541,7 +639,7 @@ export default function DashboardOverviewPage() {
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           {stats.followUpRanking.length === 0 ? (
-            <div className="col-span-full rounded-2xl border border-dashed border-gray-200 p-6 text-center text-xs font-bold text-gray-400">
+            <div className="col-span-full rounded-xl border border-dashed border-gray-200 p-6 text-center text-xs font-bold text-gray-400">
               Belum ada data follow up. Silakan input follow up terlebih dahulu.
             </div>
           ) : (
@@ -551,7 +649,7 @@ export default function DashboardOverviewPage() {
               return (
                 <div
                   key={`${item.pic}-${item.rank}`}
-                  className={`relative overflow-hidden rounded-2xl border p-4 ${
+                  className={`relative overflow-hidden rounded-xl border p-4 ${
                     isMe
                       ? "border-2 border-[#C92C1E] bg-red-50 shadow-md shadow-red-100"
                       : "border-gray-100 bg-gray-50"
@@ -641,7 +739,7 @@ function SopPoint({
   }[tone];
 
   return (
-    <div className={`rounded-2xl border p-4 ${toneClass.card}`}>
+    <div className={`rounded-xl border p-4 ${toneClass.card}`}>
       <p className={`text-sm font-black ${toneClass.title}`}>{title}</p>
 
       <ul className="mt-3 space-y-2">

@@ -321,7 +321,7 @@ function PieChartCard({
                     strokeWidth={2}
                     className="cursor-pointer transition-opacity hover:opacity-80"
                   >
-                    <title>{`${item.label}: ${item.value} customer (${((item.value / total) * 100).toFixed(1)}%)`}</title>
+                    <title>{`${item.label}: ${item.value} owner (${((item.value / total) * 100).toFixed(1)}%)`}</title>
                   </path>
                 );
               })}
@@ -349,7 +349,7 @@ function PieChartCard({
                     </p>
                   </div>
                   <p className="mt-1 whitespace-nowrap text-[11px] font-bold text-[#B7645C]">
-                    {item.value} customer • {percentage.toFixed(1)}%
+                    {item.value} owner • {percentage.toFixed(1)}%
                   </p>
                 </div>
               );
@@ -676,9 +676,9 @@ function TrendChartCard({
     <div className="rounded-3xl border border-red-100 bg-gradient-to-br from-white via-red-50/40 to-[#FFF8F6] p-5 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-lg font-black text-[#8F1F16]">Tren Jumlah Customer Berdasarkan Skor</h2>
+          <h2 className="text-lg font-black text-[#8F1F16]">Tren Jumlah Owner Berdasarkan Skor</h2>
           <p className="mt-1 text-[11px] font-medium text-[#B7645C]">
-            Menampilkan jumlah customer sesuai rentang bulan dan tahun yang dipilih.
+            Menampilkan jumlah owner sesuai rentang bulan dan tahun yang dipilih.
           </p>
         </div>
 
@@ -757,7 +757,7 @@ function TrendChartCard({
                     strokeWidth={2}
                     className="cursor-pointer"
                   >
-                    <title>{`${serie.label} - ${data[index]?.label}: ${Number(data[index]?.[serie.key]) || 0} customer`}</title>
+                    <title>{`${serie.label} - ${data[index]?.label}: ${Number(data[index]?.[serie.key]) || 0} owner`}</title>
                   </circle>
                 ))}
               </g>
@@ -872,10 +872,10 @@ function PackageBarChartCard({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 className="text-lg font-black text-[#8F1F16]">
-            Perbandingan Customer Langganan Berdasarkan Paket
+            Perbandingan Owner Langganan Berdasarkan Paket
           </h2>
           <p className="mt-1 text-[11px] font-medium text-[#B7645C]">
-            Membandingkan customer langganan berdasarkan paket Basic, Business, dan Pro.
+            Membandingkan owner langganan berdasarkan paket Basic, Business, dan Pro.
           </p>
         </div>
 
@@ -934,7 +934,7 @@ function PackageBarChartCard({
                     fill={serie.color}
                     className="cursor-pointer transition-opacity hover:opacity-80"
                   >
-                    <title>{`${serie.label} - ${item.label}: ${value} customer`}</title>
+                    <title>{`${serie.label} - ${item.label}: ${value} owner`}</title>
                   </rect>
                 );
               })}
@@ -975,7 +975,7 @@ function ChartFilterControls({
           onChange={(event) => updateFilter({ mode: event.target.value as ChartFilterMode })}
           className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#8F1F16] outline-none focus:border-[#C92C1E] sm:w-auto"
         >
-          <option value="total">Total Customer</option>
+          <option value="total">Total Owner</option>
           <option value="harian">Rentang Hari</option>
           <option value="bulanan">Rentang Bulan</option>
           <option value="tahunan">Rentang Tahun</option>
@@ -1272,52 +1272,52 @@ export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahIt
     <div className="space-y-6">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <CollapsibleChartSection
-          title="Diagram Customer Berdasarkan Skor"
-          description="Menampilkan pembagian customer berdasarkan kategori skor, mulai dari tidak potensial sampai berlangganan."
-          badge={`${skorFilteredData.length} customer`}
+          title="Diagram Owner Berdasarkan Skor"
+          description="Menampilkan pembagian owner berdasarkan kategori skor, mulai dari tidak potensial sampai berlangganan."
+          badge={`${skorFilteredData.length} owner`}
           open={openedCharts.skor}
           onToggle={() => toggleChart("skor")}
         >
           <div className="space-y-4">
             <ChartFilterControls value={skorChartFilter} onChange={setSkorChartFilter} />
-            <PieChartCard title="Diagram Customer Berdasarkan Skor" data={skorPieData} />
+            <PieChartCard title="Diagram Owner Berdasarkan Skor" data={skorPieData} />
           </div>
         </CollapsibleChartSection>
 
         <CollapsibleChartSection
-          title="Perbandingan Customer Berdasarkan Sumber"
-          description="Menunjukkan dari mana customer berasal, yaitu Facebook, Instagram, dan Tiktok."
-          badge={`${sumberFilteredData.length} customer`}
+          title="Perbandingan Owner Berdasarkan Sumber"
+          description="Menunjukkan dari mana owner berasal, yaitu Facebook, Instagram, dan Tiktok."
+          badge={`${sumberFilteredData.length} owner`}
           open={openedCharts.sumber}
           onToggle={() => toggleChart("sumber")}
         >
           <div className="space-y-4">
             <ChartFilterControls value={sumberChartFilter} onChange={setSumberChartFilter} />
-            <PieChartCard title="Perbandingan Customer Berdasarkan Sumber" data={sumberPieData} />
+            <PieChartCard title="Perbandingan Owner Berdasarkan Sumber" data={sumberPieData} />
           </div>
         </CollapsibleChartSection>
       </div>
 
       <div className="grid items-start gap-4">
         <CollapsibleChartSection
-          title="Diagram Customer Berdasarkan Sumber Kemitraan"
-          description="Menampilkan persebaran customer berdasarkan sumber kemitraan seperti Non Mitra, Referal, Partnership, dan Regional."
-          badge={`${kemitraanFilteredData.length} customer`}
+          title="Diagram Owner Berdasarkan Sumber Kemitraan"
+          description="Menampilkan persebaran owner berdasarkan sumber kemitraan seperti Non Mitra, Referal, Partnership, dan Regional."
+          badge={`${kemitraanFilteredData.length} owner`}
           open={openedCharts.kemitraan}
           onToggle={() => toggleChart("kemitraan")}
         >
           <div className="space-y-4">
             <ChartFilterControls value={kemitraanChartFilter} onChange={setKemitraanChartFilter} />
-            <PieChartCard title="Diagram Customer Berdasarkan Sumber Kemitraan" data={kemitraanPieData} />
+            <PieChartCard title="Diagram Owner Berdasarkan Sumber Kemitraan" data={kemitraanPieData} />
           </div>
         </CollapsibleChartSection>
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <CollapsibleChartSection
-          title="Diagram Tren Pertumbuhan Customer"
-          description="Melihat perkembangan jumlah customer berdasarkan waktu. Grafik ini bisa difilter berdasarkan hari, bulan, atau tahun."
-          badge={`${pertumbuhanFilteredData.length} customer`}
+          title="Diagram Tren Pertumbuhan Owner"
+          description="Melihat perkembangan jumlah owner berdasarkan waktu. Grafik ini bisa difilter berdasarkan hari, bulan, atau tahun."
+          badge={`${pertumbuhanFilteredData.length} owner`}
           open={openedCharts.pertumbuhan}
           onToggle={() => toggleChart("pertumbuhan")}
         >
@@ -1329,9 +1329,9 @@ export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahIt
         </CollapsibleChartSection>
 
         <CollapsibleChartSection
-          title="Diagram Perbandingan Paket Langganan Customer"
-          description="Membandingkan jumlah customer berdasarkan paket langganan seperti Basic, Business, Pro, dan Bundling."
-          badge={`${paketFilteredData.length} customer`}
+          title="Diagram Perbandingan Paket Langganan Owner"
+          description="Membandingkan jumlah owner berdasarkan paket langganan seperti Basic, Business, Pro, dan Bundling."
+          badge={`${paketFilteredData.length} owner`}
           open={openedCharts.paket}
           onToggle={() => toggleChart("paket")}
         >

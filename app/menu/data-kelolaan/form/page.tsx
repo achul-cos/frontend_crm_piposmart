@@ -507,10 +507,10 @@ export default function FormInputDummyPage() {
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            {editId !== null ? "Edit Profil Customer" : "Tambah Profil Customer"}
+            {editId !== null ? "Edit Profil Owner" : "Tambah Profil Owner"}
           </h1>
           <p className="mt-0.5 text-xs text-gray-500">
-            Lengkapi data utama customer agar mudah dikelola, dihubungi, dan difollow up oleh tim sales.
+            Lengkapi data utama owner agar mudah dikelola, dihubungi, dan difollow up oleh tim sales.
           </p>
         </div>
 
@@ -537,7 +537,7 @@ export default function FormInputDummyPage() {
       >
         <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/30 p-4">
           <span className="block text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
-            Data Profil Customer
+            Data Profil Owner
           </span>
 
           <div className="grid grid-cols-1 gap-3">
@@ -633,14 +633,14 @@ export default function FormInputDummyPage() {
 
         <div className="flex items-center justify-between border-t border-gray-100 pt-3">
           <div className="text-[11px] font-medium text-gray-400">
-            Pastikan data customer sudah benar sebelum disimpan ke Data Kelolaan.
+            Pastikan data owner sudah benar sebelum disimpan ke Data Kelolaan.
           </div>
 
           <button
             type="submit"
             className="cursor-pointer rounded-xl bg-[#C92C1E] px-6 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]"
           >
-            {editId !== null ? "Simpan Perubahan" : "Tambah Customer"}
+            {editId !== null ? "Simpan Perubahan" : "Tambah Owner"}
           </button>
         </div>
       </form>

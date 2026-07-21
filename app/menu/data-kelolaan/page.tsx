@@ -4,8 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GrafikCustomer from "./grafik/page";
-import { generateDummyCustomers, LIST_PIC } from "./dummy/page";
+import { generateDummyOwners, LIST_PIC } from "./dummy/page";
 import CallPage, { CallFormResult } from "./call/page";
+import ActionButtons, { EditProfileModal } from "./action/page";
 
 interface NasabahItem {
   totalFu: number;
@@ -55,7 +56,7 @@ interface NasabahItem {
   }[];
 }
 
-type EditModalMode = "profil" | "scoring";
+type EditModalMode = "profil";
 type DeleteTargetMode = "selected" | "page" | "filtered" | "custom";
 
 const LIST_BULAN = [
@@ -143,101 +144,6 @@ const isSubscribedCustomer = (item: Partial<NasabahItem>) => {
 
 const formatPercentValue = (value: number) => `${Math.round(value)}%`;
 
-const PHONE_COUNTRY_OPTIONS = [
-  { code: "ID", name: "Indonesia", flag: "🇮🇩", dialCode: "+62", placeholder: "812-3456-7890" },
-  { code: "MY", name: "Malaysia", flag: "🇲🇾", dialCode: "+60", placeholder: "12-345-6789" },
-  { code: "SG", name: "Singapore", flag: "🇸🇬", dialCode: "+65", placeholder: "8123-4567" },
-  { code: "TH", name: "Thailand", flag: "🇹🇭", dialCode: "+66", placeholder: "81-234-5678" },
-  { code: "PH", name: "Philippines", flag: "🇵🇭", dialCode: "+63", placeholder: "912-345-6789" },
-  { code: "VN", name: "Vietnam", flag: "🇻🇳", dialCode: "+84", placeholder: "91-234-5678" },
-  { code: "BN", name: "Brunei", flag: "🇧🇳", dialCode: "+673", placeholder: "712-3456" },
-  { code: "KH", name: "Cambodia", flag: "🇰🇭", dialCode: "+855", placeholder: "12-345-678" },
-  { code: "LA", name: "Laos", flag: "🇱🇦", dialCode: "+856", placeholder: "20-1234-5678" },
-  { code: "MM", name: "Myanmar", flag: "🇲🇲", dialCode: "+95", placeholder: "9-123-456789" },
-  { code: "TL", name: "Timor-Leste", flag: "🇹🇱", dialCode: "+670", placeholder: "7721-2345" },
-
-  { code: "US", name: "United States", flag: "🇺🇸", dialCode: "+1", placeholder: "123-456-7890" },
-  { code: "CA", name: "Canada", flag: "🇨🇦", dialCode: "+1", placeholder: "123-456-7890" },
-  { code: "MX", name: "Mexico", flag: "🇲🇽", dialCode: "+52", placeholder: "55-1234-5678" },
-  { code: "BR", name: "Brazil", flag: "🇧🇷", dialCode: "+55", placeholder: "11-91234-5678" },
-  { code: "AR", name: "Argentina", flag: "🇦🇷", dialCode: "+54", placeholder: "9-11-1234-5678" },
-  { code: "CL", name: "Chile", flag: "🇨🇱", dialCode: "+56", placeholder: "9-1234-5678" },
-  { code: "CO", name: "Colombia", flag: "🇨🇴", dialCode: "+57", placeholder: "300-123-4567" },
-
-  { code: "GB", name: "United Kingdom", flag: "🇬🇧", dialCode: "+44", placeholder: "7700-900123" },
-  { code: "FR", name: "France", flag: "🇫🇷", dialCode: "+33", placeholder: "6-12-34-56-78" },
-  { code: "DE", name: "Germany", flag: "🇩🇪", dialCode: "+49", placeholder: "1512-3456789" },
-  { code: "IT", name: "Italy", flag: "🇮🇹", dialCode: "+39", placeholder: "312-345-6789" },
-  { code: "ES", name: "Spain", flag: "🇪🇸", dialCode: "+34", placeholder: "612-345-678" },
-  { code: "NL", name: "Netherlands", flag: "🇳🇱", dialCode: "+31", placeholder: "6-12345678" },
-  { code: "BE", name: "Belgium", flag: "🇧🇪", dialCode: "+32", placeholder: "470-12-34-56" },
-  { code: "CH", name: "Switzerland", flag: "🇨🇭", dialCode: "+41", placeholder: "78-123-45-67" },
-  { code: "SE", name: "Sweden", flag: "🇸🇪", dialCode: "+46", placeholder: "70-123-45-67" },
-  { code: "NO", name: "Norway", flag: "🇳🇴", dialCode: "+47", placeholder: "412-34-567" },
-  { code: "DK", name: "Denmark", flag: "🇩🇰", dialCode: "+45", placeholder: "20-12-34-56" },
-  { code: "FI", name: "Finland", flag: "🇫🇮", dialCode: "+358", placeholder: "40-123-4567" },
-  { code: "IE", name: "Ireland", flag: "🇮🇪", dialCode: "+353", placeholder: "85-123-4567" },
-  { code: "PT", name: "Portugal", flag: "🇵🇹", dialCode: "+351", placeholder: "912-345-678" },
-  { code: "PL", name: "Poland", flag: "🇵🇱", dialCode: "+48", placeholder: "512-345-678" },
-  { code: "TR", name: "Turkey", flag: "🇹🇷", dialCode: "+90", placeholder: "532-123-4567" },
-  { code: "RU", name: "Russia", flag: "🇷🇺", dialCode: "+7", placeholder: "912-345-6789" },
-
-  { code: "CN", name: "China", flag: "🇨🇳", dialCode: "+86", placeholder: "138-0013-8000" },
-  { code: "JP", name: "Japan", flag: "🇯🇵", dialCode: "+81", placeholder: "90-1234-5678" },
-  { code: "KR", name: "South Korea", flag: "🇰🇷", dialCode: "+82", placeholder: "10-1234-5678" },
-  { code: "IN", name: "India", flag: "🇮🇳", dialCode: "+91", placeholder: "98765-43210" },
-  { code: "PK", name: "Pakistan", flag: "🇵🇰", dialCode: "+92", placeholder: "300-1234567" },
-  { code: "BD", name: "Bangladesh", flag: "🇧🇩", dialCode: "+880", placeholder: "1712-345678" },
-  { code: "LK", name: "Sri Lanka", flag: "🇱🇰", dialCode: "+94", placeholder: "71-234-5678" },
-  { code: "SA", name: "Saudi Arabia", flag: "🇸🇦", dialCode: "+966", placeholder: "50-123-4567" },
-  { code: "AE", name: "United Arab Emirates", flag: "🇦🇪", dialCode: "+971", placeholder: "50-123-4567" },
-  { code: "QA", name: "Qatar", flag: "🇶🇦", dialCode: "+974", placeholder: "3312-3456" },
-  { code: "KW", name: "Kuwait", flag: "🇰🇼", dialCode: "+965", placeholder: "500-12345" },
-  { code: "OM", name: "Oman", flag: "🇴🇲", dialCode: "+968", placeholder: "9212-3456" },
-
-  { code: "AU", name: "Australia", flag: "🇦🇺", dialCode: "+61", placeholder: "412-345-678" },
-  { code: "NZ", name: "New Zealand", flag: "🇳🇿", dialCode: "+64", placeholder: "21-123-4567" },
-
-  { code: "ZA", name: "South Africa", flag: "🇿🇦", dialCode: "+27", placeholder: "82-123-4567" },
-  { code: "EG", name: "Egypt", flag: "🇪🇬", dialCode: "+20", placeholder: "100-123-4567" },
-  { code: "NG", name: "Nigeria", flag: "🇳🇬", dialCode: "+234", placeholder: "803-123-4567" },
-  { code: "KE", name: "Kenya", flag: "🇰🇪", dialCode: "+254", placeholder: "712-345-678" },
-  { code: "MA", name: "Morocco", flag: "🇲🇦", dialCode: "+212", placeholder: "612-345678" },
-];
-
-const getPhoneCountryByDialCode = (phone?: string) => {
-  const value = phone?.trim() || "";
-
-  return (
-    PHONE_COUNTRY_OPTIONS.find((country) => value.startsWith(country.dialCode)) ||
-    PHONE_COUNTRY_OPTIONS[0]
-  );
-};
-
-const stripDialCode = (phone?: string, dialCode = "+62") => {
-  const value = phone?.trim() || "";
-
-  if (value.startsWith(dialCode)) {
-    return value.slice(dialCode.length).replace(/\D/g, "");
-  }
-
-  if (dialCode === "+62" && value.startsWith("0")) {
-    return value.slice(1).replace(/\D/g, "");
-  }
-
-  return value.replace(/\D/g, "");
-};
-
-const buildInternationalPhone = (dialCode: string, value: string) => {
-  const digitsOnly = value.replace(/\D/g, "").slice(0, 14);
-  return digitsOnly ? `${dialCode}${digitsOnly}` : dialCode;
-};
-
-const isValidInternationalPhone = (value?: string) => {
-  const phone = value?.trim() || "";
-  return /^\+\d{1,3}\d{6,14}$/.test(phone);
-};
-
 const REQUIRED_PROFILE_FIELDS = [
   { key: "kodeOwner", label: "Kode Owner" },
   { key: "namaOwner", label: "Nama Owner" },
@@ -275,13 +181,8 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
 
 
 
-const paketOptions = ["", "Basic", "Business", "Pro", "Bundling & Alat"];
-const sumberOptions = ["Instagram", "Facebook", "Tiktok", "Mitra", "Playstore"];
-const callOptions = ["PENDING", "CONTACTED", "NO CALL"];
-const chatOptions = ["PENDING", "PROSPECT", "DELIVERED", "NO CHAT"];
-const validitasOptions = ["VALID", "INVALID"];
 
-const getCustomerFilterDate = (item: Partial<NasabahItem>) => {
+const getOwnerFilterDate = (item: Partial<NasabahItem>) => {
   return (
     item.tanggalFu ||
     item.createDateProject ||
@@ -290,8 +191,8 @@ const getCustomerFilterDate = (item: Partial<NasabahItem>) => {
   );
 };
 
-const getCustomerFilterMonth = (item: Partial<NasabahItem>) => {
-  const dateValue = getCustomerFilterDate(item);
+const getOwnerFilterMonth = (item: Partial<NasabahItem>) => {
+  const dateValue = getOwnerFilterDate(item);
 
   if (dateValue && dateValue.includes("-")) {
     const monthIndex = Number(dateValue.split("-")[1]) - 1;
@@ -299,38 +200,6 @@ const getCustomerFilterMonth = (item: Partial<NasabahItem>) => {
   }
 
   return item.bulan || "";
-};
-
-const DATA_PACKET_MASTER: Record<string, { id_skema: string; nama_promo: string; total_penjualan: number }[]> = {
-  Basic: [
-    { id_skema: "basic_24", nama_promo: "24 Bulan Basic", total_penjualan: 1716000 },
-    { id_skema: "basic_18", nama_promo: "18 Bulan Basic", total_penjualan: 1398000 },
-    { id_skema: "basic_12", nama_promo: "12 Bulan Basic", total_penjualan: 858000 },
-    { id_skema: "basic_9", nama_promo: "9 Bulan Basic", total_penjualan: 702000 },
-    { id_skema: "basic_1", nama_promo: "1 Bulan Basic", total_penjualan: 78000 },
-  ],
-  Business: [
-    { id_skema: "biz_24", nama_promo: "24 Bulan Business", total_penjualan: 2596000 },
-    { id_skema: "biz_18", nama_promo: "18 Bulan Business", total_penjualan: 1998000 },
-    { id_skema: "biz_12", nama_promo: "12 Bulan Business", total_penjualan: 1298000 },
-    { id_skema: "biz_9", nama_promo: "9 Bulan Business", total_penjualan: 998000 },
-    { id_skema: "biz_6", nama_promo: "6 Bulan Business", total_penjualan: 708000 },
-    { id_skema: "biz_1", nama_promo: "1 Bulan Business", total_penjualan: 118000 },
-  ],
-  Pro: [
-    { id_skema: "pro_24", nama_promo: "24 Bulan Pro", total_penjualan: 3368000 },
-    { id_skema: "pro_18", nama_promo: "18 Bulan Pro", total_penjualan: 2688000 },
-    { id_skema: "pro_12", nama_promo: "12 Bulan Pro", total_penjualan: 1688000 },
-    { id_skema: "pro_9", nama_promo: "9 Bulan Pro", total_penjualan: 1368000 },
-    { id_skema: "pro_6", nama_promo: "6 Bulan Pro", total_penjualan: 1008000 },
-    { id_skema: "pro_1", nama_promo: "1 Bulan Pro", total_penjualan: 168000 },
-  ],
-  "Bundling & Alat": [
-    { id_skema: "bund_starter", nama_promo: "Paket Starter Pro", total_penjualan: 2078000 },
-    { id_skema: "bund_pos_pro", nama_promo: "POS Bundle Pro", total_penjualan: 5288000 },
-    { id_skema: "bund_jagoan_biz", nama_promo: "Jagoan Business", total_penjualan: 1598000 },
-    { id_skema: "bund_pos_biz", nama_promo: "POS Bundle Business", total_penjualan: 4798000 },
-  ],
 };
 
 
@@ -347,11 +216,6 @@ const EditIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 );
 
-const SearchIcon = () => (
-  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-  </svg>
-);
 
 const UserIcon = () => (
   <svg className="w-3.5 h-3.5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -384,15 +248,6 @@ const RefreshIcon = () => (
 );
 
 
-const CallIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M2.25 6.75c0 8.284 6.716 15 15 15h1.5A2.25 2.25 0 0021 19.5v-1.066a1.5 1.5 0 00-1.033-1.428l-4.2-1.4a1.5 1.5 0 00-1.64.43l-.826.826a11.25 11.25 0 01-6.164-6.164l.826-.826a1.5 1.5 0 00.43-1.64l-1.4-4.2A1.5 1.5 0 005.566 3H4.5A2.25 2.25 0 002.25 5.25v1.5z"
-    />
-  </svg>
-);
 
 
 function getQuickSkorBadgeClass(item: NasabahItem) {
@@ -536,7 +391,6 @@ export default function DataKelolaanPage() {
 
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
 
-  const [viewMode, setViewMode] = useState<"merah" | "hijau">("merah");
   const [filterMode, setFilterMode] = useState<"harian" | "bulanan">("harian");
 
   const [searchKodeOwner, setSearchKodeOwner] = useState("");
@@ -615,19 +469,40 @@ export default function DataKelolaanPage() {
     return () => window.clearInterval(interval);
   }, [activeTodayDate, filterMode]);
 
+  useEffect(() => {
+    const isAnyPopupOpen = editModalOpen || bulkPicModalOpen;
+
+    if (!isAnyPopupOpen || typeof window === "undefined") return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [editModalOpen, bulkPicModalOpen, callModalItem]);
+
   const saveDataNasabah = (nextData: NasabahItem[]) => {
     setDataNasabah(nextData);
     localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
   };
 
   const handleGenerateDummy = () => {
-    const mockExcelData: NasabahItem[] = generateDummyCustomers(1000);
+    const mockExcelData: NasabahItem[] = generateDummyOwners(1000);
 
     saveDataNasabah(mockExcelData);
     setTrashCount(0);
     localStorage.removeItem("piposmart_deleted_nasabah_data");
 
-    alert("Berhasil inject 1000 data dummy customer.");
+    alert("Berhasil inject 1000 data dummy owner.");
   };
 
   const handleExportData = () => {
@@ -837,7 +712,7 @@ export default function DataKelolaanPage() {
 
   const openBulkPicModal = () => {
     if (selectedIds.length === 0) {
-      alert("Pilih data customer terlebih dahulu.");
+      alert("Pilih data owner terlebih dahulu.");
       return;
     }
 
@@ -935,6 +810,7 @@ export default function DataKelolaanPage() {
           item.outlet?.toLowerCase().includes(outletKeyword));
 
       const matchesPic = picFilter === "Semua" || item.pic === picFilter;
+
       const matchesSkor =
         skorFilter === "Semua" ||
         String(item.remarks ?? item.scor ?? "0") === skorFilter;
@@ -942,31 +818,41 @@ export default function DataKelolaanPage() {
       let matchesFilter = true;
 
       if (filterMode === "harian") {
-        const itemDate = getCustomerFilterDate(item);
+        const itemDate = getOwnerFilterDate(item);
         const today = getTodayInputDate();
         const activeStartDate = startDateFilter || today;
         const activeEndDate = endDateFilter || activeStartDate;
 
         if (!itemDate) {
-          matchesFilter = false;
+          return false;
         }
 
-        if (activeStartDate && itemDate < activeStartDate) matchesFilter = false;
-        if (activeEndDate && itemDate > activeEndDate) matchesFilter = false;
+        if (activeStartDate && itemDate < activeStartDate) {
+          return false;
+        }
+
+        if (activeEndDate && itemDate > activeEndDate) {
+          return false;
+        }
       } else {
         if (startMonthFilter || endMonthFilter) {
-          const itemMonthIndex = LIST_BULAN.indexOf(getCustomerFilterMonth(item));
+          const itemMonth = getOwnerFilterMonth(item);
+          const itemMonthIndex = LIST_BULAN.indexOf(itemMonth);
+
           const startIndex = startMonthFilter
             ? LIST_BULAN.indexOf(startMonthFilter)
             : 0;
+
           const endIndex = endMonthFilter
             ? LIST_BULAN.indexOf(endMonthFilter)
             : 11;
 
-          if (itemMonthIndex !== -1) {
-            if (itemMonthIndex < startIndex || itemMonthIndex > endIndex) {
-              matchesFilter = false;
-            }
+          if (itemMonthIndex === -1) {
+            return false;
+          }
+
+          if (itemMonthIndex < startIndex || itemMonthIndex > endIndex) {
+            matchesFilter = false;
           }
         }
       }
@@ -987,10 +873,10 @@ export default function DataKelolaanPage() {
     filterMode,
   ]);
 
+
   useEffect(() => {
     setCurrentPage(1);
   }, [
-    viewMode,
     filterMode,
     searchKodeOwner,
     searchNamaOwner,
@@ -1133,58 +1019,16 @@ export default function DataKelolaanPage() {
     saveDataNasabah(nextData);
     closeEditModal();
 
-    alert(
-      modalMode === "profil"
-        ? "Data profil berhasil diperbarui."
-        : "Data scoring berhasil diperbarui.",
-    );
+    alert("Data profil berhasil diperbarui.");
   };
-
-  const updateScoringPackage = (packageName: string) => {
-    const listSkema = DATA_PACKET_MASTER[packageName] || [];
-    const skemaPertama = listSkema.length > 0 ? listSkema[0] : null;
-
-    setEditingItem((prev) =>
-      prev
-        ? {
-            ...prev,
-            finalisasiClosing: packageName,
-            skemaId: skemaPertama?.id_skema || "",
-            nominal: skemaPertama?.total_penjualan || 0,
-          }
-        : prev,
-    );
-  };
-
-  const updateScoringSkema = (skemaId: string) => {
-    if (!editingItem) return;
-
-    const listSkema = DATA_PACKET_MASTER[editingItem.finalisasiClosing || ""] || [];
-    const targetSkema = listSkema.find((item) => item.id_skema === skemaId);
-
-    setEditingItem((prev) =>
-      prev
-        ? {
-            ...prev,
-            skemaId,
-            nominal: targetSkema?.total_penjualan || prev.nominal || 0,
-          }
-        : prev,
-    );
-  };
-
-  const currentSkemaList =
-    editingItem && editingItem.finalisasiClosing
-      ? DATA_PACKET_MASTER[editingItem.finalisasiClosing] || []
-      : [];
 
   return (
-    <div className="space-y-6 font-sans text-[#1C1C1E] max-w-full overflow-hidden">
+    <div className="space-y-6 font-sans text-[#1C1C1E] max-w-full overflow-x-hidden overflow-y-visible">
       {/* ACTION TOP BAR */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-200/60 shadow-xs">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-gray-900">
-            Data Kelolaan Nasabah
+            Data Kelolaan Owner
           </h1>
           <p className="text-xs text-gray-500 font-medium mt-0.5">
             Workspace Monitoring Kemitraan PT. PIPOSMART DIGITAL INDONESIA.
@@ -1247,33 +1091,33 @@ export default function DataKelolaanPage() {
       {/* SUMMARY CUSTOMER */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryMetricCard
-          title="Total Customer"
+          title="Total Owner"
           value={summaryData.totalCustomer}
-          description="Jumlah semua customer yang masuk ke data kelolaan."
+          description="Jumlah semua owner yang masuk ke data kelolaan."
         />
 
         <SummaryMetricCard
-          title="Total Customer Potensi"
+          title="Total Owner Potensi"
           value={summaryData.totalCustomerPotensi}
-          description="Customer skor 2, remark terakhir 2, atau sedang/akan training."
+          description="Owner skor 2, remark terakhir 2, atau sedang/akan training."
         />
 
         <SummaryMetricCard
-          title="Total Customer Kemungkinan"
+          title="Total Owner Kemungkinan"
           value={summaryData.totalCustomerKemungkinan}
-          description="Customer dengan PIC valid dan skor/remark terakhir 1."
+          description="Owner dengan PIC valid dan skor/remark terakhir 1."
         />
 
         <SummaryMetricCard
-          title="Total Customer Berlangganan"
+          title="Total Owner Berlangganan"
           value={summaryData.totalCustomerBerlangganan}
-          description="Customer berlangganan aktif selain trial."
+          description="Owner berlangganan aktif selain trial."
         />
 
         <SummaryMetricCard
-          title="Perbandingan Customer Berlangganan"
+          title="Perbandingan Owner Berlangganan"
           value={formatPercentValue(summaryData.perbandinganBerlangganan)}
-          description="Total berlangganan dibanding total customer."
+          description="Total berlangganan dibanding total owner."
         />
       </div>
 
@@ -1362,28 +1206,7 @@ export default function DataKelolaanPage() {
           )}
         </div>
 
-        <div className="flex bg-gray-100 p-1 rounded-xl w-full lg:w-auto shadow-inner justify-end">
-          <button
-            onClick={() => setViewMode("merah")}
-            className={`px-5 py-2 rounded-lg text-xs font-black transition cursor-pointer ${
-              viewMode === "merah"
-                ? "bg-[#C92C1E] text-white shadow-md"
-                : "text-gray-500 hover:text-gray-900"
-            }`}
-          >
-            Profil
-          </button>
-          <button
-            onClick={() => setViewMode("hijau")}
-            className={`px-5 py-2 rounded-lg text-xs font-black transition cursor-pointer ${
-              viewMode === "hijau"
-                ? "bg-emerald-700 text-white shadow-md"
-                : "text-gray-500 hover:text-gray-900"
-            }`}
-          >
-            Scoring
-          </button>
-        </div>
+
       </div>
 
       {/* TABLE WORKSPACE */}
@@ -1392,10 +1215,10 @@ export default function DataKelolaanPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
             <div>
               <p className="text-xs font-black text-gray-800 uppercase">
-                {viewMode === "merah" ? "Tabel Profil Nasabah" : "Tabel Scoring Nasabah"}
+                Tabel Profil Owner
               </p>
               <p className="text-[11px] text-gray-400 font-medium">
-                Edit tetap muncul di depan layar sebagai modal, bukan pindah halaman.
+                Edit profil tetap muncul di depan layar sebagai modal, bukan pindah halaman.
               </p>
             </div>
 
@@ -1516,9 +1339,7 @@ export default function DataKelolaanPage() {
           <table className="w-full text-left text-xs md:text-sm font-semibold text-gray-600 border-collapse table-auto">
             <thead>
               <tr
-                className={`text-white uppercase text-[10px] md:text-[11px] tracking-wider font-black transition-colors duration-300 ${
-                  viewMode === "merah" ? "bg-[#C92C1E]" : "bg-emerald-700"
-                }`}
+                className="bg-[#C92C1E] text-white uppercase text-[10px] md:text-[11px] tracking-wider font-black"
               >
                 {selectionMode && (
                   <th className="p-3 text-center">
@@ -1532,9 +1353,7 @@ export default function DataKelolaanPage() {
                   </th>
                 )}
 
-                {viewMode === "merah" ? (
-                  <>
-                    <th className="p-3 text-center align-top">No</th>
+                <th className="p-3 text-center align-top">No</th>
                     <th className="p-3 text-center align-top min-w-[140px]">
                       <div className="space-y-2">
                         <span>Kode Owner</span>
@@ -1556,7 +1375,7 @@ export default function DataKelolaanPage() {
                           value={searchNamaOwner}
                           onChange={(e) => setSearchNamaOwner(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
-                          placeholder="Search Nama"
+                          placeholder="Search Owner"
                           className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-200"
                         />
                       </div>
@@ -1611,85 +1430,6 @@ export default function DataKelolaanPage() {
                       </div>
                     </th>
                     <th className="p-3 text-center align-top">Action</th>
-                  </>
-                ) : (
-                  <>
-                    <th className="p-3 text-center align-top">No</th>
-                    <th className="p-3 text-center align-top min-w-[140px]">
-                      <div className="space-y-2">
-                        <span>Kode Owner</span>
-                        <input
-                          type="text"
-                          value={searchKodeOwner}
-                          onChange={(e) => setSearchKodeOwner(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          placeholder="Search Kode"
-                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        />
-                      </div>
-                    </th>
-                    <th className="p-3 align-top min-w-[180px]">
-                      <div className="space-y-2">
-                        <span>Nama Owner</span>
-                        <input
-                          type="text"
-                          value={searchNamaOwner}
-                          onChange={(e) => setSearchNamaOwner(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          placeholder="Search Nama"
-                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        />
-                      </div>
-                    </th>
-                    <th className="p-3 text-center align-top min-w-[150px]">
-                      <div className="space-y-2">
-                        <span>PIC Sales</span>
-                        <select
-                          value={picFilter}
-                          onChange={(e) => setPicFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        >
-                          <option value="Semua">Semua PIC</option>
-                          {LIST_PIC.map((pic) => (
-                            <option key={pic} value={pic}>
-                              {pic}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </th>
-                    <th className="p-3 text-center align-top">Expired Date</th>
-                    <th className="p-3 text-center">Total Transaksi</th>
-                    <th className="p-3 text-center align-top min-w-[170px]">
-                      <div className="space-y-2">
-                        <span>Skor</span>
-                        <select
-                          value={skorFilter}
-                          onChange={(e) => setSkorFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        >
-                          <option value="Semua">Semua Skor</option>
-                          {LIST_SKOR.map((skor) => (
-                            <option key={skor.value} value={skor.value}>
-                              {skor.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </th>
-                    <th className="p-3">Status Call</th>
-                    <th className="p-3">Status Chat</th>
-                    <th className="p-3 text-center">Validitas</th>
-                    <th className="p-3">Remarks</th>
-                    <th className="p-3">Sumber Nasabah</th>
-                    <th className="p-3">Finalisasi Paket</th>
-                    <th className="p-3 text-right">Nominal Closing</th>
-                    <th className="p-3">Catatan</th>
-                    <th className="p-3 text-center">Action</th>
-                  </>
-                )}
               </tr>
             </thead>
 
@@ -1697,7 +1437,7 @@ export default function DataKelolaanPage() {
               {filteredData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={(viewMode === "merah" ? 7 : 16) + (selectionMode ? 1 : 0)}
+                    colSpan={7 + (selectionMode ? 1 : 0)}
                     className="p-8 text-center text-gray-400 font-bold italic"
                   >
                     Data tidak ditemukan pada rentang filter ini.
@@ -1735,9 +1475,7 @@ export default function DataKelolaanPage() {
                       </td>
                     )}
 
-                    {viewMode === "merah" ? (
-                      <>
-                        <td className="p-3 text-center text-gray-400 font-bold">
+                    <td className="p-3 text-center text-gray-400 font-bold">
                           {startDataIndex + idx + 1}
                         </td>
 
@@ -1765,138 +1503,13 @@ export default function DataKelolaanPage() {
                           className="p-3 text-center"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex items-center justify-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenCallAction(row)}
-                              className="text-gray-600 hover:text-green-600 hover:scale-110 transition"
-                              title="Call via WhatsApp"
-                            >
-                              <CallIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(row, "profil")}
-                              className="text-gray-600 hover:text-[#C92C1E] hover:scale-110 transition"
-                              title="Edit profil"
-                            >
-                              <EditIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleHapusSatuData(row)}
-                              className="text-gray-500 hover:text-red-600 hover:scale-110 transition"
-                              title="Hapus data"
-                            >
-                              <TrashIcon className="w-5 h-5" />
-                            </button>
-                          </div>
+                          <ActionButtons
+                            item={row}
+                            onCall={handleOpenCallAction}
+                            onEdit={openEditModal}
+                            onDelete={handleHapusSatuData}
+                          />
                         </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="p-3 text-center text-gray-400 font-bold">
-                          {startDataIndex + idx + 1}
-                        </td>
-                        <td className="p-3 text-center font-mono font-bold text-gray-700">
-                          {row.kodeOwner || "-"}
-                        </td>
-                        <td className="p-3 font-black text-gray-900 whitespace-normal break-words">
-                          {row.namaOwner || "-"}
-                        </td>
-                        <td className="p-3 text-center">
-                          <PicBadge value={row.pic || ""} color="green" />
-                        </td>
-                        <td className="p-3 text-center font-mono font-bold text-gray-600">
-                          {formatTgl(row.expiredDate)}
-                        </td>
-                        <td className="p-3 text-center font-bold text-gray-900">
-                          {row.totalTransaksi}
-                        </td>
-                        <td className="p-3 text-center">
-                          <SkorBadge item={row} />
-                        </td>
-                        <td className="p-3">
-                          <span
-                            className={
-                              row.callStatus === "NO CALL"
-                                ? "text-[#C92C1E] font-bold"
-                                : "text-emerald-600 font-bold"
-                            }
-                          >
-                            {row.callStatus || "-"}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className="text-gray-700 font-bold">
-                            {row.chatStatus || "-"}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <span
-                            className={`px-1 py-0.5 font-bold rounded text-[10px] ${
-                              row.validitas === "VALID"
-                                ? "bg-emerald-700 text-white"
-                                : "bg-red-600 text-white"
-                            }`}
-                          >
-                            {row.validitas || "-"}
-                          </span>
-                        </td>
-                        <td className="p-3 whitespace-normal break-words max-w-[120px]">
-                          <span
-                            className={`inline-flex items-center justify-center px-2 py-1 text-[10px] font-black rounded-md text-center whitespace-normal ${getSkorBadgeClass(row)}`}
-                          >
-                            {getSkorLabel(row)}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-black rounded-md uppercase tracking-wider border bg-gray-50 border-gray-200 text-gray-600">
-                            {row.sumberNasabah || "Instagram"}
-                          </span>
-                        </td>
-                        <td className="p-3 font-black text-gray-800 whitespace-normal break-words">
-                          {row.finalisasiClosing || "Tanpa Paket"}
-                        </td>
-                        <td className="p-3 text-right font-mono font-black text-emerald-700">
-                          {formatRupiah(row.nominal)}
-                        </td>
-                        <td className="p-3 text-gray-400 whitespace-normal break-words text-[11px]">
-                          {row.noted || "-"}
-                        </td>
-                        <td
-                          className="p-3 text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center justify-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenCallAction(row)}
-                              className="text-gray-600 hover:text-green-600 hover:scale-110 transition"
-                              title="Call via WhatsApp"
-                            >
-                              <CallIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(row, "scoring")}
-                              className="text-gray-600 hover:text-emerald-700 hover:scale-110 transition"
-                              title="Edit scoring"
-                            >
-                              <EditIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleHapusSatuData(row)}
-                              className="text-gray-500 hover:text-red-600 hover:scale-110 transition"
-                              title="Hapus data"
-                            >
-                              <TrashIcon className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    )}
                   </tr>
                 ))
               )}
@@ -1983,15 +1596,15 @@ export default function DataKelolaanPage() {
 
       {/* MODAL EDIT PIC DATA TERPILIH */}
       {bulkPicModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 p-3 sm:p-6">
+          <div className="mx-auto my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b p-5">
               <div>
                 <h2 className="text-lg font-black text-gray-900">
                   Edit PIC Data Terpilih
                 </h2>
                 <p className="text-xs font-medium text-gray-400">
-                  Pilih PIC Sales baru untuk {selectedIds.length} data customer yang dicentang.
+                  Pilih PIC Sales baru untuk {selectedIds.length} data owner yang dicentang.
                 </p>
               </div>
 
@@ -2004,7 +1617,7 @@ export default function DataKelolaanPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveBulkPic} className="space-y-4 p-5">
+            <form onSubmit={handleSaveBulkPic} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
               <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4">
                 <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
                   <FieldIcon type="sales" />
@@ -2051,355 +1664,15 @@ export default function DataKelolaanPage() {
         </div>
       )}
 
-      {/* MODAL EDIT PROFIL / SCORING */}
-      {editModalOpen && editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl border border-gray-200 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b">
-              <div>
-                <h2 className="text-lg font-black text-gray-900">
-                  {modalMode === "profil" ? "Edit Profil Nasabah" : "Edit Scoring Nasabah"}
-                </h2>
-                <p className="text-xs text-gray-400 font-medium">
-                  {modalMode === "profil"
-                    ? "Form ini hanya mengubah data utama profil customer. Skor tidak bisa diedit manual."
-                    : "Form ini hanya mengubah atribut closing. Skor tetap mengikuti hasil Call & Chat."}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeEditModal}
-                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-black"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEditModal} className="p-5 space-y-4">
-              {modalMode === "profil" ? (
-                <div className="p-4 bg-red-50/30 border border-red-100 rounded-xl space-y-3">
-                  <span className="text-[10px] font-black text-[#C92C1E] uppercase tracking-wider block">
-                    Atribut Profil Nasabah
-                  </span>
-
-                  <div className="rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-black text-[#C92C1E]">
-                    Skor Customer: {getSkorLabel(editingItem)}
-                    <span className="ml-2 text-[10px] font-bold text-gray-400">
-                      Tidak bisa diedit manual
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
-                    <FormInput
-                      label="Kode Owner *"
-                      icon="code"
-                      value={editingItem.kodeOwner || ""}
-                      onChange={(value) => updateEditingField("kodeOwner", value)}
-                      error={profileValidationErrors.kodeOwner}
-                    />
-                    <FormInput
-                      label="Nama Owner *"
-                      icon="user"
-                      value={editingItem.namaOwner || ""}
-                      onChange={(value) => updateEditingField("namaOwner", value)}
-                      error={profileValidationErrors.namaOwner}
-                    />
-                    <FormInput
-                      label="Nama Brand *"
-                      icon="brand"
-                      value={editingItem.projectBrand || ""}
-                      onChange={(value) => updateEditingField("projectBrand", value)}
-                      error={profileValidationErrors.projectBrand}
-                    />
-                    <FormInput
-                      label="Nama Outlet *"
-                      icon="outlet"
-                      value={editingItem.outlet || ""}
-                      onChange={(value) => updateEditingField("outlet", value)}
-                      error={profileValidationErrors.outlet}
-                    />
-                    <PhoneInput
-                      label="Nomor Telepon Owner *"
-                      value={editingItem.noHpOwner || ""}
-                      onChange={(value) => updateEditingField("noHpOwner", value)}
-                      error={profileValidationErrors.noHpOwner}
-                    />
-                    <PhoneInput
-                      label="Nomor Telepon Outlet *"
-                      value={editingItem.noHpOutlet || ""}
-                      onChange={(value) => updateEditingField("noHpOutlet", value)}
-                      error={profileValidationErrors.noHpOutlet}
-                    />
-                    <FormSelect
-                      label="PIC Sales *"
-                      icon="sales"
-                      required
-                      value={editingItem.pic || ""}
-                      options={LIST_PIC}
-                      onChange={(value) => updateEditingField("pic", value)}
-                      error={profileValidationErrors.pic}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 bg-emerald-50/20 border border-emerald-100 rounded-xl space-y-3">
-                  <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider block">
-                    Atribut Scoring & Closing
-                  </span>
-
-                  <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs font-black text-emerald-700">
-                    Skor Customer: {getSkorLabel(editingItem)}
-                    <span className="ml-2 text-[10px] font-bold text-gray-400">
-                      Otomatis dari Call & Chat
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <FormInput label="Expired Date" type="date" value={editingItem.expiredDate || ""} onChange={(value) => updateEditingField("expiredDate", value)} />
-                    <FormInput label="Total Transaksi" type="number" value={String(editingItem.totalTransaksi || 0)} onChange={(value) => updateEditingField("totalTransaksi", Number(value) || 0)} />
-                    <FormSelect label="Validitas" value={editingItem.validitas || "VALID"} options={validitasOptions} onChange={(value) => updateEditingField("validitas", value)} />
-                    <FormSelect label="Call Status" value={editingItem.callStatus || "PENDING"} options={callOptions} onChange={(value) => updateEditingField("callStatus", value)} />
-                    <FormSelect label="Chat Status" value={editingItem.chatStatus || "PENDING"} options={chatOptions} onChange={(value) => updateEditingField("chatStatus", value)} />
-                    <FormSelect label="Sumber Nasabah" value={editingItem.sumberNasabah || "Instagram"} options={sumberOptions} onChange={(value) => updateEditingField("sumberNasabah", value)} />
-                    <FormSelect label="Kategori Paket Closing" value={editingItem.finalisasiClosing || ""} options={paketOptions} getLabel={(value) => value || "Tanpa Paket"} onChange={updateScoringPackage} />
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase">
-                        Nama Promo / Skema Tenor
-                      </label>
-                      <select
-                        value={editingItem.skemaId || ""}
-                        onChange={(event) => updateScoringSkema(event.target.value)}
-                        className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600 font-bold text-gray-700 cursor-pointer"
-                      >
-                        <option value="">Tanpa Skema</option>
-                        {currentSkemaList.map((skema) => (
-                          <option key={skema.id_skema} value={skema.id_skema}>
-                            {skema.nama_promo}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <FormInput label="Nominal Closing" type="number" value={String(editingItem.nominal || 0)} onChange={(value) => updateEditingField("nominal", Number(value) || 0)} />
-
-                    <div className="md:col-span-2 space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase">
-                        Catatan / Noted
-                      </label>
-                      <input
-                        type="text"
-                        value={editingItem.noted || ""}
-                        onChange={(event) => updateEditingField("noted", event.target.value)}
-                        className="w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-600"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="px-4 py-2 border rounded-xl font-bold text-gray-500 hover:bg-gray-50 text-xs cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className={`px-5 py-2 text-white font-extrabold text-xs rounded-xl shadow-sm cursor-pointer ${
-                    modalMode === "profil"
-                      ? "bg-[#C92C1E] hover:bg-[#A82216]"
-                      : "bg-emerald-700 hover:bg-emerald-800"
-                  }`}
-                >
-                  Simpan Perubahan
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-function PhoneInput({
-  label,
-  value,
-  onChange,
-  error,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}) {
-  const initialCountry = getPhoneCountryByDialCode(value);
-  const [selectedCountryCode, setSelectedCountryCode] = useState(initialCountry.code);
-
-  const selectedCountry =
-    PHONE_COUNTRY_OPTIONS.find((country) => country.code === selectedCountryCode) ||
-    initialCountry;
-
-  useEffect(() => {
-    if (!value) return;
-
-    const detectedCountry = getPhoneCountryByDialCode(value);
-
-    if (value.startsWith(detectedCountry.dialCode)) {
-      setSelectedCountryCode((currentCode) => currentCode || detectedCountry.code);
-    }
-  }, [value]);
-
-  const nationalNumber = stripDialCode(value, selectedCountry.dialCode);
-
-  const handleCountryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const nextCountry =
-      PHONE_COUNTRY_OPTIONS.find((country) => country.code === event.target.value) ||
-      PHONE_COUNTRY_OPTIONS[0];
-
-    setSelectedCountryCode(nextCountry.code);
-    onChange(buildInternationalPhone(nextCountry.dialCode, nationalNumber));
-  };
-
-  const handlePhoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(buildInternationalPhone(selectedCountry.dialCode, event.target.value));
-  };
-
-  return (
-    <div className="space-y-1">
-      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
-        <FieldIcon type="phone" />
-        {label}
-      </label>
-
-      <div
-        className={`flex overflow-hidden rounded-xl border bg-white focus-within:border-[#C92C1E] ${
-          error ? "border-red-500 bg-red-50" : "border-gray-200"
-        }`}
-      >
-        <select
-          value={selectedCountry.code}
-          onChange={handleCountryChange}
-          className="w-[110px] cursor-pointer border-r bg-gray-50 px-2.5 py-2.5 text-xs font-black text-gray-700 outline-none"
-          title="Pilih kode negara"
-        >
-          {PHONE_COUNTRY_OPTIONS.map((country) => (
-            <option key={country.code} value={country.code}>
-              {country.flag} {country.dialCode}
-            </option>
-          ))}
-        </select>
-
-        <input
-          required
-          type="tel"
-          value={nationalNumber}
-          onChange={handlePhoneChange}
-          inputMode="tel"
-          autoComplete="tel"
-          placeholder={selectedCountry.placeholder}
-          className="min-w-0 flex-1 bg-white px-3 py-2.5 text-xs font-bold outline-none"
-          title="Pilih negara lalu isi nomor telepon"
-        />
-      </div>
-
-      {error ? (
-        <p className="text-[10px] font-bold text-red-600">{error}</p>
-      ) : (
-        <p className="text-[10px] font-medium text-gray-400">
-          Tersimpan sebagai: {value || `${selectedCountry.dialCode}...`}
-        </p>
-      )}
-    </div>
-  );
-}
-
-
-function FormInput({
-  label,
-  value,
-  onChange,
-  type = "text",
-  icon = "code",
-  error,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
-  error?: string;
-}) {
-  const isRequired = label.includes("*");
-
-  return (
-    <div className="space-y-1">
-      <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
-        <FieldIcon type={icon} />
-        {label}
-      </label>
-      <input
-        required={isRequired}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={`w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold ${
-          error ? "border-red-500 bg-red-50" : "border-gray-200"
-        }`}
+      <EditProfileModal
+        open={editModalOpen}
+        item={editingItem}
+        errors={profileValidationErrors}
+        listPic={LIST_PIC}
+        onClose={closeEditModal}
+        onSubmit={handleSaveEditModal}
+        onChangeField={updateEditingField}
       />
-      {error && (
-        <p className="text-[10px] font-bold text-red-600">{error}</p>
-      )}
-    </div>
-  );
-}
-
-function FormSelect({
-  label,
-  value,
-  options,
-  onChange,
-  getLabel,
-  icon = "sales",
-  required = false,
-  error,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-  getLabel?: (value: string) => string;
-  icon?: "code" | "user" | "brand" | "outlet" | "phone" | "sales";
-  required?: boolean;
-  error?: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
-        <FieldIcon type={icon} />
-        {label}
-      </label>
-      <select
-        required={required}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={`w-full bg-white border p-2.5 rounded-xl text-xs focus:outline-none focus:border-[#C92C1E] font-bold text-gray-700 cursor-pointer ${
-          error ? "border-red-500 bg-red-50" : "border-gray-200"
-        }`}
-      >
-        {options.map((option) => (
-          <option key={option || "empty-option"} value={option}>
-            {getLabel ? getLabel(option) : option}
-          </option>
-        ))}
-      </select>
-      {error && (
-        <p className="text-[10px] font-bold text-red-600">{error}</p>
-      )}
     </div>
   );
 }

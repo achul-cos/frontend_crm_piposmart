@@ -204,7 +204,29 @@ export const getWhatsAppUrl = (phone?: string) => {
   return number ? `https://wa.me/${number}` : "";
 };
 
-export const openWhatsAppCustomer = (phone?: string) => {
+export const formatCustomerPhoneDisplay = (phone?: string) => {
+  const digitsOnly = String(phone || "").replace(/\D/g, "");
+
+  if (!digitsOnly) return "-";
+
+  const nationalNumber = digitsOnly.startsWith("62")
+    ? digitsOnly.slice(2)
+    : digitsOnly.startsWith("0")
+      ? digitsOnly.slice(1)
+      : digitsOnly;
+
+  if (!nationalNumber) return "-";
+
+  if (nationalNumber.length <= 3) return nationalNumber;
+
+  if (nationalNumber.length <= 7) {
+    return `${nationalNumber.slice(0, 3)}-${nationalNumber.slice(3)}`;
+  }
+
+  return `${nationalNumber.slice(0, 3)}-${nationalNumber.slice(3, 7)}-${nationalNumber.slice(7, 11)}${nationalNumber.length > 11 ? `-${nationalNumber.slice(11)}` : ""}`;
+};
+
+const openWhatsAppCustomer = (phone?: string) => {
   const url = getWhatsAppUrl(phone);
 
   if (!url) {
@@ -451,7 +473,7 @@ export default function CallPage({
                 <div className="flex gap-2">
                   <input
                     readOnly
-                    value={customerPhone || "-"}
+                    value={formatCustomerPhoneDisplay(customerPhone)}
                     className="h-10 min-w-0 flex-1 cursor-not-allowed rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-700 outline-none"
                   />
 
