@@ -305,3 +305,6 @@ export const generateDummyCustomers = (total = 1000): DummyNasabahItem[] => {
     };
   });
 };
+
+
+export const generateDummyOwners = generateDummyCustomers;

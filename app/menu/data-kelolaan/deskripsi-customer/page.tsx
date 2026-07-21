@@ -63,12 +63,12 @@ type NasabahItem = {
 const FALLBACK_CUSTOMER: NasabahItem = {
   no: 1,
   kodeOwner: "#1111",
-  namaOwner: "Nama Customer",
+  namaOwner: "Nama Owner",
   projectBrand: "Nama Brand",
   outlet: "Nama outlet",
   noHpOwner: "08123956789",
   noHpOutlet: "08123456789",
-  sumberCustomer: "Tiktok",
+  sumberCustomer: "",
   pic: "Sales B",
   remarks: "3",
   scor: 3,
@@ -109,12 +109,12 @@ const getToneClass = (text: string) => {
     return "border-red-100 bg-red-100 text-red-700";
   }
 
-  if (lower.includes("(1)") || lower.includes("incoming")) {
-    return "border-yellow-100 bg-yellow-100 text-yellow-800";
+  if (lower.includes("incoming") || lower.includes("(1)")) {
+    return "border-blue-100 bg-blue-100 text-blue-700";
   }
 
-  if (lower.includes("(2)") || lower.includes("trial") || lower.includes("offline")) {
-    return "border-blue-100 bg-blue-100 text-blue-700";
+  if (lower.includes("trial") || lower.includes("(2)") || lower.includes("offline")) {
+    return "border-yellow-100 bg-yellow-100 text-yellow-800";
   }
 
   if (lower.includes("(3)") || lower.includes("berlangganan") || lower.includes("online")) {
@@ -129,7 +129,7 @@ const getToneClass = (text: string) => {
 };
 
 const getSumberCustomerValue = (item: NasabahItem) => {
-  return item.sumberCustomer || (item as NasabahItem & { sumberNasabah?: string }).sumberNasabah || "-";
+  return item.sumberNasabah || item.sumberCustomer || "-";
 };
 
 const getSumberTagClass = (value?: string) => {
@@ -166,6 +166,147 @@ const normalizePhone = (phone?: string) => {
   if (digitsOnly.startsWith("62")) return digitsOnly;
 
   return digitsOnly;
+};
+
+const PHONE_COUNTRY_OPTIONS = [
+  { code: "ID", flag: "🇮🇩", dialCode: "+62", placeholder: "812-3456-7890" },
+  { code: "MY", flag: "🇲🇾", dialCode: "+60", placeholder: "12-345-6789" },
+  { code: "SG", flag: "🇸🇬", dialCode: "+65", placeholder: "8123-4567" },
+  { code: "TH", flag: "🇹🇭", dialCode: "+66", placeholder: "81-234-5678" },
+  { code: "PH", flag: "🇵🇭", dialCode: "+63", placeholder: "912-345-6789" },
+  { code: "VN", flag: "🇻🇳", dialCode: "+84", placeholder: "91-234-5678" },
+  { code: "BN", flag: "🇧🇳", dialCode: "+673", placeholder: "712-3456" },
+  { code: "KH", flag: "🇰🇭", dialCode: "+855", placeholder: "12-345-678" },
+  { code: "LA", flag: "🇱🇦", dialCode: "+856", placeholder: "20-1234-5678" },
+  { code: "MM", flag: "🇲🇲", dialCode: "+95", placeholder: "9-123-456789" },
+  { code: "TL", flag: "🇹🇱", dialCode: "+670", placeholder: "7721-2345" },
+  { code: "US", flag: "🇺🇸", dialCode: "+1", placeholder: "123-456-7890" },
+  { code: "CA", flag: "🇨🇦", dialCode: "+1", placeholder: "123-456-7890" },
+  { code: "MX", flag: "🇲🇽", dialCode: "+52", placeholder: "55-1234-5678" },
+  { code: "BR", flag: "🇧🇷", dialCode: "+55", placeholder: "11-91234-5678" },
+  { code: "AR", flag: "🇦🇷", dialCode: "+54", placeholder: "9-11-1234-5678" },
+  { code: "CL", flag: "🇨🇱", dialCode: "+56", placeholder: "9-1234-5678" },
+  { code: "CO", flag: "🇨🇴", dialCode: "+57", placeholder: "300-123-4567" },
+  { code: "GB", flag: "🇬🇧", dialCode: "+44", placeholder: "7700-900123" },
+  { code: "FR", flag: "🇫🇷", dialCode: "+33", placeholder: "6-12-34-56-78" },
+  { code: "DE", flag: "🇩🇪", dialCode: "+49", placeholder: "1512-3456789" },
+  { code: "IT", flag: "🇮🇹", dialCode: "+39", placeholder: "312-345-6789" },
+  { code: "ES", flag: "🇪🇸", dialCode: "+34", placeholder: "612-345-678" },
+  { code: "NL", flag: "🇳🇱", dialCode: "+31", placeholder: "6-12345678" },
+  { code: "BE", flag: "🇧🇪", dialCode: "+32", placeholder: "470-12-34-56" },
+  { code: "CH", flag: "🇨🇭", dialCode: "+41", placeholder: "78-123-45-67" },
+  { code: "SE", flag: "🇸🇪", dialCode: "+46", placeholder: "70-123-45-67" },
+  { code: "NO", flag: "🇳🇴", dialCode: "+47", placeholder: "412-34-567" },
+  { code: "DK", flag: "🇩🇰", dialCode: "+45", placeholder: "20-12-34-56" },
+  { code: "FI", flag: "🇫🇮", dialCode: "+358", placeholder: "40-123-4567" },
+  { code: "IE", flag: "🇮🇪", dialCode: "+353", placeholder: "85-123-4567" },
+  { code: "PT", flag: "🇵🇹", dialCode: "+351", placeholder: "912-345-678" },
+  { code: "PL", flag: "🇵🇱", dialCode: "+48", placeholder: "512-345-678" },
+  { code: "TR", flag: "🇹🇷", dialCode: "+90", placeholder: "532-123-4567" },
+  { code: "RU", flag: "🇷🇺", dialCode: "+7", placeholder: "912-345-6789" },
+  { code: "CN", flag: "🇨🇳", dialCode: "+86", placeholder: "138-0013-8000" },
+  { code: "JP", flag: "🇯🇵", dialCode: "+81", placeholder: "90-1234-5678" },
+  { code: "KR", flag: "🇰🇷", dialCode: "+82", placeholder: "10-1234-5678" },
+  { code: "IN", flag: "🇮🇳", dialCode: "+91", placeholder: "98765-43210" },
+  { code: "PK", flag: "🇵🇰", dialCode: "+92", placeholder: "300-1234567" },
+  { code: "BD", flag: "🇧🇩", dialCode: "+880", placeholder: "1712-345678" },
+  { code: "LK", flag: "🇱🇰", dialCode: "+94", placeholder: "71-234-5678" },
+  { code: "SA", flag: "🇸🇦", dialCode: "+966", placeholder: "50-123-4567" },
+  { code: "AE", flag: "🇦🇪", dialCode: "+971", placeholder: "50-123-4567" },
+  { code: "QA", flag: "🇶🇦", dialCode: "+974", placeholder: "3312-3456" },
+  { code: "KW", flag: "🇰🇼", dialCode: "+965", placeholder: "500-12345" },
+  { code: "OM", flag: "🇴🇲", dialCode: "+968", placeholder: "9212-3456" },
+  { code: "AU", flag: "🇦🇺", dialCode: "+61", placeholder: "412-345-678" },
+  { code: "NZ", flag: "🇳🇿", dialCode: "+64", placeholder: "21-123-4567" },
+  { code: "ZA", flag: "🇿🇦", dialCode: "+27", placeholder: "82-123-4567" },
+  { code: "EG", flag: "🇪🇬", dialCode: "+20", placeholder: "100-123-4567" },
+  { code: "NG", flag: "🇳🇬", dialCode: "+234", placeholder: "803-123-4567" },
+  { code: "KE", flag: "🇰🇪", dialCode: "+254", placeholder: "712-345-678" },
+  { code: "MA", flag: "🇲🇦", dialCode: "+212", placeholder: "612-345678" },
+];
+
+const getPhoneCountryByNumber = (phone?: string) => {
+  const rawValue = String(phone || "").trim();
+  const digitsOnly = rawValue.replace(/\D/g, "");
+
+  if (!digitsOnly) return PHONE_COUNTRY_OPTIONS[0];
+
+  if (rawValue.startsWith("+")) {
+    const sortedCountries = [...PHONE_COUNTRY_OPTIONS].sort(
+      (a, b) => b.dialCode.length - a.dialCode.length,
+    );
+
+    return (
+      sortedCountries.find((country) =>
+        digitsOnly.startsWith(country.dialCode.replace(/\D/g, "")),
+      ) || PHONE_COUNTRY_OPTIONS[0]
+    );
+  }
+
+  if (digitsOnly.startsWith("0")) {
+    return PHONE_COUNTRY_OPTIONS[0];
+  }
+
+  const sortedCountries = [...PHONE_COUNTRY_OPTIONS].sort(
+    (a, b) => b.dialCode.length - a.dialCode.length,
+  );
+
+  return (
+    sortedCountries.find((country) =>
+      digitsOnly.startsWith(country.dialCode.replace(/\D/g, "")),
+    ) || PHONE_COUNTRY_OPTIONS[0]
+  );
+};
+
+const formatNationalByPlaceholder = (value: string, placeholder: string) => {
+  const digitsOnly = value.replace(/\D/g, "");
+  const groups = placeholder.split("-").map((group) => group.replace(/\D/g, "").length);
+  const formattedGroups: string[] = [];
+  let cursor = 0;
+
+  groups.forEach((groupLength) => {
+    if (cursor >= digitsOnly.length) return;
+
+    const nextValue = digitsOnly.slice(cursor, cursor + groupLength);
+
+    if (nextValue) {
+      formattedGroups.push(nextValue);
+    }
+
+    cursor += groupLength;
+  });
+
+  if (cursor < digitsOnly.length) {
+    formattedGroups.push(digitsOnly.slice(cursor));
+  }
+
+  return formattedGroups.join("-");
+};
+
+const formatPhoneWithDash = (phone?: string) => {
+  const rawValue = String(phone || "").trim();
+  const digitsOnly = rawValue.replace(/\D/g, "");
+
+  if (!digitsOnly) return "-";
+
+  const country = getPhoneCountryByNumber(rawValue);
+  const dialCodeDigits = country.dialCode.replace(/\D/g, "");
+
+  const nationalNumber =
+    rawValue.startsWith("+") || digitsOnly.startsWith(dialCodeDigits)
+      ? digitsOnly.slice(dialCodeDigits.length)
+      : digitsOnly.startsWith("0")
+        ? digitsOnly.slice(1)
+        : digitsOnly;
+
+  const formattedNational = formatNationalByPlaceholder(
+    nationalNumber,
+    country.placeholder,
+  );
+
+  return formattedNational
+    ? `${country.dialCode} ${formattedNational}`
+    : country.dialCode;
 };
 
 const openWhatsApp = (phone?: string) => {
@@ -237,7 +378,6 @@ function Badge({ children }: { children: React.ReactNode }) {
       )}`}
     >
       {children}
-      <span className="ml-1 text-[10px]">⌄</span>
     </span>
   );
 }
@@ -248,7 +388,7 @@ function SourceTag({ value }: { value?: string }) {
   return (
     <label className="block space-y-1.5">
       <span className="text-[10px] font-black uppercase tracking-wide text-gray-500">
-        Sumber Customer
+        Sumber Owner
       </span>
 
       <div className="rounded-lg border border-red-100 bg-white px-2.5 py-2">
@@ -309,6 +449,23 @@ export default function DeskripsiLanggananPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editCustomer, setEditCustomer] = useState<NasabahItem>(FALLBACK_CUSTOMER);
 
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    document.body.style.overflow = "";
+    document.body.style.paddingRight = "";
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.height = "";
+
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.height = "";
+    };
+  }, []);
+
   useEffect(() => {
     const cached = localStorage.getItem("piposmart_nasabah_data");
 
@@ -330,6 +487,7 @@ export default function DeskripsiLanggananPage() {
       setCustomer(FALLBACK_CUSTOMER);
     }
   }, [customerId]);
+
 
   const callHistories = useMemo(() => {
     return customer.callHistories || [];
@@ -374,7 +532,13 @@ export default function DeskripsiLanggananPage() {
   }, [customer]);
 
   const openEditModal = () => {
-    setEditCustomer(customer);
+    const sourceValue = getSumberCustomerValue(customer);
+
+    setEditCustomer({
+      ...customer,
+      sumberCustomer: sourceValue,
+      sumberNasabah: sourceValue,
+    });
     setIsEditOpen(true);
   };
 
@@ -388,13 +552,25 @@ export default function DeskripsiLanggananPage() {
     }));
   };
 
+  const updateEditSource = (value: string) => {
+    setEditCustomer((prev) => ({
+      ...prev,
+      sumberCustomer: value,
+      sumberNasabah: value,
+    }));
+  };
+
   const handleSaveEdit = () => {
-    const nextCustomer = {
+    const sourceValue = getSumberCustomerValue(editCustomer);
+
+    const nextOwner = {
       ...customer,
       ...editCustomer,
+      sumberCustomer: sourceValue,
+      sumberNasabah: sourceValue,
     };
 
-    setCustomer(nextCustomer);
+    setCustomer(nextOwner);
 
     const cached = localStorage.getItem("piposmart_nasabah_data");
 
@@ -403,22 +579,22 @@ export default function DeskripsiLanggananPage() {
         const parsed = JSON.parse(cached);
         const listData: NasabahItem[] = Array.isArray(parsed) ? parsed : [];
         const nextData = listData.map((item) =>
-          String(item.no) === String(nextCustomer.no) ? nextCustomer : item,
+          String(item.no) === String(nextOwner.no) ? nextOwner : item,
         );
 
         localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
       } catch {
-        localStorage.setItem("piposmart_nasabah_data", JSON.stringify([nextCustomer]));
+        localStorage.setItem("piposmart_nasabah_data", JSON.stringify([nextOwner]));
       }
     } else {
-      localStorage.setItem("piposmart_nasabah_data", JSON.stringify([nextCustomer]));
+      localStorage.setItem("piposmart_nasabah_data", JSON.stringify([nextOwner]));
     }
 
     setIsEditOpen(false);
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 rounded-[28px] border border-red-100 bg-[#FFF8F6] p-4 text-gray-900 shadow-sm">
+    <div className="mx-auto min-min-h-screen max-w-5xl space-y-4 rounded-[28px] border border-red-100 bg-[#FFF8F6] p-4 pb-12 text-gray-900 shadow-sm">
       <div className="flex items-center justify-end">
         <Link
           href="/menu/data-kelolaan"
@@ -445,7 +621,7 @@ export default function DeskripsiLanggananPage() {
 
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-black uppercase tracking-tight">
-              {customer.namaOwner || "Nama Customer"}
+              {customer.namaOwner || "Nama Owner"}
             </h1>
             <p className="mt-1 text-base font-black text-gray-600">
               {customer.outlet || "Nama outlet"}
@@ -462,7 +638,7 @@ export default function DeskripsiLanggananPage() {
                 Mitra : <span className="text-[#C92C1E]">{customer.kategoriMitra || "tampilkan jika ada"}</span>
               </div>
               <div className="rounded-lg border border-red-100 bg-red-50/40 px-2.5 py-1.5 text-[11px] font-black">
-                skor customer : <span className="text-[#C92C1E]">{getRemarkLabel(customer)}</span>
+                skor owner : <span className="text-[#C92C1E]">{getRemarkLabel(customer)}</span>
               </div>
             </div>
           </div>
@@ -485,14 +661,14 @@ export default function DeskripsiLanggananPage() {
         </div>
       </section>
 
-      <SectionTitle>Detail Customer</SectionTitle>
+      <SectionTitle>Detail Owner</SectionTitle>
 
       <section className="grid grid-cols-1 gap-3 rounded-2xl border border-red-100 bg-white p-4 lg:grid-cols-2">
         <InfoInput label="Kode Owner" value={customer.kodeOwner || "#1111"} />
-        <InfoInput label="Nama Owner" value={customer.namaOwner || "Nama Customer"} />
+        <InfoInput label="Nama Owner" value={customer.namaOwner || "Nama Owner"} />
         <InfoInput
           label="Nomor Handphone Owner"
-          value={customer.noHpOwner || "08123956789"}
+          value={formatPhoneWithDash(customer.noHpOwner || "08123956789")}
           action={
             <button
               onClick={() => openWhatsApp(customer.noHpOwner)}
@@ -506,7 +682,7 @@ export default function DeskripsiLanggananPage() {
         <InfoInput label="Nama Outlet" value={customer.outlet || "Nama Outlet"} />
         <InfoInput
           label="Nomor Handphone Outlet"
-          value={customer.noHpOutlet || "08123456789"}
+          value={formatPhoneWithDash(customer.noHpOutlet || "08123456789")}
           action={
             <button
               onClick={() => openWhatsApp(customer.noHpOutlet)}
@@ -607,7 +783,7 @@ export default function DeskripsiLanggananPage() {
 
       <Timeline
         items={[
-          "Customer belum training",
+          "Owner belum training",
           ...trainingHistories.map(
             (item) => `${item.lokasiTraining}, ${item.waktuTraining}`,
           ),
@@ -692,18 +868,19 @@ export default function DeskripsiLanggananPage() {
         </table>
       </section>
       {isEditOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-red-100 bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/40 p-3 sm:p-6">
+          <div className="mx-auto my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-red-100 bg-white shadow-2xl">
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
                   Edit Data
                 </p>
                 <h2 className="text-xl font-black text-gray-950">
-                  Detail Customer & Mitra
+                  Detail Owner & Mitra
                 </h2>
                 <p className="mt-1 text-xs font-bold text-gray-400">
-                  Hanya ubah identitas customer dan mitra. Riwayat tetap dari Call & Chat.
+                  Hanya ubah identitas owner dan mitra. Riwayat tetap dari Call & Chat.
                 </p>
               </div>
 
@@ -719,7 +896,7 @@ export default function DeskripsiLanggananPage() {
             <div className="space-y-5">
               <div className="rounded-2xl border border-red-100 bg-[#FFF8F6] p-4">
                 <h3 className="mb-3 text-sm font-black text-[#C92C1E]">
-                  Detail Customer
+                  Detail Owner
                 </h3>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -758,11 +935,11 @@ export default function DeskripsiLanggananPage() {
 
                   <label className="space-y-1.5">
                     <span className="text-[10px] font-black uppercase text-gray-500">
-                      Sumber Customer
+                      Sumber Owner
                     </span>
                     <input
-                      value={editCustomer.sumberCustomer || ""}
-                      onChange={(event) => updateEditField("sumberCustomer", event.target.value)}
+                      value={getSumberCustomerValue(editCustomer)}
+                      onChange={(event) => updateEditSource(event.target.value)}
                       className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-[#C92C1E]"
                     />
                   </label>
@@ -772,7 +949,7 @@ export default function DeskripsiLanggananPage() {
                       No HP Owner
                     </span>
                     <input
-                      value={editCustomer.noHpOwner || ""}
+                      value={formatPhoneWithDash(editCustomer.noHpOwner || "")}
                       onChange={(event) => updateEditField("noHpOwner", event.target.value)}
                       className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-[#C92C1E]"
                     />
@@ -783,7 +960,7 @@ export default function DeskripsiLanggananPage() {
                       No HP Outlet
                     </span>
                     <input
-                      value={editCustomer.noHpOutlet || ""}
+                      value={formatPhoneWithDash(editCustomer.noHpOutlet || "")}
                       onChange={(event) => updateEditField("noHpOutlet", event.target.value)}
                       className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-[#C92C1E]"
                     />
@@ -860,6 +1037,7 @@ export default function DeskripsiLanggananPage() {
                   Simpan Perubahan
                 </button>
               </div>
+            </div>
             </div>
           </div>
         </div>

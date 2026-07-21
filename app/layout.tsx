@@ -138,6 +138,9 @@ export default function RootLayout({
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
+      const savedUserName = localStorage.getItem("piposmart_user_name") || "User";
+      sessionStorage.removeItem(`piposmart_sop_seen_${savedUserName}`);
+
       localStorage.removeItem("piposmart_is_logged_in");
       localStorage.removeItem("piposmart_user_name");
       localStorage.removeItem("piposmart_user_role");
