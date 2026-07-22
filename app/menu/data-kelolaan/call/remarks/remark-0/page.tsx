@@ -44,3 +44,7 @@ export function applyRemark0Action(customer: CallCustomer): CallCustomer {
     scor: 0,
   };
 }
+
+export default function Remark0Page() {
+  return null;
+}

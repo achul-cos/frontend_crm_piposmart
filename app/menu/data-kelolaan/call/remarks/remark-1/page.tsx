@@ -23,3 +23,7 @@ export function applyRemark1Action(customer: CallCustomer): CallCustomer {
     scor: 1,
   };
 }
+
+export default function Remark1Page() {
+  return null;
+}
