@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LIST_PIC } from "../dummy/page";
@@ -71,7 +71,6 @@ const SUMBER_NASABAH_OPTIONS = [
   { value: "Instagram", label: "Instagram", tone: "pink" },
   { value: "Facebook", label: "Facebook", tone: "blue" },
   { value: "Tiktok", label: "Tiktok", tone: "dark" },
-  { value: "Mitra", label: "Mitra", tone: "green" },
   { value: "Playstore", label: "Playstore", tone: "red" },
 ];
 
@@ -215,7 +214,7 @@ const REQUIRED_PROFILE_FIELDS = [
   { key: "kodeOwner", label: "Kode Owner" },
   { key: "namaOwner", label: "Nama Owner" },
   { key: "projectBrand", label: "Nama Brand" },
-  { key: "outlet", label: "Nama Outlet" },
+  { key: "outlet", label: "Outlet" },
   { key: "noHpOwner", label: "Nomor Telepon Owner" },
   { key: "noHpOutlet", label: "Nomor Telepon Outlet" },
   { key: "pic", label: "PIC Sales" },
@@ -244,6 +243,30 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
   }
 
   return errors;
+};
+
+
+const getOwnerProfileByKodeOwner = (kodeOwner: string) => {
+  if (typeof window === "undefined") return null;
+
+  const normalizedKodeOwner = kodeOwner.trim();
+
+  if (!normalizedKodeOwner) return null;
+
+  const cached = localStorage.getItem("piposmart_nasabah_data");
+
+  if (!cached) return null;
+
+  try {
+    const list: NasabahItem[] = JSON.parse(cached);
+
+    return (
+      list.find((item) => String(item.kodeOwner || "").trim() === normalizedKodeOwner) ||
+      null
+    );
+  } catch {
+    return null;
+  }
 };
 
 
@@ -336,6 +359,7 @@ export default function FormInputDummyPage() {
     noted: "",
   });
   const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
+  const [outletInputMode, setOutletInputMode] = useState<"existing" | "new">("existing");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -357,6 +381,7 @@ export default function FormInputDummyPage() {
 
       if (matchItem) {
         setFormInput(matchItem);
+        setOutletInputMode("existing");
       }
     } catch {
       setFormInput((prev) => prev);
@@ -367,6 +392,25 @@ export default function FormInputDummyPage() {
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = event.target;
+
+    if (name === "kodeOwner") {
+      const matchedOwner = getOwnerProfileByKodeOwner(value);
+
+      setFormInput((prev) => ({
+        ...prev,
+        kodeOwner: value,
+        namaOwner: matchedOwner?.namaOwner || "",
+        projectBrand: matchedOwner?.projectBrand || "",
+        noHpOwner: matchedOwner?.noHpOwner || "",
+        noHpOutlet: matchedOwner?.noHpOutlet || "",
+        pic: matchedOwner?.pic || "No PIC",
+        sumberNasabah: matchedOwner?.sumberNasabah || "Instagram",
+        outlet: "",
+      }));
+
+      setOutletInputMode("existing");
+      return;
+    }
 
     setFormInput((prev) => ({
       ...prev,
@@ -393,6 +437,50 @@ export default function FormInputDummyPage() {
       [field]: "",
     }));
   };
+
+
+  const ownerOutletOptions = useMemo(() => {
+    if (typeof window === "undefined") return [];
+
+    const kodeOwner = String(formInput.kodeOwner || "").trim();
+
+    if (!kodeOwner) return [];
+
+    const cached = localStorage.getItem("piposmart_nasabah_data");
+
+    if (!cached) return [];
+
+    try {
+      const list: NasabahItem[] = JSON.parse(cached);
+
+      return Array.from(
+        new Set(
+          list
+            .filter((item) => String(item.kodeOwner || "").trim() === kodeOwner)
+            .map((item) => item.outlet || item.projectBrand)
+            .filter((outlet): outlet is string => Boolean(outlet && outlet.trim())),
+        ),
+      );
+    } catch {
+      return [];
+    }
+  }, [formInput.kodeOwner]);
+
+  useEffect(() => {
+    if (!formInput.kodeOwner) {
+      setOutletInputMode("existing");
+      return;
+    }
+
+    if (ownerOutletOptions.length === 0) {
+      setOutletInputMode("new");
+      return;
+    }
+
+    if (!formInput.outlet) {
+      setOutletInputMode("existing");
+    }
+  }, [formInput.kodeOwner, formInput.outlet, ownerOutletOptions.length]);
 
 
   const handleSaveData = (event: React.FormEvent) => {
@@ -427,7 +515,7 @@ export default function FormInputDummyPage() {
               kodeOwner: formInput.kodeOwner || "",
               namaOwner: formInput.namaOwner || "",
               projectBrand: formInput.projectBrand || "",
-              outlet: formInput.outlet || "",
+              outlet: formInput.outlet || formInput.projectBrand || "",
               noHpOwner: formInput.noHpOwner || "",
               noHpOutlet: formInput.noHpOutlet || "",
               pic: formInput.pic || "Satria",
@@ -463,7 +551,7 @@ export default function FormInputDummyPage() {
         kodeOwner: formInput.kodeOwner || "",
         namaOwner: formInput.namaOwner || "",
         projectBrand: formInput.projectBrand || "",
-        outlet: formInput.outlet || "",
+        outlet: formInput.outlet || formInput.projectBrand || "",
         noHpOwner: formInput.noHpOwner || "",
         noHpOutlet: formInput.noHpOutlet || "",
         createDateProject: getToday(),
@@ -547,9 +635,15 @@ export default function FormInputDummyPage() {
               name="kodeOwner"
               value={formInput.kodeOwner || ""}
               onChange={handleInputChange}
-              placeholder="Contoh: 18907"
+              placeholder="Isi kode owner, data owner akan auto terisi"
               error={validationErrors.kodeOwner}
             />
+
+            {formInput.kodeOwner && (
+              <p className="rounded-xl border border-red-100 bg-red-50/50 px-3 py-2 text-[10px] font-bold text-[#C92C1E]">
+                Jika Kode Owner cocok dengan data yang tersimpan, Nama Owner, Nama Brand, nomor telepon, PIC, dan sumber akan terisi otomatis. Jika Kode Owner diubah atau tidak cocok, field otomatis dikosongkan.
+              </p>
+            )}
 
             <FormInput
               label="Nama Owner *"
@@ -571,13 +665,13 @@ export default function FormInputDummyPage() {
               error={validationErrors.projectBrand}
             />
 
-            <FormInput
-              label="Nama Outlet *"
-              icon="outlet"
-              name="outlet"
+            <OwnerOutletSelector
+              kodeOwner={formInput.kodeOwner || ""}
               value={formInput.outlet || ""}
-              onChange={handleInputChange}
-              placeholder="Contoh: Azzahra Laundry Cabang 1"
+              options={ownerOutletOptions}
+              mode={outletInputMode}
+              onModeChange={setOutletInputMode}
+              onChange={(value) => updateFormField("outlet", value)}
               error={validationErrors.outlet}
             />
 
@@ -644,6 +738,131 @@ export default function FormInputDummyPage() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+
+function OwnerOutletSelector({
+  kodeOwner,
+  value,
+  options,
+  mode,
+  onModeChange,
+  onChange,
+  error,
+}: {
+  kodeOwner: string;
+  value: string;
+  options: string[];
+  mode: "existing" | "new";
+  onModeChange: (mode: "existing" | "new") => void;
+  onChange: (value: string) => void;
+  error?: string;
+}) {
+  const hasKodeOwner = kodeOwner.trim() !== "";
+  const hasExistingOutlet = options.length > 0;
+  const showNewOutletInput = !hasExistingOutlet || mode === "new";
+
+  if (!hasKodeOwner) {
+    return (
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+          <FieldIcon type="outlet" />
+          Tambah Outlet *
+        </label>
+
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs font-bold text-gray-400">
+          Isi Kode Owner terlebih dahulu untuk menampilkan dropdown outlet yang dimiliki.
+        </div>
+
+        {error && (
+          <p className="text-[10px] font-bold text-red-600">{error}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+          <FieldIcon type="outlet" />
+          Tambah Outlet *
+        </label>
+
+        {hasExistingOutlet && (
+          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-[#C92C1E]">
+            {options.length} outlet ditemukan
+          </span>
+        )}
+      </div>
+
+      {showNewOutletInput ? (
+        <div className="space-y-2">
+          <input
+            required
+            type="text"
+            name="outlet"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Contoh: Azzahra Laundry Cabang 1"
+            className={`w-full rounded-xl border bg-white p-2.5 text-xs font-bold focus:outline-none focus:border-[#C92C1E] ${
+              error ? "border-red-500 bg-red-50" : "border-gray-200"
+            }`}
+          />
+
+          {hasExistingOutlet && (
+            <button
+              type="button"
+              onClick={() => {
+                onModeChange("existing");
+                onChange("");
+              }}
+              className="text-[10px] font-black text-[#C92C1E] hover:underline"
+            >
+              Pilih outlet yang sudah ada
+            </button>
+          )}
+        </div>
+      ) : (
+        <select
+          required
+          value={value}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+
+            if (nextValue === "__new__") {
+              onModeChange("new");
+              onChange("");
+              return;
+            }
+
+            onChange(nextValue);
+          }}
+          className={`w-full cursor-pointer rounded-xl border bg-white p-2.5 text-xs font-black text-gray-700 focus:outline-none focus:border-[#C92C1E] ${
+            error ? "border-red-500 bg-red-50" : "border-gray-200"
+          }`}
+        >
+          <option value="">Pilih outlet milik owner ini</option>
+          {options.map((outlet) => (
+            <option key={outlet} value={outlet}>
+              {outlet}
+            </option>
+          ))}
+          <option value="__new__">+ Tambah outlet baru</option>
+        </select>
+      )}
+
+      {error ? (
+        <p className="text-[10px] font-bold text-red-600">{error}</p>
+      ) : (
+        <p className="text-[10px] font-medium text-gray-400">
+          Kode Owner:{" "}
+          <span className="font-black text-[#C92C1E]">{kodeOwner}</span>
+          {value ? ` · Outlet: ${value}` : ""}
+        </p>
+      )}
     </div>
   );
 }

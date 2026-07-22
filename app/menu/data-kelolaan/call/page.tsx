@@ -469,7 +469,7 @@ export default function CallPage({
                 />
               </FieldWrapper>
 
-              <FieldWrapper label="Nomor Customer" icon={<ContactIcon className="h-4 w-4" />}>
+              <FieldWrapper label="Nomor Owner" icon={<ContactIcon className="h-4 w-4" />}>
                 <div className="flex gap-2">
                   <input
                     readOnly
@@ -576,7 +576,7 @@ export default function CallPage({
                 value={conclusion}
                 onChange={(event) => setConclusion(event.target.value)}
                 rows={4}
-                placeholder="Isi kesimpulan call dengan customer"
+                placeholder="Isi kesimpulan call dengan owner"
                 className="mt-2 w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E]"
               />
             </div>
