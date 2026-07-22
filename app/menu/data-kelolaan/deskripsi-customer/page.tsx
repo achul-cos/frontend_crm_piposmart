@@ -132,6 +132,21 @@ const getSumberCustomerValue = (item: NasabahItem) => {
   return item.sumberNasabah || item.sumberCustomer || "-";
 };
 
+
+const isValidOwnerOutletName = (value?: string) => {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+
+  if (!normalizedValue) return false;
+
+  return ![
+    "-",
+    "nama outlet",
+    "nama outlet aktif",
+    "nothing laundry",
+    "tampilkan jika ada",
+  ].includes(normalizedValue);
+};
+
 const getSumberTagClass = (value?: string) => {
   const lower = String(value || "").toLowerCase();
 
@@ -531,6 +546,41 @@ export default function DeskripsiLanggananPage() {
     return [];
   }, [customer]);
 
+  const ownerOutlets = useMemo(() => {
+    if (typeof window === "undefined") return [];
+
+    const kodeOwner = String(customer.kodeOwner || "").trim();
+
+    if (!kodeOwner) {
+      return isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : [];
+    }
+
+    const cached = localStorage.getItem("piposmart_nasabah_data");
+
+    if (!cached) {
+      return isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : [];
+    }
+
+    try {
+      const parsed = JSON.parse(cached);
+      const listData: NasabahItem[] = Array.isArray(parsed) ? parsed : [];
+
+      const outletsFromData = listData
+        .filter((item) => String(item.kodeOwner || "").trim() === kodeOwner)
+        .map((item) => item.outlet || item.projectBrand)
+        .filter((outlet): outlet is string => isValidOwnerOutletName(outlet));
+
+      const combinedOutlets = [
+        ...outletsFromData,
+        ...(isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : []),
+      ];
+
+      return Array.from(new Set(combinedOutlets));
+    } catch {
+      return isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : [];
+    }
+  }, [customer.kodeOwner, customer.outlet]);
+
   const openEditModal = () => {
     const sourceValue = getSumberCustomerValue(customer);
 
@@ -679,7 +729,55 @@ export default function DeskripsiLanggananPage() {
           }
         />
         <InfoInput label="Nama Brand" value={customer.projectBrand || "Nama Brand"} />
-        <InfoInput label="Nama Outlet" value={customer.outlet || "Nama Outlet"} />
+        <InfoInput label="Nama Outlet Aktif" value={isValidOwnerOutletName(customer.outlet) ? customer.outlet : "-"} />
+
+        <label className="block space-y-1.5 lg:col-span-2">
+          <span className="text-[10px] font-black uppercase tracking-wide text-gray-500">
+            Outlet Owner
+          </span>
+
+          <select
+            value={isValidOwnerOutletName(customer.outlet) ? customer.outlet : ""}
+            onChange={(event) => {
+              const selectedOutlet = event.target.value;
+              const nextOwner = {
+                ...customer,
+                outlet: selectedOutlet,
+              };
+
+              setCustomer(nextOwner);
+
+              const cached = localStorage.getItem("piposmart_nasabah_data");
+
+              if (cached) {
+                try {
+                  const parsed = JSON.parse(cached);
+                  const listData: NasabahItem[] = Array.isArray(parsed) ? parsed : [];
+                  const nextData = listData.map((item) =>
+                    String(item.no) === String(nextOwner.no) ? nextOwner : item,
+                  );
+
+                  localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
+                } catch {
+                  localStorage.setItem("piposmart_nasabah_data", JSON.stringify([nextOwner]));
+                }
+              }
+            }}
+            className="w-full cursor-pointer rounded-lg border border-red-100 bg-white px-2.5 py-2 text-[11px] font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+          >
+            <option value="">Pilih outlet owner</option>
+            {ownerOutlets.map((outlet, index) => (
+              <option key={`${outlet}-${index}`} value={outlet}>
+                {outlet}
+              </option>
+            ))}
+          </select>
+
+          <p className="text-[10px] font-medium text-gray-400">
+            Pilih outlet milik owner ini berdasarkan Kode Owner yang sama.
+          </p>
+        </label>
+
         <InfoInput
           label="Nomor Handphone Outlet"
           value={formatPhoneWithDash(customer.noHpOutlet || "08123456789")}
@@ -924,13 +1022,38 @@ export default function DeskripsiLanggananPage() {
 
                   <label className="space-y-1.5">
                     <span className="text-[10px] font-black uppercase text-gray-500">
-                      Nama Outlet
+                      Outlet Aktif
                     </span>
-                    <input
-                      value={editCustomer.outlet || ""}
+                    <select
+                      value={isValidOwnerOutletName(editCustomer.outlet) ? editCustomer.outlet : ""}
                       onChange={(event) => updateEditField("outlet", event.target.value)}
-                      className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                    />
+                      className="w-full cursor-pointer rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#C92C1E]"
+                    >
+                      <option value="">Pilih outlet owner</option>
+                      {ownerOutlets.map((outlet, index) => (
+                        <option key={`${outlet}-active-${index}`} value={outlet}>
+                          {outlet}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-1.5 md:col-span-2">
+                    <span className="text-[10px] font-black uppercase text-gray-500">
+                      Outlet Owner
+                    </span>
+                    <select
+                      value={isValidOwnerOutletName(editCustomer.outlet) ? editCustomer.outlet : ""}
+                      onChange={(event) => updateEditField("outlet", event.target.value)}
+                      className="w-full cursor-pointer rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#C92C1E]"
+                    >
+                      <option value="">Pilih outlet owner</option>
+                      {ownerOutlets.map((outlet, index) => (
+                        <option key={`${outlet}-edit-${index}`} value={outlet}>
+                          {outlet}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="space-y-1.5">
