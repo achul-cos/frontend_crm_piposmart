@@ -308,3 +308,7 @@ export const generateDummyCustomers = (total = 1000): DummyNasabahItem[] => {
 
 
 export const generateDummyOwners = generateDummyCustomers;
+
+export default function DummyPage() {
+  return null;
+}
