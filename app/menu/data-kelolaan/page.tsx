@@ -157,6 +157,12 @@ const REQUIRED_PROFILE_FIELDS = [
 type ProfileFieldKey = (typeof REQUIRED_PROFILE_FIELDS)[number]["key"];
 type ProfileValidationErrors = Partial<Record<ProfileFieldKey, string>>;
 
+const isValidInternationalPhone = (value?: string) => {
+  const digitsOnly = String(value || "").replace(/\D/g, "");
+
+  return digitsOnly.length >= 8 && digitsOnly.length <= 16;
+};
+
 const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
   const errors: ProfileValidationErrors = {};
 
@@ -395,7 +401,7 @@ export default function DataKelolaanPage() {
 
   const [searchKodeOwner, setSearchKodeOwner] = useState("");
   const [searchNamaOwner, setSearchNamaOwner] = useState("");
-  const [searchNamaOutlet, setSearchNamaOutlet] = useState("");
+  const [searchNamaBrand, setSearchNamaBrand] = useState("");
   const [startDateFilter, setStartDateFilter] = useState(() => getTodayInputDate());
   const [endDateFilter, setEndDateFilter] = useState(() => getTodayInputDate());
   const [startMonthFilter, setStartMonthFilter] = useState("");
@@ -799,15 +805,15 @@ export default function DataKelolaanPage() {
     return dataNasabah.filter((item) => {
       const kodeKeyword = searchKodeOwner.toLowerCase().trim();
       const namaKeyword = searchNamaOwner.toLowerCase().trim();
-      const outletKeyword = searchNamaOutlet.toLowerCase().trim();
+      const brandKeyword = searchNamaBrand.toLowerCase().trim();
 
       const matchesSearch =
         (kodeKeyword === "" ||
           item.kodeOwner?.toLowerCase().includes(kodeKeyword)) &&
         (namaKeyword === "" ||
           item.namaOwner?.toLowerCase().includes(namaKeyword)) &&
-        (outletKeyword === "" ||
-          item.outlet?.toLowerCase().includes(outletKeyword));
+        (brandKeyword === "" ||
+          item.projectBrand?.toLowerCase().includes(brandKeyword));
 
       const matchesPic = picFilter === "Semua" || item.pic === picFilter;
 
@@ -863,7 +869,7 @@ export default function DataKelolaanPage() {
     dataNasabah,
     searchKodeOwner,
     searchNamaOwner,
-    searchNamaOutlet,
+    searchNamaBrand,
     picFilter,
     skorFilter,
     startDateFilter,
@@ -874,13 +880,75 @@ export default function DataKelolaanPage() {
   ]);
 
 
+  const displayData = useMemo(() => {
+    const groupedMap = new Map<string, NasabahItem>();
+
+    filteredData.forEach((item) => {
+      const groupKey = [
+        String(item.kodeOwner || "").trim(),
+        String(item.projectBrand || "").trim().toLowerCase(),
+      ].join("::");
+
+      const existingItem = groupedMap.get(groupKey);
+
+      if (!existingItem) {
+        const sameOwnerRows = dataNasabah.filter(
+          (row) =>
+            String(row.kodeOwner || "").trim() === String(item.kodeOwner || "").trim() &&
+            String(row.projectBrand || "").trim().toLowerCase() ===
+              String(item.projectBrand || "").trim().toLowerCase(),
+        );
+
+        const outletRows = sameOwnerRows
+          .flatMap((row) => {
+            const listFromOutlets = row.outlets?.length
+              ? row.outlets.map((outletItem) => ({
+                  namaOutlet: outletItem.namaOutlet,
+                  noHpOutlet: outletItem.noHpOutlet || row.noHpOutlet || "",
+                }))
+              : [];
+
+            return [
+              ...listFromOutlets,
+              ...(row.outlet
+                ? [{ namaOutlet: row.outlet, noHpOutlet: row.noHpOutlet || "" }]
+                : []),
+            ];
+          })
+          .map((outletItem) => ({
+            namaOutlet: String(outletItem.namaOutlet || "").trim(),
+            noHpOutlet: String(outletItem.noHpOutlet || "").trim(),
+          }))
+          .filter((outletItem) => outletItem.namaOutlet);
+
+        const uniqueOutlets = Array.from(
+          new Map(
+            outletRows.map((outletItem) => [
+              outletItem.namaOutlet.toLowerCase(),
+              outletItem,
+            ]),
+          ).values(),
+        );
+
+        groupedMap.set(groupKey, {
+          ...item,
+          outlets: uniqueOutlets,
+          outlet: uniqueOutlets[0]?.namaOutlet || item.outlet || "",
+        });
+      }
+    });
+
+    return Array.from(groupedMap.values());
+  }, [filteredData, dataNasabah]);
+
+
   useEffect(() => {
     setCurrentPage(1);
   }, [
     filterMode,
     searchKodeOwner,
     searchNamaOwner,
-    searchNamaOutlet,
+    searchNamaBrand,
     picFilter,
     skorFilter,
     startDateFilter,
@@ -890,14 +958,14 @@ export default function DataKelolaanPage() {
     rowsPerPage,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
+  const totalPages = Math.max(1, Math.ceil(displayData.length / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const startDataIndex = (safeCurrentPage - 1) * rowsPerPage;
-  const endDataIndex = Math.min(startDataIndex + rowsPerPage, filteredData.length);
+  const endDataIndex = Math.min(startDataIndex + rowsPerPage, displayData.length);
 
   const paginatedData = useMemo(
-    () => filteredData.slice(startDataIndex, endDataIndex),
-    [filteredData, startDataIndex, endDataIndex],
+    () => displayData.slice(startDataIndex, endDataIndex),
+    [displayData, startDataIndex, endDataIndex],
   );
 
   const currentPageIds = useMemo(
@@ -1012,9 +1080,90 @@ export default function DataKelolaanPage() {
       scor: selectedSkor.scor,
     };
 
-    const nextData = dataNasabah.map((item) =>
-      item.no === normalizedEditingItem.no ? normalizedEditingItem : item,
+    const normalizedOutletsWithPhone = (normalizedEditingItem.outlets || [])
+      .map((outletItem) => ({
+        namaOutlet: String(outletItem.namaOutlet || "").trim(),
+        noHpOutlet: String(outletItem.noHpOutlet || "").trim(),
+      }))
+      .filter((outletItem) => outletItem.namaOutlet);
+
+    const nextData = dataNasabah.map((item) => {
+      const isSameOwnerBrand =
+        String(item.kodeOwner || "").trim() ===
+          String(normalizedEditingItem.kodeOwner || "").trim() &&
+        String(item.projectBrand || "").trim().toLowerCase() ===
+          String(normalizedEditingItem.projectBrand || "").trim().toLowerCase();
+
+      if (normalizedOutletsWithPhone.length > 0 && isSameOwnerBrand) {
+        const sameOwnerRows = dataNasabah.filter(
+          (row) =>
+            String(row.kodeOwner || "").trim() ===
+              String(normalizedEditingItem.kodeOwner || "").trim() &&
+            String(row.projectBrand || "").trim().toLowerCase() ===
+              String(normalizedEditingItem.projectBrand || "").trim().toLowerCase(),
+        );
+
+        const rowIndex = sameOwnerRows.findIndex((row) => row.no === item.no);
+        const nextOutlet =
+          normalizedOutletsWithPhone[rowIndex] ||
+          normalizedOutletsWithPhone.find(
+            (outletItem) =>
+              outletItem.namaOutlet.toLowerCase() ===
+              String(item.outlet || "").trim().toLowerCase(),
+          ) ||
+          normalizedOutletsWithPhone[0];
+
+        return {
+          ...item,
+          namaOwner: normalizedEditingItem.namaOwner,
+          projectBrand: normalizedEditingItem.projectBrand,
+          noHpOwner: normalizedEditingItem.noHpOwner,
+          noHpOutlet: nextOutlet?.noHpOutlet || "",
+          pic: normalizedEditingItem.pic,
+          remarks: normalizedEditingItem.remarks,
+          scor: normalizedEditingItem.scor,
+          outlet: nextOutlet?.namaOutlet || item.outlet || "",
+          outlets: normalizedOutletsWithPhone,
+        };
+      }
+
+      return item.no === normalizedEditingItem.no ? normalizedEditingItem : item;
+    });
+
+    const existingOutletKeysAfterEdit = new Set(
+      nextData
+        .filter(
+          (item) =>
+            String(item.kodeOwner || "").trim() ===
+              String(normalizedEditingItem.kodeOwner || "").trim() &&
+            String(item.projectBrand || "").trim().toLowerCase() ===
+              String(normalizedEditingItem.projectBrand || "").trim().toLowerCase(),
+        )
+        .map((item) => String(item.outlet || "").trim().toLowerCase())
+        .filter(Boolean),
     );
+
+    const maxCurrentNo =
+      nextData.length > 0 ? Math.max(...nextData.map((item) => Number(item.no) || 0)) : 0;
+    let nextNoCounter = maxCurrentNo + 1;
+
+    normalizedOutletsWithPhone.forEach((outletItem) => {
+      const outletKey = outletItem.namaOutlet.toLowerCase();
+
+      if (!outletKey || existingOutletKeysAfterEdit.has(outletKey)) return;
+
+      nextData.push({
+        ...normalizedEditingItem,
+        no: nextNoCounter,
+        outlet: outletItem.namaOutlet,
+        noHpOutlet: outletItem.noHpOutlet || "",
+        outlets: normalizedOutletsWithPhone,
+        totalTransaksi: 0,
+      } as NasabahItem);
+
+      nextNoCounter += 1;
+      existingOutletKeysAfterEdit.add(outletKey);
+    });
 
     saveDataNasabah(nextData);
     closeEditModal();
@@ -1382,13 +1531,13 @@ export default function DataKelolaanPage() {
                     </th>
                     <th className="p-3 align-top min-w-[180px]">
                       <div className="space-y-2">
-                        <span>Nama Outlet</span>
+                        <span>Nama Brand</span>
                         <input
                           type="text"
-                          value={searchNamaOutlet}
-                          onChange={(e) => setSearchNamaOutlet(e.target.value)}
+                          value={searchNamaBrand}
+                          onChange={(e) => setSearchNamaBrand(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
-                          placeholder="Search Outlet"
+                          placeholder="Search Brand"
                           className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-200"
                         />
                       </div>
@@ -1434,7 +1583,7 @@ export default function DataKelolaanPage() {
             </thead>
 
             <tbody>
-              {filteredData.length === 0 ? (
+              {displayData.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7 + (selectionMode ? 1 : 0)}
@@ -1488,7 +1637,7 @@ export default function DataKelolaanPage() {
                         </td>
 
                         <td className="p-3 text-gray-500 whitespace-normal break-words">
-                          {row.outlet || "-"}
+                          {row.projectBrand || "-"}
                         </td>
 
                         <td className="p-3 text-center">
