@@ -53,6 +53,22 @@ interface NasabahItem {
     waktuMulai: string;
     waktuBerakhir: string;
     hargaAktual: number;
+    snapshot?: {
+      paketId: string;
+      namaPaket: string;
+      hargaPaketBulanan: number;
+      promoId: string;
+      namaPromo: string;
+      tenor: number;
+      bonus: number;
+      hargaNormal: number;
+      diskonPromo: number;
+      hargaPromo: number;
+      jenisPromo: string;
+      bundlingItems: string[];
+      potonganTambahan: number;
+      kodeUnik: number;
+    };
   }[];
 }
 
@@ -156,6 +172,11 @@ const REQUIRED_PROFILE_FIELDS = [
 
 type ProfileFieldKey = (typeof REQUIRED_PROFILE_FIELDS)[number]["key"];
 type ProfileValidationErrors = Partial<Record<ProfileFieldKey, string>>;
+
+const isValidInternationalPhone = (value?: string) => {
+  const phone = value?.trim() || "";
+  return /^\+\d{1,3}\d{6,14}$/.test(phone);
+};
 
 const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
   const errors: ProfileValidationErrors = {};

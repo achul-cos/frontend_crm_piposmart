@@ -2,8 +2,8 @@
 
 import React, { useMemo, useEffect } from "react";
 import type { CallCustomer } from "../../page";
-import { INITIAL_PROMOS, KATEGORI_LABELS } from "@/app/lib/promo-data";
-import { Receipt, CalendarDays, CheckCircle2 } from "lucide-react";
+import { INITIAL_PAKETS, INITIAL_MASTER_PROMOS, KATEGORI_LABELS } from "@/app/lib/paket-langganan-data";
+import { Receipt, CalendarDays, CheckCircle2, Package } from "lucide-react";
 
 export type Remark3SalesPayload = {
   packageType: string;
@@ -21,11 +21,10 @@ export const REMARK_3_OPTIONS = [
   },
 ];
 
-const PACKAGE_OPTIONS = [
-  { value: "basic", label: "Basic" },
-  { value: "business", label: "Business" },
-  { value: "pro", label: "Pro" },
-];
+const PACKAGE_OPTIONS = INITIAL_PAKETS.map((p) => ({
+  value: p.id,
+  label: p.namaPaket,
+}));
 
 type PromoData = {
   label: string;
@@ -35,24 +34,32 @@ type PromoData = {
   hargaNormal: number;
   diskon: number;
   hargaPromo: number;
+  jenisPromo: string;
+  bundlingItems: string[];
+  promoId: string;
+  namaPromo: string;
 };
 
 const getActivePromos = (packageType: string): PromoData[] => {
-  const promos = INITIAL_PROMOS.filter(p => p.paket === packageType);
+  const promos = INITIAL_MASTER_PROMOS.filter((p) => p.paketId === packageType);
   if (promos.length === 0) return [];
-  return promos.map(p => ({
+  return promos.map((p) => ({
     label: `${p.namaPromo} (${KATEGORI_LABELS[p.kategoriNasabah]})`,
     tenor: p.tenor,
     bonus: p.bonus,
-    totalTenor: p.totalMasaAktif,
+    totalTenor: p.tenor + p.bonus,
     hargaNormal: p.hargaNormal,
     diskon: p.diskon,
     hargaPromo: p.hargaPromo,
+    jenisPromo: p.jenisPromo,
+    bundlingItems: p.bundlingItems,
+    promoId: p.id,
+    namaPromo: p.namaPromo,
   }));
 };
 
 export const getDefaultSalesPayload = (): Remark3SalesPayload => ({
-  packageType: "basic",
+  packageType: INITIAL_PAKETS[0]?.id || "",
   promoIndex: 0,
   transferCode: 0,
   discount: 0,
@@ -70,7 +77,7 @@ const getPackageOption = (value: string) =>
 
 const getSelectedPromo = (packageType: string, promoIndex?: number) => {
   let promos = getActivePromos(packageType);
-  if (promos.length === 0) promos = getActivePromos("basic");
+  if (promos.length === 0) promos = getActivePromos(INITIAL_PAKETS[0]?.id || "");
   const index = typeof promoIndex === "number" && promoIndex >= 0 && promoIndex < promos.length ? promoIndex : 0;
   return promos[index];
 };
@@ -95,7 +102,7 @@ function Remark3SalesSection({
 }) {
   const selectedPackage = getPackageOption(value.packageType);
   let activePromos = getActivePromos(selectedPackage.value);
-  if (activePromos.length === 0) activePromos = getActivePromos("basic");
+  if (activePromos.length === 0) activePromos = getActivePromos(INITIAL_PAKETS[0]?.id || "");
   const currentPromoIndex = typeof value.promoIndex === "number" ? value.promoIndex : 0;
   const activePromo = activePromos[currentPromoIndex] || activePromos[0];
 
@@ -191,7 +198,7 @@ function Remark3SalesSection({
             <div className="rounded-xl border border-dashed border-gray-200 bg-white p-4">
               <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Penyesuaian Tambahan</p>
               <div className="space-y-3">
-                <NumberInput
+                <CurrencyInput
                   label="Kode Unik Transfer"
                   value={value.transferCode || 0}
                   onChange={(nextValue) =>
@@ -230,10 +237,26 @@ function Remark3SalesSection({
                   </>
                 )}
               </div>
-              <div className="mt-2 inline-flex w-fit items-center rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-black text-white shadow-sm">
-                Total {activePromo.totalTenor} Bulan
+              <div className="flex flex-wrap gap-2 mt-2">
+                <div className="inline-flex w-fit items-center rounded-lg bg-blue-100 px-2.5 py-1 text-[11px] font-black text-blue-700 shadow-sm border border-blue-200">
+                  Total {activePromo.totalTenor * 30} Hari
+                </div>
               </div>
             </div>
+
+            {activePromo.jenisPromo === "bundling" && activePromo.bundlingItems.length > 0 && (
+              <div className="flex flex-col justify-center rounded-xl border border-violet-100 bg-violet-50/50 p-4">
+                <div className="flex items-center gap-2 text-violet-700 mb-2">
+                  <Package className="h-4 w-4" />
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Barang Bundling</span>
+                </div>
+                <ul className="list-disc pl-5 space-y-1 text-xs font-bold text-violet-900">
+                  {activePromo.bundlingItems.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* Right: Receipt Summary */}
@@ -282,31 +305,7 @@ function Remark3SalesSection({
   );
 }
 
-function NumberInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-black uppercase text-gray-500">
-        {label}
-      </label>
 
-      <input
-        type="number"
-        min={0}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value) || 0)}
-        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-700 outline-none focus:border-emerald-600"
-      />
-    </div>
-  );
-}
 
 function CurrencyInput({
   label,
@@ -343,6 +342,7 @@ export function applyRemark3Action(
   payload: Remark3SalesPayload,
 ): CallCustomer {
   const selectedPackage = getPackageOption(payload.packageType);
+  const selectedPackageData = INITIAL_PAKETS.find(p => p.id === payload.packageType);
   const activePromo = getSelectedPromo(payload.packageType, payload.promoIndex);
 
   const actualSale = Math.max(activePromo.hargaPromo - (payload.discount || 0) + (payload.transferCode || 0), 0);
@@ -364,6 +364,22 @@ export function applyRemark3Action(
         waktuMulai: formatDateOnly(startDate),
         waktuBerakhir: formatDateOnly(endDate),
         hargaAktual: actualSale,
+        snapshot: {
+          paketId: payload.packageType,
+          namaPaket: selectedPackage.label,
+          hargaPaketBulanan: selectedPackageData?.hargaPerBulan || 0,
+          promoId: activePromo.promoId,
+          namaPromo: activePromo.namaPromo,
+          tenor: activePromo.tenor,
+          bonus: activePromo.bonus,
+          hargaNormal: activePromo.hargaNormal,
+          diskonPromo: activePromo.diskon,
+          hargaPromo: activePromo.hargaPromo,
+          jenisPromo: activePromo.jenisPromo,
+          bundlingItems: activePromo.bundlingItems,
+          potonganTambahan: payload.discount || 0,
+          kodeUnik: payload.transferCode || 0,
+        },
       },
     ],
   };

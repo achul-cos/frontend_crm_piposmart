@@ -21,6 +21,22 @@ type PurchaseHistoryItem = {
   waktuMulai: string;
   waktuBerakhir: string;
   hargaAktual: number;
+  snapshot?: {
+    paketId: string;
+    namaPaket: string;
+    hargaPaketBulanan: number;
+    promoId: string;
+    namaPromo: string;
+    tenor: number;
+    bonus: number;
+    hargaNormal: number;
+    diskonPromo: number;
+    hargaPromo: number;
+    jenisPromo: string;
+    bundlingItems: string[];
+    potonganTambahan: number;
+    kodeUnik: number;
+  };
 };
 
 type NasabahItem = {
@@ -930,40 +946,100 @@ export default function DeskripsiLanggananPage() {
       />
 
       <section className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
-        <table className="w-full border-collapse text-xs">
-          <thead className="bg-red-50 text-[#C92C1E]">
-            <tr>
-              <th className="border border-red-100 px-2.5 py-2 text-center font-black">No</th>
-              <th className="border border-red-100 px-2.5 py-2 text-center font-black">Paket</th>
-              <th className="border border-red-100 px-2.5 py-2 text-center font-black">Waktu Mulai</th>
-              <th className="border border-red-100 px-2.5 py-2 text-center font-black">Waktu Berakhir</th>
-              <th className="border border-red-100 px-2.5 py-2 text-center font-black">Harga Aktual</th>
-            </tr>
-          </thead>
-          <tbody>
-            {purchaseHistories.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="border border-red-100 px-2.5 py-5 text-center text-sm font-bold text-gray-400">
-                  Belum ada riwayat pembelian.
-                </td>
-              </tr>
-            ) : (
-              purchaseHistories.map((item, index) => (
-                <tr key={`${item.paket}-${index}`}>
-                  <td className="border border-red-100 px-2.5 py-2 text-center font-black">{index + 1}</td>
-                  <td className="border border-red-100 px-2.5 py-2">
+        {purchaseHistories.length === 0 ? (
+          <div className="p-5 text-center text-sm font-bold text-gray-400">
+            Belum ada riwayat pembelian.
+          </div>
+        ) : (
+          <div className="flex flex-col divide-y divide-gray-100">
+            {purchaseHistories.map((item, index) => {
+              if (item.snapshot) {
+                const s = item.snapshot;
+                return (
+                  <div key={index} className="p-5 hover:bg-gray-50/50 transition-colors">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge>{s.namaPaket}</Badge>
+                          <span className="text-xs font-bold text-gray-400">ID: {s.promoId}</span>
+                        </div>
+                        <h4 className="text-lg font-black text-gray-900">{s.namaPromo}</h4>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">
+                          {s.jenisPromo}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-gray-400">Total Bayar</p>
+                        <p className="text-xl font-black text-[#C92C1E]">{formatRupiah(item.hargaAktual)}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Periode Aktif</p>
+                        <p className="text-sm font-bold text-gray-800">{item.waktuMulai} - {item.waktuBerakhir}</p>
+                        <p className="text-xs font-bold text-blue-600 mt-0.5">
+                          {s.tenor} Bulan {s.bonus > 0 ? `+ ${s.bonus} Bln Bonus` : ''} 
+                          ({(s.tenor + s.bonus) * 30} Hari)
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Rincian Harga</p>
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Harga Normal</span>
+                            <span className="font-bold text-gray-400 line-through">{formatRupiah(s.hargaNormal)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Diskon Promo</span>
+                            <span className="font-bold text-emerald-600">-{formatRupiah(s.diskonPromo)}</span>
+                          </div>
+                          {s.potonganTambahan > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-500">Diskon Manual</span>
+                              <span className="font-bold text-emerald-600">-{formatRupiah(s.potonganTambahan)}</span>
+                            </div>
+                          )}
+                          {s.kodeUnik > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-500">Kode Unik</span>
+                              <span className="font-bold text-amber-600">+{formatRupiah(s.kodeUnik)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {s.bundlingItems && s.bundlingItems.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Barang Bundling</p>
+                          <ul className="list-disc pl-4 text-xs font-bold text-violet-700">
+                            {s.bundlingItems.map((bi, i) => (
+                              <li key={i}>{bi}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Fallback for old transaction format without snapshot
+              return (
+                <div key={index} className="p-5 flex justify-between items-center hover:bg-gray-50/50">
+                  <div>
                     <Badge>{item.paket}</Badge>
-                  </td>
-                  <td className="border border-red-100 px-2.5 py-2 font-black">{item.waktuMulai}</td>
-                  <td className="border border-red-100 px-2.5 py-2 font-black">{item.waktuBerakhir}</td>
-                  <td className="border border-red-100 px-2.5 py-2 font-black">
-                    {formatRupiah(item.hargaAktual)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                    <p className="text-sm font-bold text-gray-800 mt-2">{item.waktuMulai} - {item.waktuBerakhir}</p>
+                    <p className="text-xs font-bold text-gray-400 mt-1">Format transaksi lama (Tidak ada detail snapshot)</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-gray-400">Harga Aktual</p>
+                    <p className="text-lg font-black text-[#C92C1E]">{formatRupiah(item.hargaAktual)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
       {isEditOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/40 p-3 sm:p-6">

@@ -52,6 +52,22 @@ export interface CallCustomer {
     waktuMulai: string;
     waktuBerakhir: string;
     hargaAktual: number;
+    snapshot?: {
+      paketId: string;
+      namaPaket: string;
+      hargaPaketBulanan: number;
+      promoId: string;
+      namaPromo: string;
+      tenor: number;
+      bonus: number;
+      hargaNormal: number;
+      diskonPromo: number;
+      hargaPromo: number;
+      jenisPromo: string;
+      bundlingItems: string[];
+      potonganTambahan: number;
+      kodeUnik: number;
+    };
   }[];
 }
 

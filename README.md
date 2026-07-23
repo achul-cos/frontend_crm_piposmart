@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Piposmart CRM (Frontend)
 
-## Getting Started
+Piposmart CRM adalah aplikasi antarmuka pengguna (Frontend) yang dirancang khusus untuk tim Sales dan Manajemen dalam melacak aktivitas prospek, mengelola *follow-up* (Call & Chat), dan mencatat laporan penjualan (Closing).
 
-First, run the development server:
+Aplikasi ini mengusung desain **modern, cepat, dan premium** menggunakan ekosistem terbaru dari Next.js dan Tailwind CSS.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🚀 Tech Stack
+
+- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
+- **UI Library**: [React 19](https://react.dev/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Data Export**: [XLSX](https://sheetjs.com/)
+- **Charts**: [Recharts](https://recharts.org/)
+- **Language**: TypeScript
+
+## ✨ Fitur Utama
+
+1. **📊 Dashboard Analitik**
+   - Ringkasan statistik operasional (Total Prospek, Closing, dll).
+   - Metrik Potensi dan grafik performa *Sales*.
+   - Filter rentang waktu yang interaktif.
+
+2. **👥 Manajemen Kelolaan Customer**
+   - Tabel responsif untuk memantau ratusan data nasabah.
+   - Form pencatatan Riwayat *Call* & *Chat* (Remark 1, 2, 3).
+   - Indikator skor kelayakan (Skor 0 - 3) berdasarkan parameter respon.
+   - Sistem tong sampah (*Trash / Recycle Bin*) untuk *Soft Delete* & *Restore* data.
+
+3. **🏷️ Master Promo (Paket Langganan)**
+   - Manajemen terpusat (*Single Source of Truth*) untuk katalog paket & promosi.
+   - Form Pop-up modern untuk kalkulasi harga diskon, masa tenor, dan bonus bulan.
+   - Terintegrasi langsung dengan formulir "Laporan Penjualan" (*Remark 3*) di modul kelolaan customer.
+
+4. **📑 SOP & Panduan Operasional**
+   - Direktori *Standard Operating Procedure* terintegrasi.
+   - Panduan indikator, *script chat*, dan prosedur eskalasi.
+
+## ⚙️ Prasyarat
+
+Sebelum menjalankan proyek ini, pastikan Anda telah menginstal:
+- [Node.js](https://nodejs.org/) (Versi 20.x atau terbaru)
+- Backend Golang CRM (harus berjalan di port `localhost:8080`)
+
+## 💻 Instalasi & Menjalankan Aplikasi
+
+1. Clone repositori ini:
+   ```bash
+   git clone https://github.com/piposmart/crm_piposmart.git
+   cd crm_piposmart
+   ```
+
+2. Instal dependensi:
+   ```bash
+   npm install
+   ```
+
+3. Jalankan *development server*:
+   ```bash
+   npm run dev
+   ```
+
+4. Buka [http://localhost:3000](http://localhost:3000) di browser Anda.
+
+## 📁 Struktur Proyek (App Router)
+
+```text
+app/
+├── auth/            # Halaman Login & Logout
+├── lib/             # Utilities (API config, fungsi helpers, static data)
+├── menu/            # Halaman Utama (Main Modules)
+│   ├── data-kelolaan/  # Manajemen Customer & Remarks
+│   ├── paket-langganan/# Modul Master Promo
+│   ├── setting/        # Profil User
+│   └── sop/            # Panduan Operasional
+├── layout.tsx       # Root layout & navigasi Sidebar
+└── page.tsx         # Dashboard Index
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🔐 Autentikasi
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Saat ini aplikasi menggunakan sistem otentikasi simulasi (DUMMY) yang dikelola melalui `localStorage` (menggunakan prefix `piposmart_is_logged_in`). Terdapat tiga peran (*role*) yang digunakan untuk mengatur izin akses antarmuka:
+- `Developer`
+- `Supervisor`
+- `Sales`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🔗 Integrasi API
 
-## Learn More
+Seluruh panggilan ke backend (pengambilan, penyimpanan, dan penghapusan data) dikelola secara terpusat di dalam `app/lib/api.ts`. Aplikasi ini berkomunikasi dengan backend Golang yang memproses format JSON dan terhubung ke database.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+*Dibuat untuk Tim Piposmart © 2026*
