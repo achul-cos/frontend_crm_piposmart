@@ -13,6 +13,7 @@ export type EditProfileItem = ActionItem & {
   kodeOwner?: string;
   projectBrand?: string;
   outlet?: string;
+  outlets?: { namaOutlet: string; noHpOutlet?: string }[];
   noHpOwner?: string;
   noHpOutlet?: string;
   pic?: string;
@@ -226,6 +227,8 @@ function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "pho
   );
 }
 
+
+
 function PhoneInput({
   label,
   value,
@@ -360,6 +363,274 @@ function FormInput({
     </div>
   );
 }
+
+
+
+function OutletNamesEditor<T extends EditProfileItem>({
+  item,
+  error,
+  onChangeField,
+}: {
+  item: T;
+  error?: string;
+  onChangeField: <K extends keyof T>(field: K, value: T[K]) => void;
+}) {
+  type OutletRow = { namaOutlet: string; noHpOutlet?: string };
+
+  const [isOutletListOpen, setIsOutletListOpen] = useState(false);
+  const [outletRows, setOutletRows] = useState<OutletRow[]>([]);
+  const [initialOutletCount, setInitialOutletCount] = useState(0);
+
+  useEffect(() => {
+    const rows: OutletRow[] =
+      item.outlets && item.outlets.length > 0
+        ? item.outlets.map((outletItem) => ({
+            namaOutlet: outletItem.namaOutlet || "",
+            noHpOutlet: outletItem.noHpOutlet || item.noHpOutlet || "",
+          }))
+        : item.outlet
+          ? [{ namaOutlet: item.outlet, noHpOutlet: item.noHpOutlet || "" }]
+          : [];
+
+    setOutletRows(rows);
+    setInitialOutletCount(rows.length);
+    setIsOutletListOpen(false);
+  }, [item.no]);
+
+  const syncOutlets = (nextOutlets: OutletRow[]) => {
+    const cleanedOutlets = nextOutlets.map((outletItem) => ({
+      namaOutlet: outletItem.namaOutlet || "",
+      noHpOutlet: outletItem.noHpOutlet || "",
+    }));
+
+    const normalizedOutlets = cleanedOutlets
+      .map((outletItem) => ({
+        namaOutlet: String(outletItem.namaOutlet || "").trim(),
+        noHpOutlet: String(outletItem.noHpOutlet || "").trim(),
+      }))
+      .filter((outletItem) => outletItem.namaOutlet);
+
+    onChangeField("outlets", cleanedOutlets as T["outlets"]);
+    onChangeField("outlet", (normalizedOutlets[0]?.namaOutlet || "") as T["outlet"]);
+    onChangeField("noHpOutlet", (normalizedOutlets[0]?.noHpOutlet || "") as T["noHpOutlet"]);
+  };
+
+  const handleChangeOutletField = (
+    index: number,
+    field: keyof OutletRow,
+    value: string,
+  ) => {
+    const nextOutlets = outletRows.map((outletItem, itemIndex) =>
+      itemIndex === index ? { ...outletItem, [field]: value } : outletItem,
+    );
+
+    setOutletRows(nextOutlets);
+    syncOutlets(nextOutlets);
+  };
+
+  const handleAddOutlet = () => {
+    const nextOutlets = [...outletRows, { namaOutlet: "", noHpOutlet: "" }];
+
+    setOutletRows(nextOutlets);
+    syncOutlets(nextOutlets);
+  };
+
+  const handleRemoveOutlet = (index: number) => {
+    if (outletRows.length <= 1) return;
+
+    const nextOutlets = outletRows.filter((_, itemIndex) => itemIndex !== index);
+    const nextInitialCount =
+      index < initialOutletCount ? Math.max(initialOutletCount - 1, 0) : initialOutletCount;
+
+    setOutletRows(nextOutlets);
+    setInitialOutletCount(nextInitialCount);
+    syncOutlets(nextOutlets);
+  };
+
+  const existingOutletRows = outletRows
+    .map((outletItem, index) => ({ ...outletItem, originalIndex: index }))
+    .filter((_, index) => index < initialOutletCount);
+
+  const newOutletRows = outletRows
+    .map((outletItem, index) => ({ ...outletItem, originalIndex: index }))
+    .filter((_, index) => index >= initialOutletCount);
+
+  const activeOutlet =
+    existingOutletRows.find((outletItem) => String(outletItem.namaOutlet || "").trim())
+      ?.namaOutlet ||
+    outletRows.find((outletItem) => String(outletItem.namaOutlet || "").trim())?.namaOutlet ||
+    item.outlet ||
+    "";
+
+  const filledExistingOutletCount = existingOutletRows.filter((outletItem) =>
+    String(outletItem.namaOutlet || "").trim(),
+  ).length;
+
+  const renderOutletFields = (
+    outletItem: OutletRow & { originalIndex: number },
+    title: string,
+    inputPlaceholder: string,
+    canDelete: boolean,
+    deleteLabel: string,
+  ) => (
+    <div key={`${title}-${outletItem.originalIndex}`} className="space-y-2">
+      <span className="text-[10px] font-black uppercase text-gray-400">
+        {title}
+      </span>
+
+      <label className="space-y-1">
+        <span className="text-[10px] font-black uppercase text-gray-400">
+          Nama Outlet
+        </span>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={outletItem.namaOutlet || ""}
+            onChange={(event) =>
+              handleChangeOutletField(outletItem.originalIndex, "namaOutlet", event.target.value)
+            }
+            placeholder={inputPlaceholder}
+            className={`min-w-0 flex-1 rounded-xl border bg-white p-2.5 text-xs font-bold outline-none focus:border-[#C92C1E] ${
+              error && outletItem.originalIndex === 0
+                ? "border-red-500 bg-red-50"
+                : "border-gray-200"
+            }`}
+          />
+
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleRemoveOutlet(outletItem.originalIndex)}
+              aria-label={deleteLabel}
+              title={deleteLabel}
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-red-100 bg-white text-red-500 transition hover:border-red-200 hover:bg-red-50 active:scale-95"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.6}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 7h12M9.5 7V5.75A1.75 1.75 0 0111.25 4h1.5a1.75 1.75 0 011.75 1.75V7m-7 0l.7 12.25A1.75 1.75 0 009.95 21h4.1a1.75 1.75 0 001.75-1.75L16.5 7M10.5 11v6M13.5 11v6"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
+      </label>
+
+      <PhoneInput
+        label="Nomor Telepon Outlet *"
+        value={outletItem.noHpOutlet || ""}
+        onChange={(value) =>
+          handleChangeOutletField(outletItem.originalIndex, "noHpOutlet", value)
+        }
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/30 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+          <FieldIcon type="outlet" />
+          Outlet Brand
+        </label>
+
+        <button
+          type="button"
+          onClick={handleAddOutlet}
+          className="shrink-0 cursor-pointer rounded-full bg-[#C92C1E] px-3 py-1.5 text-[10px] font-black text-white shadow-sm transition hover:bg-[#A82216]"
+        >
+          + Tambah Outlet
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setIsOutletListOpen((prev) => !prev)}
+        className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-red-100 bg-white px-3 py-2.5 text-left text-xs font-black text-gray-700 transition hover:border-red-200 hover:bg-red-50"
+      >
+        <span className="min-w-0 truncate">
+          {activeOutlet || "Belum ada outlet lama"}
+        </span>
+
+        <span className="flex shrink-0 items-center gap-2 text-[10px] font-black text-[#C92C1E]">
+          {filledExistingOutletCount} outlet lama
+          <svg
+            className={`h-3.5 w-3.5 transition ${isOutletListOpen ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </span>
+      </button>
+
+      {isOutletListOpen && (
+        <div className="space-y-3 rounded-xl border border-red-100 bg-white p-3">
+          {existingOutletRows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-red-100 bg-red-50/40 p-3 text-xs font-bold text-gray-400">
+              Belum ada outlet lama untuk brand ini.
+            </div>
+          ) : (
+            existingOutletRows.map((outletItem, visibleIndex) =>
+              renderOutletFields(
+                outletItem,
+                `Outlet Lama ${visibleIndex + 1}`,
+                "Contoh: Azzahra Laundry Cabang 1",
+                outletRows.length > 1,
+                `Hapus outlet ${visibleIndex + 1}`,
+              ),
+            )
+          )}
+        </div>
+      )}
+
+      {newOutletRows.length > 0 && (
+        <div className="space-y-3 rounded-xl border border-dashed border-[#C92C1E]/30 bg-white p-3">
+          <p className="text-[10px] font-black uppercase tracking-wide text-[#C92C1E]">
+            Outlet Baru
+          </p>
+
+          {newOutletRows.map((outletItem, index) =>
+            renderOutletFields(
+              outletItem,
+              `Outlet Baru ${index + 1}`,
+              "Contoh: Azzahra Laundry Cabang Baru",
+              outletRows.length > 1,
+              `Hapus outlet baru ${index + 1}`,
+            ),
+          )}
+
+          <button
+            type="button"
+            onClick={handleAddOutlet}
+            className="w-full cursor-pointer rounded-xl border border-dashed border-[#C92C1E]/40 bg-red-50/50 px-4 py-2.5 text-xs font-black text-[#C92C1E] transition hover:bg-red-100"
+          >
+            + Tambah Lagi
+          </button>
+        </div>
+      )}
+
+      {error ? (
+        <p className="text-[10px] font-bold text-red-600">{error}</p>
+      ) : (
+        <p className="text-[10px] font-medium text-gray-400">
+          Outlet lama disimpan di dropdown. Outlet baru muncul di luar dropdown. Setiap outlet bisa punya nomor telepon berbeda.
+        </p>
+      )}
+    </div>
+  );
+}
+
 
 function FormSelect({
   label,
@@ -501,24 +772,16 @@ export function EditProfileModal<T extends EditProfileItem>({
               onChange={(value) => onChangeField("projectBrand", value as T["projectBrand"])}
               error={errors.projectBrand}
             />
-            <FormInput
-              label="Nama Outlet *"
-              icon="outlet"
-              value={item.outlet || ""}
-              onChange={(value) => onChangeField("outlet", value as T["outlet"])}
+            <OutletNamesEditor
+              item={item}
               error={errors.outlet}
+              onChangeField={onChangeField}
             />
             <PhoneInput
               label="Nomor Telepon Owner *"
               value={item.noHpOwner || ""}
               onChange={(value) => onChangeField("noHpOwner", value as T["noHpOwner"])}
               error={errors.noHpOwner}
-            />
-            <PhoneInput
-              label="Nomor Telepon Outlet *"
-              value={item.noHpOutlet || ""}
-              onChange={(value) => onChangeField("noHpOutlet", value as T["noHpOutlet"])}
-              error={errors.noHpOutlet}
             />
             <FormSelect
               label="PIC Sales *"

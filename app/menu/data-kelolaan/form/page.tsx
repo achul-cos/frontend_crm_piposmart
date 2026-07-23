@@ -1,9 +1,14 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LIST_PIC } from "../dummy/page";
+
+type OwnerOutletItem = {
+  namaOutlet: string;
+  noHpOutlet: string;
+};
 
 interface NasabahItem {
   totalFu: number;
@@ -19,6 +24,7 @@ interface NasabahItem {
   namaOwner: string;
   projectBrand: string;
   outlet: string;
+  outlets?: OwnerOutletItem[];
   noHpOwner: string;
   noHpOutlet: string;
   createDateProject: string;
@@ -216,7 +222,6 @@ const REQUIRED_PROFILE_FIELDS = [
   { key: "projectBrand", label: "Nama Brand" },
   { key: "outlet", label: "Outlet" },
   { key: "noHpOwner", label: "Nomor Telepon Owner" },
-  { key: "noHpOutlet", label: "Nomor Telepon Outlet" },
   { key: "pic", label: "PIC Sales" },
 ] as const;
 
@@ -238,9 +243,6 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
     errors.noHpOwner = "Nomor Telepon Owner belum valid. Pilih negara lalu isi nomor telepon.";
   }
 
-  if (!errors.noHpOutlet && !isValidInternationalPhone(item.noHpOutlet)) {
-    errors.noHpOutlet = "Nomor Telepon Outlet belum valid. Pilih negara lalu isi nomor telepon.";
-  }
 
   return errors;
 };
@@ -266,6 +268,75 @@ const getOwnerProfileByKodeOwner = (kodeOwner: string) => {
     );
   } catch {
     return null;
+  }
+};
+
+
+const buildOutletRowsFromOwner = (owner?: Partial<NasabahItem> | null): OwnerOutletItem[] => {
+  const existingOutlets = owner?.outlets || [];
+
+  if (existingOutlets.length > 0) {
+    return existingOutlets
+      .map((item) => ({
+        namaOutlet: item.namaOutlet || "",
+        noHpOutlet: item.noHpOutlet || owner?.noHpOutlet || "",
+      }))
+      .filter((item) => item.namaOutlet.trim());
+  }
+
+  if (owner?.outlet && owner.outlet !== owner.projectBrand) {
+    return [
+      {
+        namaOutlet: owner.outlet,
+        noHpOutlet: owner.noHpOutlet || "",
+      },
+    ];
+  }
+
+  return [];
+};
+
+const normalizeOutletRows = (rows: OwnerOutletItem[]) => {
+  return rows
+    .map((item) => ({
+      namaOutlet: item.namaOutlet.trim(),
+      noHpOutlet: item.noHpOutlet.trim(),
+    }))
+    .filter((item) => item.namaOutlet);
+};
+
+const getExistingOutletsByKodeOwner = (kodeOwner?: string) => {
+  if (typeof window === "undefined") return [];
+
+  const normalizedKodeOwner = String(kodeOwner || "").trim();
+
+  if (!normalizedKodeOwner) return [];
+
+  const cached = localStorage.getItem("piposmart_nasabah_data");
+
+  if (!cached) return [];
+
+  try {
+    const list: NasabahItem[] = JSON.parse(cached);
+    const outlets = list
+      .filter((item) => String(item.kodeOwner || "").trim() === normalizedKodeOwner)
+      .flatMap((item) => {
+        if (item.outlets?.length) return item.outlets;
+        return item.outlet && item.outlet !== item.projectBrand
+          ? [{ namaOutlet: item.outlet, noHpOutlet: item.noHpOutlet || "" }]
+          : [];
+      })
+      .map((item) => ({
+        namaOutlet: item.namaOutlet.trim(),
+        noHpOutlet: item.noHpOutlet || "",
+      }))
+      .filter((item) => item.namaOutlet);
+
+    return Array.from(
+      new Map(outlets.map((item) => [item.namaOutlet.toLowerCase(), item])).values(),
+    );
+  } catch {
+    return [];
   }
 };
 
@@ -359,7 +430,7 @@ export default function FormInputDummyPage() {
     noted: "",
   });
   const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
-  const [outletInputMode, setOutletInputMode] = useState<"existing" | "new">("existing");
+  const [outletRows, setOutletRows] = useState<OwnerOutletItem[]>([]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -381,7 +452,7 @@ export default function FormInputDummyPage() {
 
       if (matchItem) {
         setFormInput(matchItem);
-        setOutletInputMode("existing");
+        setOutletRows(buildOutletRowsFromOwner(matchItem));
       }
     } catch {
       setFormInput((prev) => prev);
@@ -406,9 +477,20 @@ export default function FormInputDummyPage() {
         pic: matchedOwner?.pic || "No PIC",
         sumberNasabah: matchedOwner?.sumberNasabah || "Instagram",
         outlet: "",
+        outlets: [],
       }));
 
-      setOutletInputMode("existing");
+      setOutletRows([]);
+      setValidationErrors((prev) => ({
+        ...prev,
+        kodeOwner: "",
+        namaOwner: "",
+        projectBrand: "",
+        outlet: "",
+        noHpOwner: "",
+        noHpOutlet: "",
+      }));
+
       return;
     }
 
@@ -439,54 +521,91 @@ export default function FormInputDummyPage() {
   };
 
 
-  const ownerOutletOptions = useMemo(() => {
-    if (typeof window === "undefined") return [];
 
-    const kodeOwner = String(formInput.kodeOwner || "").trim();
 
-    if (!kodeOwner) return [];
+  const handleAddOutletRow = () => {
+    setOutletRows((prev) => [
+      ...prev,
+      { namaOutlet: "", noHpOutlet: "" },
+    ]);
 
-    const cached = localStorage.getItem("piposmart_nasabah_data");
+    setValidationErrors((prev) => ({ ...prev, outlet: "" }));
+  };
 
-    if (!cached) return [];
-
-    try {
-      const list: NasabahItem[] = JSON.parse(cached);
-
-      return Array.from(
-        new Set(
-          list
-            .filter((item) => String(item.kodeOwner || "").trim() === kodeOwner)
-            .map((item) => item.outlet || item.projectBrand)
-            .filter((outlet): outlet is string => Boolean(outlet && outlet.trim())),
-        ),
+  const handleUpdateOutletRow = (
+    index: number,
+    field: keyof OwnerOutletItem,
+    value: string,
+  ) => {
+    setOutletRows((prev) => {
+      const nextRows = prev.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item,
       );
-    } catch {
-      return [];
-    }
-  }, [formInput.kodeOwner]);
+      const normalizedRows = normalizeOutletRows(nextRows);
 
-  useEffect(() => {
-    if (!formInput.kodeOwner) {
-      setOutletInputMode("existing");
-      return;
-    }
+      setFormInput((current) => ({
+        ...current,
+        outlet: normalizedRows[0]?.namaOutlet || "",
+        outlets: normalizedRows,
+        noHpOutlet: normalizedRows[0]?.noHpOutlet || "",
+      }));
 
-    if (ownerOutletOptions.length === 0) {
-      setOutletInputMode("new");
-      return;
-    }
+      return nextRows;
+    });
 
-    if (!formInput.outlet) {
-      setOutletInputMode("existing");
-    }
-  }, [formInput.kodeOwner, formInput.outlet, ownerOutletOptions.length]);
+    setValidationErrors((prev) => ({ ...prev, outlet: "" }));
+  };
 
+  const handleRemoveOutletRow = (index: number) => {
+    setOutletRows((prev) => {
+      const nextRows = prev.filter((_, itemIndex) => itemIndex !== index);
+      const normalizedRows = normalizeOutletRows(nextRows);
+
+      setFormInput((current) => ({
+        ...current,
+        outlet: normalizedRows[0]?.namaOutlet || "",
+        outlets: normalizedRows,
+        noHpOutlet: normalizedRows[0]?.noHpOutlet || "",
+      }));
+
+      return nextRows;
+    });
+  };
 
   const handleSaveData = (event: React.FormEvent) => {
     event.preventDefault();
 
-    const errors = getProfileFieldErrors(formInput);
+    const normalizedOutlets = normalizeOutletRows(outletRows);
+    const existingOutlets = getExistingOutletsByKodeOwner(formInput.kodeOwner);
+    const mergedOutlets = Array.from(
+      new Map(
+        [...existingOutlets, ...normalizedOutlets].map((item) => [
+          item.namaOutlet.toLowerCase(),
+          item,
+        ]),
+      ).values(),
+    );
+
+    const nextFormInput: Partial<NasabahItem> = {
+      ...formInput,
+      outlet: normalizedOutlets[0]?.namaOutlet || "",
+      outlets: mergedOutlets,
+      noHpOutlet: normalizedOutlets[0]?.noHpOutlet || "",
+    };
+
+    const errors = getProfileFieldErrors(nextFormInput);
+
+    if (normalizedOutlets.length === 0) {
+      errors.outlet = "Minimal 1 outlet wajib ditambahkan.";
+    }
+
+    const outletWithoutPhone = normalizedOutlets.find(
+      (outletItem) => !isValidInternationalPhone(outletItem.noHpOutlet),
+    );
+
+    if (outletWithoutPhone) {
+      errors.outlet = "Setiap outlet wajib punya nomor telepon outlet yang valid.";
+    }
 
     if (Object.values(errors).some(Boolean)) {
       setValidationErrors(errors);
@@ -507,21 +626,27 @@ export default function FormInputDummyPage() {
       }
     }
 
+    const getNextNo = (list: NasabahItem[]) =>
+      list.length > 0
+        ? Math.max(...list.map((item) => Number(item.no) || 0)) + 1
+        : 1;
+
     if (editId !== null) {
       currentList = currentList.map((item) =>
         item.no === editId
           ? {
               ...item,
-              kodeOwner: formInput.kodeOwner || "",
-              namaOwner: formInput.namaOwner || "",
-              projectBrand: formInput.projectBrand || "",
-              outlet: formInput.outlet || formInput.projectBrand || "",
-              noHpOwner: formInput.noHpOwner || "",
-              noHpOutlet: formInput.noHpOutlet || "",
-              pic: formInput.pic || "Satria",
-              sumberNasabah: formInput.sumberNasabah || "Instagram",
-              remarks: formInput.remarks || "0",
-              scor: Number(formInput.scor ?? 0),
+              kodeOwner: nextFormInput.kodeOwner || "",
+              namaOwner: nextFormInput.namaOwner || "",
+              projectBrand: nextFormInput.projectBrand || "",
+              outlet: nextFormInput.outlet || "",
+              outlets: mergedOutlets,
+              noHpOwner: nextFormInput.noHpOwner || "",
+              noHpOutlet: normalizedOutlets[0]?.noHpOutlet || nextFormInput.noHpOutlet || "",
+              pic: nextFormInput.pic || "Satria",
+              sumberNasabah: nextFormInput.sumberNasabah || "Instagram",
+              remarks: nextFormInput.remarks || "0",
+              scor: Number(nextFormInput.scor ?? 0),
               tanggalFu: getToday(),
               tahun: getCurrentYear(),
               bulan: getCurrentMonthName(),
@@ -531,51 +656,97 @@ export default function FormInputDummyPage() {
           : item,
       );
 
-      alert("Data profil berhasil diperbarui.");
+      const existingOutletNames = new Set(
+        currentList
+          .filter(
+            (item) =>
+              String(item.kodeOwner || "").trim() ===
+              String(nextFormInput.kodeOwner || "").trim(),
+          )
+          .map((item) => String(item.outlet || "").trim().toLowerCase())
+          .filter(Boolean),
+      );
+
+      normalizedOutlets.forEach((outletItem) => {
+        const outletName = outletItem.namaOutlet.trim();
+        const outletKey = outletName.toLowerCase();
+
+        if (!outletName || existingOutletNames.has(outletKey)) return;
+
+        const nextNo = getNextNo(currentList);
+
+        currentList.push({
+          ...(currentList.find((item) => item.no === editId) as NasabahItem),
+          no: nextNo,
+          outlet: outletName,
+          outlets: mergedOutlets,
+          noHpOutlet: outletItem.noHpOutlet || "",
+          totalTransaksi: 0,
+          tanggalFu: getToday(),
+          tahun: getCurrentYear(),
+          bulan: getCurrentMonthName(),
+          tanggalDibagikan: getToday(),
+          createDateProject: getToday(),
+        });
+
+        existingOutletNames.add(outletKey);
+      });
+
+      alert("Data profil dan outlet tambahan berhasil diperbarui.");
     } else {
-      const nextNo =
-        currentList.length > 0
-          ? Math.max(...currentList.map((item) => Number(item.no) || 0)) + 1
-          : 1;
+      normalizedOutlets.forEach((outletItem, index) => {
+        const outletName = outletItem.namaOutlet.trim();
 
-      const itemBaru: NasabahItem = {
-        totalFu: 0,
-        tanggalFu: getToday(),
-        tahun: getCurrentYear(),
-        bulan: getCurrentMonthName(),
-        no: nextNo,
-        pic: formInput.pic || "Satria",
-        tanggalDibagikan: getToday(),
-        statusAkun: "Akun Baru",
-        kodeBaris: "",
-        kodeOwner: formInput.kodeOwner || "",
-        namaOwner: formInput.namaOwner || "",
-        projectBrand: formInput.projectBrand || "",
-        outlet: formInput.outlet || formInput.projectBrand || "",
-        noHpOwner: formInput.noHpOwner || "",
-        noHpOutlet: formInput.noHpOutlet || "",
-        createDateProject: getToday(),
-        expiredDate: "",
-        totalTransaksi: 0,
-        scor: Number(formInput.scor ?? 0),
-        callStatus: "PENDING",
-        chatStatus: "PENDING",
-        validitas: "VALID",
-        remarks: formInput.remarks || "0",
-        sumberNasabah: formInput.sumberNasabah || "Instagram",
-        finalisasiClosing: "",
-        skemaId: "",
-        nominal: 0,
-        noted: "",
-      };
+        if (!outletName) return;
 
-      currentList.push(itemBaru);
-      alert("Data profil berhasil ditambahkan.");
+        const nextNo = getNextNo(currentList);
+
+        const itemBaru: NasabahItem = {
+          totalFu: 0,
+          tanggalFu: getToday(),
+          tahun: getCurrentYear(),
+          bulan: getCurrentMonthName(),
+          no: nextNo,
+          pic: nextFormInput.pic || "Satria",
+          tanggalDibagikan: getToday(),
+          statusAkun: "Akun Baru",
+          kodeBaris: "",
+          kodeOwner: nextFormInput.kodeOwner || "",
+          namaOwner: nextFormInput.namaOwner || "",
+          projectBrand: nextFormInput.projectBrand || "",
+          outlet: outletName,
+          outlets: mergedOutlets,
+          noHpOwner: nextFormInput.noHpOwner || "",
+          noHpOutlet: outletItem.noHpOutlet || "",
+          createDateProject: getToday(),
+          expiredDate: "",
+          totalTransaksi: 0,
+          scor: Number(nextFormInput.scor ?? 0),
+          callStatus: "PENDING",
+          chatStatus: "PENDING",
+          validitas: "VALID",
+          remarks: nextFormInput.remarks || "0",
+          sumberNasabah: nextFormInput.sumberNasabah || "Instagram",
+          finalisasiClosing: "",
+          skemaId: "",
+          nominal: 0,
+          noted: "",
+        };
+
+        currentList.push(itemBaru);
+      });
+
+      alert(
+        normalizedOutlets.length > 1
+          ? `${normalizedOutlets.length} outlet berhasil ditambahkan.`
+          : "Data profil berhasil ditambahkan.",
+      );
     }
 
     localStorage.setItem("piposmart_nasabah_data", JSON.stringify(currentList));
     router.push("/menu/data-kelolaan");
   };
+
 
   return (
     <div className="mx-auto max-w-lg space-y-6 font-sans text-[#1C1C1E]">
@@ -665,13 +836,12 @@ export default function FormInputDummyPage() {
               error={validationErrors.projectBrand}
             />
 
-            <OwnerOutletSelector
+            <OutletRowsInput
               kodeOwner={formInput.kodeOwner || ""}
-              value={formInput.outlet || ""}
-              options={ownerOutletOptions}
-              mode={outletInputMode}
-              onModeChange={setOutletInputMode}
-              onChange={(value) => updateFormField("outlet", value)}
+              rows={outletRows}
+              onAdd={handleAddOutletRow}
+              onUpdate={handleUpdateOutletRow}
+              onRemove={handleRemoveOutletRow}
               error={validationErrors.outlet}
             />
 
@@ -686,13 +856,6 @@ export default function FormInputDummyPage() {
               value={formInput.noHpOwner || ""}
               onChange={(value) => updateFormField("noHpOwner", value)}
               error={validationErrors.noHpOwner}
-            />
-
-            <PhoneInput
-              label="Nomor Telepon Outlet *"
-              value={formInput.noHpOutlet || ""}
-              onChange={(value) => updateFormField("noHpOutlet", value)}
-              error={validationErrors.noHpOutlet}
             />
 
             <div className="space-y-1">
@@ -743,124 +906,131 @@ export default function FormInputDummyPage() {
 }
 
 
-function OwnerOutletSelector({
+function OutletRowsInput({
   kodeOwner,
-  value,
-  options,
-  mode,
-  onModeChange,
-  onChange,
+  rows,
+  onAdd,
+  onUpdate,
+  onRemove,
   error,
 }: {
   kodeOwner: string;
-  value: string;
-  options: string[];
-  mode: "existing" | "new";
-  onModeChange: (mode: "existing" | "new") => void;
-  onChange: (value: string) => void;
+  rows: OwnerOutletItem[];
+  onAdd: () => void;
+  onUpdate: (index: number, field: keyof OwnerOutletItem, value: string) => void;
+  onRemove: (index: number) => void;
   error?: string;
 }) {
   const hasKodeOwner = kodeOwner.trim() !== "";
-  const hasExistingOutlet = options.length > 0;
-  const showNewOutletInput = !hasExistingOutlet || mode === "new";
-
-  if (!hasKodeOwner) {
-    return (
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
-          <FieldIcon type="outlet" />
-          Tambah Outlet *
-        </label>
-
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs font-bold text-gray-400">
-          Isi Kode Owner terlebih dahulu untuk menampilkan dropdown outlet yang dimiliki.
-        </div>
-
-        {error && (
-          <p className="text-[10px] font-bold text-red-600">{error}</p>
-        )}
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2 rounded-xl border border-red-100 bg-white p-3">
       <div className="flex items-center justify-between gap-2">
         <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
           <FieldIcon type="outlet" />
-          Tambah Outlet *
+          Outlet Owner *
         </label>
 
-        {hasExistingOutlet && (
-          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-[#C92C1E]">
-            {options.length} outlet ditemukan
-          </span>
-        )}
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={!hasKodeOwner}
+          className="cursor-pointer rounded-full bg-[#C92C1E] px-3 py-1.5 text-[10px] font-black text-white shadow-sm transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          + Tambah Outlet
+        </button>
       </div>
 
-      {showNewOutletInput ? (
-        <div className="space-y-2">
-          <input
-            required
-            type="text"
-            name="outlet"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder="Contoh: Azzahra Laundry Cabang 1"
-            className={`w-full rounded-xl border bg-white p-2.5 text-xs font-bold focus:outline-none focus:border-[#C92C1E] ${
-              error ? "border-red-500 bg-red-50" : "border-gray-200"
-            }`}
-          />
-
-          {hasExistingOutlet && (
-            <button
-              type="button"
-              onClick={() => {
-                onModeChange("existing");
-                onChange("");
-              }}
-              className="text-[10px] font-black text-[#C92C1E] hover:underline"
-            >
-              Pilih outlet yang sudah ada
-            </button>
-          )}
+      {!hasKodeOwner && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs font-bold text-gray-400">
+          Isi Kode Owner terlebih dahulu, lalu klik tombol tambah outlet.
         </div>
-      ) : (
-        <select
-          required
-          value={value}
-          onChange={(event) => {
-            const nextValue = event.target.value;
+      )}
 
-            if (nextValue === "__new__") {
-              onModeChange("new");
-              onChange("");
-              return;
-            }
+      {hasKodeOwner && rows.length === 0 && (
+        <div className="rounded-xl border border-dashed border-red-100 bg-red-50/40 p-3 text-xs font-bold text-gray-400">
+          Belum ada outlet. Tekan tombol <span className="text-[#C92C1E]">+ Tambah Outlet</span> untuk menambahkan outlet owner.
+        </div>
+      )}
 
-            onChange(nextValue);
-          }}
-          className={`w-full cursor-pointer rounded-xl border bg-white p-2.5 text-xs font-black text-gray-700 focus:outline-none focus:border-[#C92C1E] ${
-            error ? "border-red-500 bg-red-50" : "border-gray-200"
-          }`}
-        >
-          <option value="">Pilih outlet milik owner ini</option>
-          {options.map((outlet) => (
-            <option key={outlet} value={outlet}>
-              {outlet}
-            </option>
+      {rows.length > 0 && (
+        <div className="space-y-3">
+          {rows.map((item, index) => (
+            <div
+              key={`outlet-${index}`}
+              className="space-y-3 rounded-xl border border-red-100 bg-red-50/30 p-3"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-[#C92C1E]">
+                  Outlet {index + 1}
+                </span>
+              </div>
+
+              <label className="space-y-1">
+                <span className="text-[10px] font-black uppercase text-gray-400">
+                  Nama Outlet
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={item.namaOutlet}
+                    onChange={(event) => onUpdate(index, "namaOutlet", event.target.value)}
+                    placeholder="Contoh: Azzahra Laundry Cabang 1"
+                    className={`min-w-0 flex-1 rounded-xl border bg-white p-2.5 text-xs font-bold outline-none focus:border-[#C92C1E] ${
+                      error && index === 0 ? "border-red-500 bg-red-50" : "border-gray-200"
+                    }`}
+                  />
+
+                  {rows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(index)}
+                      aria-label={`Hapus outlet ${index + 1}`}
+                      title="Hapus outlet"
+                      className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-red-100 bg-white text-red-500 transition hover:border-red-200 hover:bg-red-50 active:scale-95"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.6}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 7h12M9.5 7V5.75A1.75 1.75 0 0111.25 4h1.5a1.75 1.75 0 011.75 1.75V7m-7 0l.7 12.25A1.75 1.75 0 009.95 21h4.1a1.75 1.75 0 001.75-1.75L16.5 7M10.5 11v6M13.5 11v6"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </label>
+
+              <PhoneInput
+                label="Nomor Telepon Outlet *"
+                value={item.noHpOutlet || ""}
+                onChange={(value) => onUpdate(index, "noHpOutlet", value)}
+              />
+            </div>
           ))}
-          <option value="__new__">+ Tambah outlet baru</option>
-        </select>
+
+          <button
+            type="button"
+            onClick={onAdd}
+            className="w-full cursor-pointer rounded-xl border border-dashed border-[#C92C1E]/40 bg-red-50/50 px-4 py-2.5 text-xs font-black text-[#C92C1E] transition hover:bg-red-100"
+          >
+            + Tambah Lagi
+          </button>
+        </div>
       )}
 
       {error ? (
         <p className="text-[10px] font-bold text-red-600">{error}</p>
       ) : (
         <p className="text-[10px] font-medium text-gray-400">
-          Kode Owner:{" "}
-          <span className="font-black text-[#C92C1E]">{kodeOwner}</span>
-          {value ? ` · Outlet: ${value}` : ""}
+          Setiap outlet bisa punya nomor telepon yang berbeda.
         </p>
       )}
     </div>

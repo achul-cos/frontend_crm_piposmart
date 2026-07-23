@@ -45,6 +45,7 @@ type NasabahItem = {
   namaOwner?: string;
   projectBrand?: string;
   outlet?: string;
+  outlets?: { namaOutlet: string; noHpOutlet?: string }[];
   noHpOwner?: string;
   noHpOutlet?: string;
   sumberCustomer?: string;
@@ -373,6 +374,24 @@ const ChatBubbleIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
   </svg>
 );
 
+
+const findOutletPhoneByName = (
+  outlets: { namaOutlet: string; noHpOutlet?: string }[],
+  outletName?: string,
+) => {
+  const normalizedOutletName = String(outletName || "").trim().toLowerCase();
+
+  if (!normalizedOutletName) return "";
+
+  return (
+    outlets.find(
+      (outletItem) =>
+        String(outletItem.namaOutlet || "").trim().toLowerCase() === normalizedOutletName,
+    )?.noHpOutlet || ""
+  );
+};
+
+
 function InfoInput({
   label,
   value,
@@ -383,7 +402,7 @@ function InfoInput({
   action?: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
+    <label className="block space-y-2">
       <span className="text-[10px] font-black uppercase tracking-wide text-gray-500">
         {label}
       </span>
@@ -432,6 +451,52 @@ function SourceTag({ value }: { value?: string }) {
         </span>
       </div>
     </label>
+  );
+}
+
+
+
+function OutletNameList({
+  outlets,
+  activeOutlet,
+  onSelect,
+}: {
+  outlets: string[];
+  activeOutlet?: string;
+  onSelect: (outlet: string) => void;
+}) {
+  if (outlets.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-red-100 bg-red-50/40 px-3 py-3 text-[11px] font-bold text-gray-400">
+        Belum ada outlet yang tersimpan untuk owner ini.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+
+      <div className="flex max-w-md flex-wrap gap-2 rounded-lg border border-red-100 bg-white px-2.5 py-2">
+        {outlets.map((outlet, index) => {
+          const isActive = outlet === activeOutlet;
+
+          return (
+            <button
+              key={`${outlet}-${index}`}
+              type="button"
+              onClick={() => onSelect(outlet)}
+              className={`cursor-pointer rounded-full border px-3 py-1 text-[11px] font-black transition-none ${
+                isActive
+                  ? "border-[#C92C1E]/30 bg-red-50 text-[#C92C1E]"
+                  : "border-gray-200 bg-gray-50 text-gray-600"
+              }`}
+            >
+              {outlet}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -563,18 +628,27 @@ export default function DeskripsiLanggananPage() {
   }, [customer]);
 
   const ownerOutlets = useMemo(() => {
-    if (typeof window === "undefined") return [];
+    const fallbackOutlets = isValidOwnerOutletName(customer.outlet)
+      ? [
+          {
+            namaOutlet: customer.outlet as string,
+            noHpOutlet: customer.noHpOutlet || "",
+          },
+        ]
+      : [];
+
+    if (typeof window === "undefined") return fallbackOutlets;
 
     const kodeOwner = String(customer.kodeOwner || "").trim();
 
     if (!kodeOwner) {
-      return isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : [];
+      return fallbackOutlets;
     }
 
     const cached = localStorage.getItem("piposmart_nasabah_data");
 
     if (!cached) {
-      return isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : [];
+      return fallbackOutlets;
     }
 
     try {
@@ -583,19 +657,90 @@ export default function DeskripsiLanggananPage() {
 
       const outletsFromData = listData
         .filter((item) => String(item.kodeOwner || "").trim() === kodeOwner)
-        .map((item) => item.outlet || item.projectBrand)
-        .filter((outlet): outlet is string => isValidOwnerOutletName(outlet));
+        .flatMap((item) => {
+          const outletList = item.outlets?.length
+            ? item.outlets.map((outletItem) => ({
+                namaOutlet: outletItem.namaOutlet,
+                noHpOutlet: outletItem.noHpOutlet || item.noHpOutlet || "",
+              }))
+            : [];
+
+          return [
+            ...outletList,
+            ...(isValidOwnerOutletName(item.outlet)
+              ? [
+                  {
+                    namaOutlet: item.outlet as string,
+                    noHpOutlet: item.noHpOutlet || "",
+                  },
+                ]
+              : []),
+          ];
+        })
+        .map((outletItem) => ({
+          namaOutlet: String(outletItem.namaOutlet || "").trim(),
+          noHpOutlet: String(outletItem.noHpOutlet || "").trim(),
+        }))
+        .filter((outletItem) => isValidOwnerOutletName(outletItem.namaOutlet));
 
       const combinedOutlets = [
         ...outletsFromData,
-        ...(isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : []),
+        ...fallbackOutlets,
       ];
 
-      return Array.from(new Set(combinedOutlets));
+      return Array.from(
+        new Map(
+          combinedOutlets.map((outletItem) => [
+            outletItem.namaOutlet.toLowerCase(),
+            outletItem,
+          ]),
+        ).values(),
+      );
     } catch {
-      return isValidOwnerOutletName(customer.outlet) ? [customer.outlet as string] : [];
+      return fallbackOutlets;
     }
-  }, [customer.kodeOwner, customer.outlet]);
+  }, [customer.kodeOwner, customer.outlet, customer.noHpOutlet]);
+
+  const ownerOutletNames = useMemo(() => {
+    return ownerOutlets.map((outletItem) => outletItem.namaOutlet);
+  }, [ownerOutlets]);
+
+  const handleSelectOutlet = (selectedOutlet: string) => {
+    const selectedOutletPhone = findOutletPhoneByName(ownerOutlets, selectedOutlet);
+
+    const nextOwner = {
+      ...customer,
+      outlet: selectedOutlet,
+      noHpOutlet: selectedOutletPhone || customer.noHpOutlet || "",
+    };
+
+    setCustomer(nextOwner);
+
+    const cached = localStorage.getItem("piposmart_nasabah_data");
+
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        const listData: NasabahItem[] = Array.isArray(parsed) ? parsed : [];
+        const nextData = listData.map((item) =>
+          String(item.no) === String(nextOwner.no)
+            ? nextOwner
+            : String(item.kodeOwner || "").trim() === String(nextOwner.kodeOwner || "").trim() &&
+                String(item.outlet || "").trim().toLowerCase() ===
+                  selectedOutlet.trim().toLowerCase()
+              ? {
+                  ...item,
+                  noHpOutlet: selectedOutletPhone || item.noHpOutlet || "",
+                }
+              : item,
+        );
+
+        localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
+      } catch {
+        localStorage.setItem("piposmart_nasabah_data", JSON.stringify([nextOwner]));
+      }
+    }
+  };
 
   const openEditModal = () => {
     const sourceValue = getSumberCustomerValue(customer);
@@ -628,10 +773,12 @@ export default function DeskripsiLanggananPage() {
 
   const handleSaveEdit = () => {
     const sourceValue = getSumberCustomerValue(editCustomer);
+    const selectedOutletPhone = findOutletPhoneByName(ownerOutlets, editCustomer.outlet);
 
     const nextOwner = {
       ...customer,
       ...editCustomer,
+      noHpOutlet: selectedOutletPhone || editCustomer.noHpOutlet || "",
       sumberCustomer: sourceValue,
       sumberNasabah: sourceValue,
     };
@@ -645,7 +792,16 @@ export default function DeskripsiLanggananPage() {
         const parsed = JSON.parse(cached);
         const listData: NasabahItem[] = Array.isArray(parsed) ? parsed : [];
         const nextData = listData.map((item) =>
-          String(item.no) === String(nextOwner.no) ? nextOwner : item,
+          String(item.no) === String(nextOwner.no)
+            ? nextOwner
+            : String(item.kodeOwner || "").trim() === String(nextOwner.kodeOwner || "").trim() &&
+                String(item.outlet || "").trim().toLowerCase() ===
+                  String(nextOwner.outlet || "").trim().toLowerCase()
+              ? {
+                  ...item,
+                  noHpOutlet: nextOwner.noHpOutlet,
+                }
+              : item,
         );
 
         localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
@@ -664,7 +820,7 @@ export default function DeskripsiLanggananPage() {
       <div className="flex items-center justify-end">
         <Link
           href="/menu/data-kelolaan"
-          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#C92C1E] bg-[#C92C1E] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#A82216] hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
+          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#C92C1E] bg-[#C92C1E] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-200 hover:bg-[#A82216] hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
         >
           <svg
             className="h-4 w-4 text-white"
@@ -690,7 +846,7 @@ export default function DeskripsiLanggananPage() {
               {customer.namaOwner || "Nama Owner"}
             </h1>
             <p className="mt-1 text-base font-black text-gray-600">
-              {customer.outlet || "Nama outlet"}
+              {customer.projectBrand || "Nama Brand"}
             </p>
 
             <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -714,13 +870,13 @@ export default function DeskripsiLanggananPage() {
           <button
             type="button"
             onClick={openEditModal}
-            className="cursor-pointer rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-xs font-black text-blue-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-100 hover:shadow-md active:translate-y-0 active:scale-[0.98]"
+            className="cursor-pointer rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-xs font-black text-blue-700 shadow-sm transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 hover:shadow-md active:translate-y-0 active:scale-[0.98]"
           >
             Edit
           </button>
           <button
             onClick={() => openWhatsApp(customer.noHpOwner || customer.noHpOutlet)}
-            className="cursor-pointer rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-xs font-black text-emerald-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-md active:translate-y-0 active:scale-[0.98]"
+            className="cursor-pointer rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-xs font-black text-emerald-700 shadow-sm transition-all duration-200 hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-md active:translate-y-0 active:scale-[0.98]"
           >
             Call 📞
           </button>
@@ -738,59 +894,27 @@ export default function DeskripsiLanggananPage() {
           action={
             <button
               onClick={() => openWhatsApp(customer.noHpOwner)}
-              className="cursor-pointer rounded-lg border border-emerald-200 bg-emerald-100 px-3 text-[10px] font-black text-emerald-700 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-200 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
+              className="cursor-pointer rounded-lg border border-emerald-200 bg-emerald-100 px-3 text-[10px] font-black text-emerald-700 transition-all duration-200 hover:border-emerald-300 hover:bg-emerald-200 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
             >
               hubungi 📞
             </button>
           }
         />
         <InfoInput label="Nama Brand" value={customer.projectBrand || "Nama Brand"} />
-        <InfoInput label="Nama Outlet Aktif" value={isValidOwnerOutletName(customer.outlet) ? customer.outlet : "-"} />
 
-        <label className="block space-y-1.5 lg:col-span-2">
+        <label className="block space-y-1.5">
           <span className="text-[10px] font-black uppercase tracking-wide text-gray-500">
-            Outlet Owner
+            Nama-Nama Outlet Owner
           </span>
 
-          <select
-            value={isValidOwnerOutletName(customer.outlet) ? customer.outlet : ""}
-            onChange={(event) => {
-              const selectedOutlet = event.target.value;
-              const nextOwner = {
-                ...customer,
-                outlet: selectedOutlet,
-              };
-
-              setCustomer(nextOwner);
-
-              const cached = localStorage.getItem("piposmart_nasabah_data");
-
-              if (cached) {
-                try {
-                  const parsed = JSON.parse(cached);
-                  const listData: NasabahItem[] = Array.isArray(parsed) ? parsed : [];
-                  const nextData = listData.map((item) =>
-                    String(item.no) === String(nextOwner.no) ? nextOwner : item,
-                  );
-
-                  localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
-                } catch {
-                  localStorage.setItem("piposmart_nasabah_data", JSON.stringify([nextOwner]));
-                }
-              }
-            }}
-            className="w-full cursor-pointer rounded-lg border border-red-100 bg-white px-2.5 py-2 text-[11px] font-black text-gray-700 outline-none focus:border-[#C92C1E]"
-          >
-            <option value="">Pilih outlet owner</option>
-            {ownerOutlets.map((outlet, index) => (
-              <option key={`${outlet}-${index}`} value={outlet}>
-                {outlet}
-              </option>
-            ))}
-          </select>
+          <OutletNameList
+            outlets={ownerOutletNames}
+            activeOutlet={customer.outlet}
+            onSelect={handleSelectOutlet}
+          />
 
           <p className="text-[10px] font-medium text-gray-400">
-            Pilih outlet milik owner ini berdasarkan Kode Owner yang sama.
+            Klik nama outlet untuk memilih outlet aktif owner ini.
           </p>
         </label>
 
@@ -800,7 +924,7 @@ export default function DeskripsiLanggananPage() {
           action={
             <button
               onClick={() => openWhatsApp(customer.noHpOutlet)}
-              className="cursor-pointer rounded-lg border border-emerald-200 bg-emerald-100 px-3 text-[10px] font-black text-emerald-700 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-200 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
+              className="cursor-pointer rounded-lg border border-emerald-200 bg-emerald-100 px-3 text-[10px] font-black text-emerald-700 transition-all duration-200 hover:border-emerald-300 hover:bg-emerald-200 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
             >
               hubungi 📞
             </button>
@@ -886,7 +1010,7 @@ export default function DeskripsiLanggananPage() {
           <button
             type="button"
             onClick={() => setShowAllComments((prev) => !prev)}
-            className="mx-auto mt-4 block cursor-pointer rounded-full px-3 py-1.5 text-xs font-black text-gray-500 transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-50 hover:text-[#C92C1E] active:translate-y-0 active:scale-[0.98]"
+            className="mx-auto mt-4 block cursor-pointer rounded-full px-3 py-1.5 text-xs font-black text-gray-500 transition-all duration-200 hover:bg-red-50 hover:text-[#C92C1E] active:translate-y-0 active:scale-[0.98]"
           >
             {showAllComments ? "Show Less ˄" : "Show More ˅"}
           </button>
@@ -1061,7 +1185,7 @@ export default function DeskripsiLanggananPage() {
               <button
                 type="button"
                 onClick={() => setIsEditOpen(false)}
-                className="cursor-pointer rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-100 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
+                className="cursor-pointer rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E] transition-all duration-200 hover:bg-red-100 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
               >
                 Tutup
               </button>
@@ -1102,35 +1226,39 @@ export default function DeskripsiLanggananPage() {
                     </span>
                     <select
                       value={isValidOwnerOutletName(editCustomer.outlet) ? editCustomer.outlet : ""}
-                      onChange={(event) => updateEditField("outlet", event.target.value)}
-                      className="w-full cursor-pointer rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#C92C1E]"
+                      onChange={(event) => {
+                        const selectedOutlet = event.target.value;
+                        updateEditField("outlet", selectedOutlet);
+                        updateEditField("noHpOutlet", findOutletPhoneByName(ownerOutlets, selectedOutlet));
+                      }}
+                      className="w-full max-w-xs cursor-pointer rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#C92C1E]"
                     >
                       <option value="">Pilih outlet owner</option>
-                      {ownerOutlets.map((outlet, index) => (
-                        <option key={`${outlet}-active-${index}`} value={outlet}>
-                          {outlet}
+                      {ownerOutlets.map((outletItem, index) => (
+                        <option
+                          key={`${outletItem.namaOutlet}-active-${index}`}
+                          value={outletItem.namaOutlet}
+                        >
+                          {outletItem.namaOutlet}
                         </option>
                       ))}
                     </select>
                   </label>
 
-                  <label className="space-y-1.5 md:col-span-2">
+                  <div className="space-y-2 md:col-span-2">
                     <span className="text-[10px] font-black uppercase text-gray-500">
-                      Outlet Owner
+                      Nama-Nama Outlet Owner
                     </span>
-                    <select
-                      value={isValidOwnerOutletName(editCustomer.outlet) ? editCustomer.outlet : ""}
-                      onChange={(event) => updateEditField("outlet", event.target.value)}
-                      className="w-full cursor-pointer rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#C92C1E]"
-                    >
-                      <option value="">Pilih outlet owner</option>
-                      {ownerOutlets.map((outlet, index) => (
-                        <option key={`${outlet}-edit-${index}`} value={outlet}>
-                          {outlet}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+
+                    <OutletNameList
+                      outlets={ownerOutletNames}
+                      activeOutlet={editCustomer.outlet}
+                      onSelect={(outlet) => {
+                        updateEditField("outlet", outlet);
+                        updateEditField("noHpOutlet", findOutletPhoneByName(ownerOutlets, outlet));
+                      }}
+                    />
+                  </div>
 
                   <label className="space-y-1.5">
                     <span className="text-[10px] font-black uppercase text-gray-500">
@@ -1223,7 +1351,7 @@ export default function DeskripsiLanggananPage() {
                 <button
                   type="button"
                   onClick={() => setIsEditOpen(false)}
-                  className="cursor-pointer rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-500 transition-all duration-200 hover:-translate-y-0.5 hover:bg-gray-50 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
+                  className="cursor-pointer rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-500 transition-all duration-200 hover:bg-gray-50 hover:shadow-sm active:translate-y-0 active:scale-[0.98]"
                 >
                   Batal
                 </button>
@@ -1231,7 +1359,7 @@ export default function DeskripsiLanggananPage() {
                 <button
                   type="button"
                   onClick={handleSaveEdit}
-                  className="cursor-pointer rounded-xl bg-[#C92C1E] px-4 py-2 text-xs font-black text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#A82216] hover:shadow-md active:translate-y-0 active:scale-[0.98]"
+                  className="cursor-pointer rounded-xl bg-[#C92C1E] px-4 py-2 text-xs font-black text-white shadow-sm transition-all duration-200 hover:bg-[#A82216] hover:shadow-md active:translate-y-0 active:scale-[0.98]"
                 >
                   Simpan Perubahan
                 </button>
