@@ -22,6 +22,10 @@ interface NasabahItem {
   namaOwner: string;
   projectBrand: string;
   outlet: string;
+  outlets?: {
+    namaOutlet: string;
+    noHpOutlet?: string;
+  }[];
   noHpOwner: string;
   noHpOutlet: string;
   createDateProject: string;
@@ -174,11 +178,6 @@ type ProfileFieldKey = (typeof REQUIRED_PROFILE_FIELDS)[number]["key"];
 type ProfileValidationErrors = Partial<Record<ProfileFieldKey, string>>;
 
 const isValidInternationalPhone = (value?: string) => {
-  const phone = value?.trim() || "";
-  return /^\+\d{1,3}\d{6,14}$/.test(phone);
-};
-
-const isValidInternationalPhone = (value?: string) => {
   const digitsOnly = String(value || "").replace(/\D/g, "");
 
   return digitsOnly.length >= 8 && digitsOnly.length <= 16;
@@ -196,16 +195,15 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
   });
 
   if (!errors.noHpOwner && !isValidInternationalPhone(item.noHpOwner)) {
-    errors.noHpOwner = "Nomor Telepon Owner belum valid. Pilih negara lalu isi nomor telepon.";
+    errors.noHpOwner = "Nomor Telepon Owner belum valid.";
   }
 
   if (!errors.noHpOutlet && !isValidInternationalPhone(item.noHpOutlet)) {
-    errors.noHpOutlet = "Nomor Telepon Outlet belum valid. Pilih negara lalu isi nomor telepon.";
+    errors.noHpOutlet = "Nomor Telepon Outlet belum valid.";
   }
 
   return errors;
 };
-
 
 
 
