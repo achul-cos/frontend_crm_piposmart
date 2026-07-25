@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { getLeadInteractions, getLeadTrainings, getLeadClosings, fetchOwnerOutlets } from "@/app/lib/api";
 
 type CallHistoryItem = {
   waktuCall: string;
@@ -41,6 +42,7 @@ type PurchaseHistoryItem = {
 
 type NasabahItem = {
   no?: number;
+  ownerId?: number;
   kodeOwner?: string;
   namaOwner?: string;
   projectBrand?: string;
@@ -537,12 +539,13 @@ function Timeline({
   );
 }
 
-export default function DeskripsiLanggananPage() {
+function DeskripsiLanggananContent() {
   const searchParams = useSearchParams();
   const customerId = searchParams.get("id");
   const [customer, setCustomer] = useState<NasabahItem>(FALLBACK_CUSTOMER);
   const [showAllComments, setShowAllComments] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [realOutlets, setRealOutlets] = useState<{namaOutlet: string, noHpOutlet: string}[]>([]);
   const [editCustomer, setEditCustomer] = useState<NasabahItem>(FALLBACK_CUSTOMER);
 
 
@@ -582,6 +585,106 @@ export default function DeskripsiLanggananPage() {
     } catch {
       setCustomer(FALLBACK_CUSTOMER);
     }
+  }, [customerId]);
+
+  useEffect(() => {
+    if (customer.ownerId) {
+      fetchOwnerOutlets(customer.ownerId).then(data => {
+        if (data) {
+          setRealOutlets(data.map(o => ({
+            namaOutlet: o.name,
+            noHpOutlet: o.phone || ""
+          })));
+        }
+      }).catch(console.error);
+    }
+  }, [customer.ownerId]);
+
+  // Load real interaction & training history from backend
+  useEffect(() => {
+    const id = Number(customerId);
+    if (!id || isNaN(id)) return;
+
+    Promise.all([
+      getLeadInteractions(id).catch(() => []),
+      getLeadTrainings(id).catch(() => []),
+      getLeadClosings(id).catch(() => []),
+    ]).then(([interactions, trainings, closings]) => {
+      if (interactions.length > 0 || trainings.length > 0 || closings.length > 0) {
+        const callHistories: CallHistoryItem[] = interactions.map((i) => ({
+          waktuCall: new Date(i.interaction_at).toLocaleString("id-ID"),
+          picSales: i.sales?.name || i.supervisor?.name || "-",
+          remark: i.remark_label || (i.remark_score !== undefined && i.remark_score !== null
+            ? String(i.remark_score)
+            : "-"),
+          conclusion: i.note || "-",
+        }));
+
+        const trainingHistories: TrainingHistoryItem[] = trainings.map((t) => ({
+          waktuTraining: t.scheduled_at
+            ? new Date(t.scheduled_at).toLocaleString("id-ID")
+            : "-",
+          lokasiTraining: t.location || t.training_type || "-",
+        }));
+
+        const purchaseHistories: PurchaseHistoryItem[] = closings.map((c: any) => {
+          let waktuMulai = "-";
+          let waktuBerakhir = "-";
+
+          if (c.closed_at) {
+             const startDate = new Date(c.closed_at);
+             waktuMulai = startDate.toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: 'numeric' });
+             
+             if (c.duration_days) {
+               const endDate = new Date(startDate);
+               endDate.setDate(endDate.getDate() + c.duration_days);
+               waktuBerakhir = endDate.toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: 'numeric' });
+             } else if (c.plan_snapshot?.duration_days) {
+               const endDate = new Date(startDate);
+               endDate.setDate(endDate.getDate() + c.plan_snapshot.duration_days);
+               waktuBerakhir = endDate.toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: 'numeric' });
+             }
+          }
+
+          let snapshot: PurchaseHistoryItem['snapshot'] = undefined;
+          
+          if (c.plan_snapshot || c.package_snapshot) {
+             snapshot = {
+                paketId: c.package?.code || c.package_snapshot?.code || "-",
+                namaPaket: c.package?.name || c.package_snapshot?.name || "-",
+                hargaPaketBulanan: Number(c.package_snapshot?.price || 0),
+                promoId: c.promotion?.code || c.promotion_snapshot?.code || "-",
+                namaPromo: c.plan?.name || c.plan_snapshot?.name || "-",
+                tenor: c.tenure_months || c.plan_snapshot?.tenure_months || 0,
+                bonus: 0,
+                hargaNormal: Number(c.base_price || c.plan_snapshot?.price || 0),
+                diskonPromo: Number(c.discount_amount || 0),
+                hargaPromo: Number(c.base_price || 0) - Number(c.discount_amount || 0),
+                jenisPromo: c.promotion_snapshot?.type || "Standard",
+                bundlingItems: [],
+                potonganTambahan: 0,
+                kodeUnik: Number(c.unique_transfer_code || 0)
+             };
+          }
+
+          return {
+            paket: c.plan?.name || c.package?.name || "-",
+            waktuMulai,
+            waktuBerakhir,
+            hargaAktual: Number(c.final_amount) || 0,
+            snapshot
+          };
+        });
+
+        setCustomer(prev => ({
+          ...prev,
+          callHistories: callHistories.length > 0 ? callHistories : prev.callHistories,
+          trainingHistories: trainingHistories.length > 0 ? trainingHistories : prev.trainingHistories,
+          purchaseHistories: purchaseHistories.length > 0 ? purchaseHistories : prev.purchaseHistories,
+          totalFu: callHistories.length || prev.totalFu,
+        }));
+      }
+    });
   }, [customerId]);
 
 
@@ -628,6 +731,10 @@ export default function DeskripsiLanggananPage() {
   }, [customer]);
 
   const ownerOutlets = useMemo(() => {
+    if (realOutlets.length > 0) {
+      return realOutlets;
+    }
+
     const fallbackOutlets = isValidOwnerOutletName(customer.outlet)
       ? [
           {
@@ -699,7 +806,7 @@ export default function DeskripsiLanggananPage() {
     } catch {
       return fallbackOutlets;
     }
-  }, [customer.kodeOwner, customer.outlet, customer.noHpOutlet]);
+  }, [customer.kodeOwner, customer.outlet, customer.noHpOutlet, realOutlets]);
 
   const ownerOutletNames = useMemo(() => {
     return ownerOutlets.map((outletItem) => outletItem.namaOutlet);
@@ -1370,5 +1477,13 @@ export default function DeskripsiLanggananPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DeskripsiLanggananPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center font-bold text-gray-500">Memuat detail...</div>}>
+      <DeskripsiLanggananContent />
+    </Suspense>
   );
 }
