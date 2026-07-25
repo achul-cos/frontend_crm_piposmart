@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSession } from "@/app/lib/auth/session";
+import { roleLabel } from "@/app/lib/auth/rbac";
 
 const SettingIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
   <svg
@@ -36,15 +37,13 @@ const UserIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
 );
 
 export default function SettingPage() {
-  const [userName, setUserName] = useState("User");
-  const [userRole, setUserRole] = useState("Sales");
-  const [username, setUsername] = useState("-");
+  // Identitas dari SessionProvider (BFF) — localStorage tidak lagi menjadi
+  // sumber data sejak Sprint FE-01.
+  const { user } = useSession();
 
-  useEffect(() => {
-    setUserName(localStorage.getItem("piposmart_user_name") || "User");
-    setUserRole(localStorage.getItem("piposmart_user_role") || "Sales");
-    setUsername(localStorage.getItem("piposmart_user_username") || "-");
-  }, []);
+  const userName = user?.name || "User";
+  const userRole = user ? roleLabel(user.role) : "Sales";
+  const username = user?.email || "-";
 
   return (
     <div className="space-y-6 font-sans text-[#1C1C1E]">

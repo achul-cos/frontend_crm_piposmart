@@ -1,46 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-type BackendUser = {
-  id?: string | number;
-  name?: string;
-  full_name?: string;
-  username?: string;
-  email?: string;
-  role?: string;
-  role_name?: string;
-};
-
-const getUserDisplayName = (value?: string) => {
-  if (!value) return "User";
-
-  const cleaned = value
-    .replace("@piposmart.id", "")
-    .replace(/\./g, " ")
-    .replace(/_/g, " ")
-    .trim();
-
-  return cleaned
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
-const normalizeRole = (role?: string) => {
-  if (!role) return "Admin";
-
-  const value = role.toLowerCase();
-
-  if (value.includes("developer")) return "Developer";
-  if (value.includes("supervisor")) return "Supervisor";
-  if (value.includes("sales")) return "Sales";
-  if (value.includes("admin")) return "Admin";
-
-  return role;
-};
+import { useSession } from "@/app/lib/auth/session";
+import type { SessionPayload } from "@/app/lib/api/types";
 
 const getRoleClass = (role: string) => {
   if (role === "Admin") return "border-purple-100 bg-purple-50 text-purple-700";
@@ -49,8 +13,10 @@ const getRoleClass = (role: string) => {
   return "border-gray-100 bg-gray-50 text-gray-500";
 };
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { applySession } = useSession();
 
   const [email, setEmail] = useState("admin.001@demo.piposmart.id");
   const [password, setPassword] = useState("Password123!");
@@ -64,11 +30,11 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-      const loginResponse = await fetch(`${apiUrl}/api/v1/auth/login`, {
+      // Login lewat Route Handler (BFF). Route Handler yang menyimpan refresh
+      // token ke cookie httpOnly; browser hanya menerima access token +
+      // profil. Tidak ada lagi token yang ditulis ke localStorage.
+      const loginResponse = await fetch("/api/auth/login", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -81,72 +47,21 @@ export default function LoginPage() {
       const loginResult = await loginResponse.json();
 
       if (!loginResponse.ok) {
-        throw new Error(loginResult?.error?.message || "Login backend gagal.");
+        throw new Error(loginResult?.error?.message || "Login gagal.");
       }
 
-      const accessToken = loginResult?.data?.access_token;
+      const session = loginResult as SessionPayload;
 
-      if (!accessToken) {
-        throw new Error("Token backend tidak ditemukan.");
+      if (!session.access_token) {
+        throw new Error("Token backend tidak ditemukan pada response login.");
       }
 
-      let profileData: BackendUser | null =
-        loginResult?.data?.user ||
-        loginResult?.data?.profile ||
-        null;
+      // Simpan sesi di memory (bukan storage) dan mulai timer auto-refresh.
+      applySession(session);
 
-      try {
-        const profileResponse = await fetch(`${apiUrl}/api/v1/auth/me`, {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-        const profileResult = await profileResponse.json();
-
-        if (profileResponse.ok) {
-          profileData =
-            profileResult?.data?.user ||
-            profileResult?.data ||
-            profileData;
-        }
-      } catch {
-        profileData = profileData;
-      }
-
-      const userName =
-        profileData?.name ||
-        profileData?.full_name ||
-        getUserDisplayName(profileData?.email || email);
-
-      const userUsername =
-        profileData?.username ||
-        profileData?.email ||
-        email.trim();
-
-      const userRole = normalizeRole(
-        profileData?.role ||
-          profileData?.role_name ||
-          "Admin",
-      );
-
-      localStorage.setItem("piposmart_access_token", accessToken);
-      localStorage.setItem("piposmart_is_logged_in", "true");
-      localStorage.setItem("piposmart_user_name", userName);
-      localStorage.setItem("piposmart_user_role", userRole);
-      localStorage.setItem("piposmart_user_username", userUsername);
-      localStorage.setItem(
-        "piposmart_user",
-        JSON.stringify({
-          name: userName,
-          username: userUsername,
-          role: userRole,
-        }),
-      );
-
-      router.replace("/");
+      // Kembalikan pengguna ke tujuan awal bila proxy.ts mengarahkannya kemari.
+      const nextPath = searchParams.get("next");
+      router.replace(nextPath && nextPath.startsWith("/") ? nextPath : "/");
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -222,10 +137,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+              <label
+                htmlFor="login-email"
+                className="text-[10px] font-black uppercase tracking-wider text-gray-400"
+              >
                 Email
               </label>
               <input
+                id="login-email"
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value);
@@ -237,11 +156,15 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+              <label
+                htmlFor="login-password"
+                className="text-[10px] font-black uppercase tracking-wider text-gray-400"
+              >
                 Password
               </label>
               <div className="flex overflow-hidden rounded-2xl border border-gray-200 bg-white focus-within:border-[#C92C1E]">
                 <input
+                  id="login-password"
                   value={password}
                   onChange={(event) => {
                     setPassword(event.target.value);
@@ -304,5 +227,17 @@ export default function LoginPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * `useSearchParams` (dipakai untuk membaca `?next=`) wajib berada di dalam
+ * batas <Suspense> pada Next.js 16, jika tidak build akan gagal.
+ */
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

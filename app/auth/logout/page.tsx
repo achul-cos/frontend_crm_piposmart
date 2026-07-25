@@ -1,22 +1,36 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 
+import { useSession } from "@/app/lib/auth/session";
+
+/**
+ * Halaman logout.
+ *
+ * `session.logout()` mencabut sesi di backend, menghapus cookie refresh lewat
+ * Route Handler, membersihkan access token di memory, lalu mengarahkan ke
+ * halaman login. Penghapusan `localStorage` yang lama tidak diperlukan lagi
+ * karena token tidak pernah lagi disimpan di sana — tapi tetap dibersihkan
+ * sekali untuk merapikan sisa data dari versi sebelumnya.
+ */
 export default function LogoutPage() {
-  const router = useRouter();
+  const { logout } = useSession();
 
   useEffect(() => {
-    localStorage.removeItem("piposmart_is_logged_in");
-    localStorage.removeItem("piposmart_user_name");
-    localStorage.removeItem("piposmart_user_role");
-    localStorage.removeItem("piposmart_user_username");
-    localStorage.removeItem("piposmart_user");
-    localStorage.removeItem("piposmart_token");
-    localStorage.removeItem("isLoggedIn");
+    // Bersihkan sisa key dari implementasi lama (aman bila sudah tidak ada).
+    [
+      "piposmart_access_token",
+      "piposmart_is_logged_in",
+      "piposmart_user_name",
+      "piposmart_user_role",
+      "piposmart_user_username",
+      "piposmart_user",
+      "piposmart_token",
+      "isLoggedIn",
+    ].forEach((key) => localStorage.removeItem(key));
 
-    router.replace("/auth/login");
-  }, [router]);
+    void logout();
+  }, [logout]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F6F7F9] p-4 font-sans">

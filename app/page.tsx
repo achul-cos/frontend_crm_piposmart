@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
+import { useSession } from "@/app/lib/auth/session";
+import { roleLabel } from "@/app/lib/auth/rbac";
+
 type NasabahItem = {
   no: number;
   pic?: string;
@@ -98,20 +101,30 @@ const isValidPicName = (value?: string) => {
 const SOP_READ_DELAY_SECONDS = 5;
 
 export default function DashboardOverviewPage() {
+  const { user } = useSession();
+
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
-  const [userName, setUserName] = useState("User");
-  const [userRole, setUserRole] = useState("Sales");
   const [isSopOpen, setIsSopOpen] = useState(false);
   const [isSopReady, setIsSopReady] = useState(false);
   const [sopCountdown, setSopCountdown] = useState(SOP_READ_DELAY_SECONDS);
 
-  useEffect(() => {
-    const cached = localStorage.getItem("piposmart_nasabah_data");
-    const savedUserName = localStorage.getItem("piposmart_user_name");
-    const savedUserRole = localStorage.getItem("piposmart_user_role");
+  // Identitas sekarang berasal dari SessionProvider (BFF), bukan localStorage
+  // — login tidak lagi menulis `piposmart_user_name`/`piposmart_user_role`
+  // sejak Sprint FE-01 (lihat app/lib/auth/session.tsx). Di-memoize (bukan
+  // `const` biasa) supaya React Compiler bisa membuktikan nilainya stabil
+  // antar-render — tanpa ini, `useMemo` lain yang bergantung padanya
+  // (`visibleData` di bawah) kehilangan optimisasi memoization-nya.
+  const userName = useMemo(() => user?.name || "User", [user]);
+  const userRole = useMemo(
+    () => (user ? roleLabel(user.role) : "Sales"),
+    [user],
+  );
 
-    if (savedUserName) setUserName(savedUserName);
-    if (savedUserRole) setUserRole(savedUserRole);
+  useEffect(() => {
+    // Cache dummy Kelolaan Customer versi lama; dashboard belum disambungkan
+    // ke data asli pada FE-01 (di luar scope — hanya Kelolaan Customer yang
+    // disambungkan sprint ini). Dijadwalkan untuk FE-02/FE-03.
+    const cached = localStorage.getItem("piposmart_nasabah_data");
 
     if (cached) {
       try {
@@ -124,10 +137,11 @@ export default function DashboardOverviewPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !userName || userName === "User") {
+      return;
+    }
 
-    const savedUserName = localStorage.getItem("piposmart_user_name") || "User";
-    const sopSeenKey = `piposmart_sop_seen_${savedUserName}`;
+    const sopSeenKey = `piposmart_sop_seen_${userName}`;
     const hasSeenSopThisLogin = sessionStorage.getItem(sopSeenKey);
 
     if (!hasSeenSopThisLogin) {
@@ -135,7 +149,7 @@ export default function DashboardOverviewPage() {
       setIsSopReady(false);
       setSopCountdown(SOP_READ_DELAY_SECONDS);
     }
-  }, []);
+  }, [userName]);
 
   useEffect(() => {
     if (!isSopOpen) return;
@@ -162,8 +176,7 @@ export default function DashboardOverviewPage() {
     if (!isSopReady) return;
 
     if (typeof window !== "undefined") {
-      const savedUserName = localStorage.getItem("piposmart_user_name") || "User";
-      const sopSeenKey = `piposmart_sop_seen_${savedUserName}`;
+      const sopSeenKey = `piposmart_sop_seen_${userName}`;
       sessionStorage.setItem(sopSeenKey, "true");
     }
 
