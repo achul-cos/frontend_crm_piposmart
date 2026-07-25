@@ -41,6 +41,10 @@ interface NasabahItem {
   namaOwner: string;
   projectBrand: string;
   outlet: string;
+  outlets?: {
+    namaOutlet: string;
+    noHpOutlet?: string;
+  }[];
   noHpOwner: string;
   noHpOutlet: string;
   createDateProject: string;
@@ -211,11 +215,11 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
   });
 
   if (!errors.noHpOwner && !isValidInternationalPhone(item.noHpOwner)) {
-    errors.noHpOwner = "Nomor Telepon Owner belum valid. Pilih negara lalu isi nomor telepon.";
+    errors.noHpOwner = "Nomor Telepon Owner belum valid.";
   }
 
   if (!errors.noHpOutlet && !isValidInternationalPhone(item.noHpOutlet)) {
-    errors.noHpOutlet = "Nomor Telepon Outlet belum valid. Pilih negara lalu isi nomor telepon.";
+    errors.noHpOutlet = "Nomor Telepon Outlet belum valid.";
   }
 
   return errors;
