@@ -2,8 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { restoreOwner, hardDeleteOwner } from "@/app/lib/api";
 
 interface NasabahItem {
+  ownerId?: number;
   totalFu: number;
   tanggalFu: string;
   tahun: string;
@@ -137,6 +139,12 @@ export default function DataKelolaanTrashPage() {
     saveTrash(nextTrash);
     setSelectedIds([]);
 
+    // Call API to restore
+    const restoreOwnerIds = restoreItems.map(item => item.ownerId).filter((id): id is number => id !== undefined);
+    if (restoreOwnerIds.length > 0) {
+      Promise.all(restoreOwnerIds.map(id => restoreOwner(id).catch(e => console.error(e))));
+    }
+
     alert(`${restoreItems.length} data berhasil dipulihkan ke tabel utama.`);
   };
 
@@ -153,10 +161,17 @@ export default function DataKelolaanTrashPage() {
     if (!yakin) return;
 
     const selectedSet = new Set(selectedIds);
+    const deletedItems = trashData.filter((item) => selectedSet.has(item.no));
     const nextTrash = trashData.filter((item) => !selectedSet.has(item.no));
 
     saveTrash(nextTrash);
     setSelectedIds([]);
+
+    // Call API to hard delete
+    const hardDeleteOwnerIds = deletedItems.map(item => item.ownerId).filter((id): id is number => id !== undefined);
+    if (hardDeleteOwnerIds.length > 0) {
+      Promise.all(hardDeleteOwnerIds.map(id => hardDeleteOwner(id).catch(e => console.error(e))));
+    }
 
     alert(`${selectedSet.size} data berhasil dihapus permanen dari riwayat.`);
   };
@@ -170,9 +185,16 @@ export default function DataKelolaanTrashPage() {
 
     if (!yakin) return;
 
+    const deletedItems = [...trashData];
     setTrashData([]);
     setSelectedIds([]);
     localStorage.removeItem("piposmart_deleted_nasabah_data");
+
+    // Call API to hard delete all
+    const hardDeleteOwnerIds = deletedItems.map(item => item.ownerId).filter((id): id is number => id !== undefined);
+    if (hardDeleteOwnerIds.length > 0) {
+      Promise.all(hardDeleteOwnerIds.map(id => hardDeleteOwner(id).catch(e => console.error(e))));
+    }
 
     alert("Riwayat hapus berhasil dikosongkan.");
   };

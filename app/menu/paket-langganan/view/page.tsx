@@ -48,6 +48,8 @@ export default function ViewDrawer({
   onClose: () => void;
   onEdit: () => void;
 }) {
+  if (!promo) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />

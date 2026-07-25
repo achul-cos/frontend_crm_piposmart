@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { getCatalogPackages, getCatalogPlans, getEligiblePromotions, type CatalogPackage, type CatalogPlan, type CatalogPromotion } from "@/app/lib/api";
 import RemarkOptionsSection, {
   getRemarkLabelFromValue,
   getRemarkScoreFromValue,
@@ -74,6 +75,16 @@ export interface CallCustomer {
 export interface CallFormResult {
   customerId: number;
   nextCustomer: CallCustomer;
+  rawPayload: {
+    callStatus: string;
+    chatStatus: string;
+    selectedRemarkScore: string;
+    conclusion: string;
+    followUpDate: string;
+    callTime: string;
+    trainingPayload?: Remark2TrainingPayload;
+    salesPayload?: Remark3SalesPayload;
+  };
 }
 
 const CALL_STATUS_OPTIONS = [
@@ -274,6 +285,32 @@ export default function CallPage({
   const [salesPayload, setSalesPayload] = useState<Remark3SalesPayload>(
     getDefaultSalesPayload(),
   );
+  const [catalogPackages, setCatalogPackages] = useState<CatalogPackage[]>([]);
+  const [catalogPlans, setCatalogPlans] = useState<CatalogPlan[]>([]);
+  const [eligiblePromotions, setEligiblePromotions] = useState<CatalogPromotion[]>([]);
+
+  // Load catalog packages & all plans once on mount
+  useEffect(() => {
+    getCatalogPackages().then(setCatalogPackages).catch(console.error);
+    getCatalogPlans().then((plans) => {
+      setCatalogPlans(plans);
+      // Pre-select first plan
+      if (plans.length > 0) {
+        setSalesPayload(prev => ({ ...prev, planId: prev.planId ?? plans[0].id }));
+      }
+    }).catch(console.error);
+  }, []);
+
+  // When planId changes, reload eligible promotions
+  useEffect(() => {
+    if (salesPayload.planId) {
+      getEligiblePromotions(salesPayload.planId)
+        .then(setEligiblePromotions)
+        .catch(() => setEligiblePromotions([]));
+    } else {
+      setEligiblePromotions([]);
+    }
+  }, [salesPayload.planId]);
 
   useEffect(() => {
     if (!customer) return;
@@ -388,6 +425,16 @@ export default function CallPage({
     onSave({
       customerId: customer.no,
       nextCustomer,
+      rawPayload: {
+        callStatus,
+        chatStatus,
+        selectedRemarkScore,
+        conclusion: conclusion.trim(),
+        followUpDate,
+        callTime: callTime,
+        trainingPayload: selectedRemarkScore === "2" ? trainingPayload : undefined,
+        salesPayload: selectedRemarkScore === "3" ? salesPayload : undefined,
+      }
     });
 
     resetForm();
@@ -578,7 +625,13 @@ export default function CallPage({
 
           {selectedRemarkScore === "3" && selectedRemark && (
             <div className="mt-4">
-              <Remark3SalesSection value={salesPayload} onChange={setSalesPayload} />
+              <Remark3SalesSection
+                value={salesPayload}
+                onChange={setSalesPayload}
+                backendPackages={catalogPackages}
+                backendPlans={catalogPlans}
+                backendPromotions={eligiblePromotions}
+              />
             </div>
           )}
 

@@ -93,17 +93,17 @@ function FieldGroup({
 // ============================================================
 
 export default function FormPromoDrawer({
-  mode,
+  mode = "create",
   existingPromo,
-  pakets,
-  onClose,
-  onSave,
+  pakets = [],
+  onClose = () => {},
+  onSave = async () => {},
 }: {
-  mode: "create" | "edit";
-  existingPromo: MasterPromo | null;
-  pakets: MasterPaket[];
-  onClose: () => void;
-  onSave: (promo: MasterPromo) => void;
+  mode?: "create" | "edit";
+  existingPromo?: MasterPromo | null;
+  pakets?: MasterPaket[];
+  onClose?: () => void;
+  onSave?: (promo: MasterPromo) => void;
 }) {
   const aktifPakets = useMemo(() => getAktifPakets(pakets), [pakets]);
   const defaultPaketId = existingPromo?.paketId || aktifPakets[0]?.id || "";
@@ -152,12 +152,15 @@ export default function FormPromoDrawer({
   };
 
   const toggleBundlingItem = (item: string) => {
-    setForm((prev) => ({
-      ...prev,
-      bundlingItems: prev.bundlingItems.includes(item)
-        ? prev.bundlingItems.filter((i) => i !== item)
-        : [...prev.bundlingItems, item],
-    }));
+    setForm((prev) => {
+      const items = prev.bundlingItems || [];
+      return {
+        ...prev,
+        bundlingItems: items.includes(item)
+          ? items.filter((i) => i !== item)
+          : [...items, item],
+      };
+    });
   };
 
   const validate = (): boolean => {

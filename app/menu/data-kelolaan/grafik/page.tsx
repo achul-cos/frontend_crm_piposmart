@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 
 interface NasabahItem {
+  ownerId?: number;
   totalFu: number;
   tanggalFu: string;
   tahun: string;
@@ -1168,6 +1169,7 @@ function CollapsibleChartSection({
 
 
 export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahItem[] }) {
+  if (!dataNasabah) return null;
   const today = new Date();
   const [skorChartFilter, setSkorChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));
   const [sumberChartFilter, setSumberChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));

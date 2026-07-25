@@ -4,10 +4,13 @@ import React, { useMemo, useEffect } from "react";
 import type { CallCustomer } from "../../page";
 import { INITIAL_PAKETS, INITIAL_MASTER_PROMOS, KATEGORI_LABELS } from "@/app/lib/paket-langganan-data";
 import { Receipt, CalendarDays, CheckCircle2, Package } from "lucide-react";
+import type { CatalogPackage, CatalogPlan, CatalogPromotion } from "@/app/lib/api";
 
 export type Remark3SalesPayload = {
-  packageType: string;
-  promoIndex?: number;
+  packageType: string;    // display: package code/name (for UI)
+  planId?: number;        // backend plan ID
+  promotionId?: number;   // backend promotion ID
+  promoIndex?: number;    // legacy fallback index
   durationMonth?: number; // legacy
   transferCode: number;
   discount: number;
@@ -96,27 +99,58 @@ const formatDateOnly = (date: Date) =>
 function Remark3SalesSection({
   value,
   onChange,
+  backendPackages = [],
+  backendPlans = [],
+  backendPromotions = [],
 }: {
   value: Remark3SalesPayload;
   onChange: (value: Remark3SalesPayload) => void;
+  backendPackages?: CatalogPackage[];
+  backendPlans?: CatalogPlan[];
+  backendPromotions?: CatalogPromotion[];
 }) {
+  if (!value) return null;
+
+  // Use backend data if available, else fallback to dummy
+  const useBackend = backendPackages.length > 0;
+
+  // Resolve package options
+  const packageOptions = useBackend
+    ? backendPackages.map((p) => ({ value: String(p.id), label: p.name }))
+    : PACKAGE_OPTIONS;
+
+  // Resolve plans for current package
+  const plansForPackage = useBackend
+    ? backendPlans.filter((pl) => pl.package?.id === Number(value.packageType) || backendPlans.length > 0)
+    : [];
+
+  // Selected plan
+  const selectedPlan = useBackend
+    ? backendPlans.find((pl) => pl.id === value.planId) || backendPlans[0]
+    : null;
+
+  // Promotions for selected plan
+  const promotionsForPlan = backendPromotions;
+
+  // Fallback to dummy data
   const selectedPackage = getPackageOption(value.packageType);
   let activePromos = getActivePromos(selectedPackage.value);
   if (activePromos.length === 0) activePromos = getActivePromos(INITIAL_PAKETS[0]?.id || "");
   const currentPromoIndex = typeof value.promoIndex === "number" ? value.promoIndex : 0;
   const activePromo = activePromos[currentPromoIndex] || activePromos[0];
 
-  const actualSale = Math.max(activePromo.hargaPromo - (value.discount || 0) + (value.transferCode || 0), 0);
+  const hargaPromo = useBackend && selectedPlan
+    ? Number(selectedPlan.price)
+    : (activePromo?.hargaPromo || 0);
 
-  // Auto fix if promoIndex is out of bounds or missing when package changes
+  const actualSale = Math.max(hargaPromo - (value.discount || 0) + (value.transferCode || 0), 0);
+
+  // Auto fix promoIndex if out of bounds
   useEffect(() => {
-    if (typeof value.promoIndex !== "number" || value.promoIndex >= activePromos.length) {
-      onChange({
-        ...value,
-        promoIndex: 0,
-      });
+    if (!useBackend && (typeof value.promoIndex !== "number" || value.promoIndex >= activePromos.length)) {
+      onChange({ ...value, promoIndex: 0 });
     }
-  }, [value.packageType, value.promoIndex, activePromos.length, onChange, value]);
+  }, [value.packageType, value.promoIndex, activePromos.length, onChange, value, useBackend]);
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -143,13 +177,21 @@ function Remark3SalesSection({
             1. Pilih Jenis Paket
           </label>
           <div className="grid grid-cols-3 gap-3">
-            {PACKAGE_OPTIONS.map((item) => {
-              const isSelected = value.packageType === item.value;
+            {packageOptions.map((item) => {
+              const isSelected = useBackend ? value.packageType === item.value : value.packageType === item.value;
               return (
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() => onChange({ ...value, packageType: item.value, promoIndex: 0 })}
+                  onClick={() => {
+                    if (useBackend) {
+                      // Find first plan for this package
+                      const firstPlan = backendPlans.find(pl => pl.package?.id === Number(item.value)) || backendPlans[0];
+                      onChange({ ...value, packageType: item.value, planId: firstPlan?.id, promotionId: undefined });
+                    } else {
+                      onChange({ ...value, packageType: item.value, promoIndex: 0 });
+                    }
+                  }}
                   className={`relative flex flex-col items-center justify-center rounded-xl border p-3.5 transition-all cursor-pointer ${
                     isSelected
                       ? "border-[#C92C1E] bg-red-50/50 text-[#C92C1E] shadow-sm ring-1 ring-[#C92C1E]"
@@ -173,22 +215,62 @@ function Remark3SalesSection({
           <label className="mb-3 block text-[11px] font-black uppercase tracking-widest text-gray-500">
             2. Pilih Promo / Durasi
           </label>
-          <select
-            value={currentPromoIndex}
-            onChange={(event) =>
-              onChange({
-                ...value,
-                promoIndex: Number(event.target.value),
-              })
-            }
-            className="h-11 w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-4 text-sm font-black text-gray-800 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-1 focus:ring-[#C92C1E]"
-          >
-            {activePromos.map((promo, idx) => (
-              <option key={idx} value={idx}>
-                {promo.label}
-              </option>
-            ))}
-          </select>
+          {useBackend ? (
+            <select
+              value={value.planId || ""}
+              onChange={(event) => {
+                const planId = Number(event.target.value);
+                onChange({ ...value, planId, promotionId: undefined });
+              }}
+              className="h-11 w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-4 text-sm font-black text-gray-800 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-1 focus:ring-[#C92C1E]"
+            >
+              <option value="">-- Pilih Plan --</option>
+              {backendPlans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name} ({plan.tenure_months} bln)
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={currentPromoIndex}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  promoIndex: Number(event.target.value),
+                })
+              }
+              className="h-11 w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-4 text-sm font-black text-gray-800 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-1 focus:ring-[#C92C1E]"
+            >
+              {activePromos.map((promo, idx) => (
+                <option key={idx} value={idx}>
+                  {promo.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {useBackend && backendPromotions.length > 0 && (
+            <div className="mt-3">
+              <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-gray-500">
+                2b. Pilih Promo (Opsional)
+              </label>
+              <select
+                value={value.promotionId || ""}
+                onChange={(event) => {
+                  const v = event.target.value;
+                  onChange({ ...value, promotionId: v ? Number(v) : undefined });
+                }}
+                className="h-11 w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-4 text-sm font-black text-gray-800 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-1 focus:ring-[#C92C1E]"
+              >
+                <option value="">-- Tanpa Promo --</option>
+                {backendPromotions.map((promo) => (
+                  <option key={promo.id} value={promo.id}>
+                    {promo.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Receipt Area */}

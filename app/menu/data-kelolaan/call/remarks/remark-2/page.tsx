@@ -57,7 +57,9 @@ function Remark2TrainingSection({
   value: Remark2TrainingPayload;
   onChange: (value: Remark2TrainingPayload) => void;
 }) {
-  const existingSessions = customer.trainingSessions || [];
+  if (!value) return null;
+
+  const existingSessions = customer?.trainingSessions || [];
   const previewTime = formatDateTime(value.schedule);
 
   return (
