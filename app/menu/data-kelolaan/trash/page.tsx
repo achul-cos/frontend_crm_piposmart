@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { restoreOwner, hardDeleteOwner } from "@/app/lib/api";
+import { restoreOwner, hardDeleteOwner } from "@/app/lib/api/owners";
 
 interface NasabahItem {
   ownerId?: number;

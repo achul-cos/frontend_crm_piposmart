@@ -3,7 +3,26 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getLeads, createOwner, updateOwner, bulkCreateOwnerOutlets, fetchOwnerOutlets, getSalesList, getSupervisorList, assignSalesToLead, assignSupervisorToLead, getLead, bulkForceDeleteOutlets, getProfile, type CreateLeadRequest, type UserResponse } from "@/app/lib/api";
+import {
+  createOwner,
+  updateOwner,
+  bulkCreateOutlets as bulkCreateOwnerOutlets,
+  bulkForceDeleteOutlets,
+  listOutlets,
+} from "@/app/lib/api/owners";
+import {
+  listLeads,
+  getLead,
+  getSupervisorList,
+  assignSupervisor as assignSupervisorToLead,
+} from "@/app/lib/api/leads";
+import type { UserSummary } from "@/app/lib/api/types";
+import { useSession } from "@/app/lib/auth/session";
+import { normalizeRole } from "@/app/lib/auth/rbac";
+import {
+  stageToStatusAkun,
+  scoreToRemarkLabel,
+} from "@/app/lib/mappers/nasabah";
 
 type OwnerOutletItem = {
   namaOutlet: string;
@@ -432,45 +451,39 @@ export default function FormInputDummyPage() {
   });
   const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
   const [outletRows, setOutletRows] = useState<OwnerOutletItem[]>([]);
-  const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
-  const [loggedInUser, setLoggedInUser] = useState("Satria");
-  const [loggedInRole, setLoggedInRole] = useState("Developer");
-  const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(loggedInRole);
+  const [supervisorList, setSupervisorList] = useState<UserSummary[]>([]);
+
+  // Identitas & role dari SessionProvider (BFF) — bukan localStorage, sejak
+  // Sprint FE-01. `normalizeRole` memetakan role backend (ADMIN/SUPERVISOR/
+  // SALES) yang sebenarnya; halaman ini sebelumnya punya daftar longgar
+  // ("Developer"/"Direktur"/dst.) yang tidak pernah cocok dengan role nyata.
+  const { user } = useSession();
+  const loggedInUser = user?.name || "User";
+  const role = normalizeRole(user?.role);
+  const isAdmin = role === "ADMIN";
+
+  useEffect(() => {
+    // Catatan migrasi: kode asli (localStorage-based) punya cabang tambahan
+    // "kalau role Supervisor, sisipkan diri sendiri ke daftar" — tapi gate
+    // di atasnya sudah mensyaratkan role Admin/Developer/Direktur (tidak
+    // pernah termasuk Supervisor), jadi cabang itu sebenarnya tidak pernah
+    // tercapai sejak awal. Perilaku dipertahankan persis (bukan diperbaiki,
+    // di luar scope migrasi auth) — cabang mati itu dihapus, bukan dipindah.
+    if (!isAdmin) return;
+
+    getSupervisorList().then(setSupervisorList).catch(console.error);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const userName = localStorage.getItem("piposmart_user_name") || "Satria";
-    const userRole = localStorage.getItem("piposmart_user_role") || "Developer";
-
-    setLoggedInUser(userName);
-    setLoggedInRole(userRole);
-
-    const isAdminUser = ["Developer", "Admin", "ADMIN", "Direktur"].includes(userRole);
-
-    if (isAdminUser) {
-      getSupervisorList().then(setSupervisorList).catch(console.error);
-
-      if (userRole === "Supervisor" || userRole === "SUPERVISOR") {
-        getProfile().then(me => {
-          if (me && me.id) {
-            setSupervisorList(prev => {
-              if (prev.find(s => s.id === me.id)) return prev;
-              return [...prev, { id: me.id, name: me.name, role: "SUPERVISOR" } as UserResponse];
-            });
-          }
-        }).catch(console.error);
-      }
-    }
 
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id");
 
     if (!idParam) {
       // Create mode
-      if (!isAdminUser) {
+      if (!isAdmin) {
         setFormInput((prev) => ({ ...prev, pic: "No PIC" }));
       }
       return;
@@ -479,43 +492,60 @@ export default function FormInputDummyPage() {
     const targetNo = Number(idParam);
     setEditId(targetNo);
 
-    const cached = localStorage.getItem("piposmart_nasabah_data");
-    if (!cached) return;
+    // Sprint FE-02: sebelumnya field form diisi dari cache
+    // `piposmart_nasabah_data` di localStorage — cache itu tidak lagi ditulis
+    // sejak tabel utama membaca data live dari API (Sprint FE-01), jadi form
+    // edit akan selalu kosong kalau dipertahankan. Sekarang mengambil lead
+    // langsung dari backend; `targetNo` adalah `Lead.id` asli (dikirim tabel
+    // utama sebagai query param `id`), bukan nomor baris tampilan.
+    //
+    // Backend menyimpan/mengembalikan telepon TANPA prefix "+" (mis.
+    // "6281200000099"), sementara `isValidInternationalPhone` di file ini
+    // mensyaratkan format "+62...". Tanpa normalisasi ini, submit edit gagal
+    // tertahan validasi secara diam-diam (tanpa alert) — ditemukan lewat e2e.
+    const ensurePlusPrefix = (phone?: string) => {
+      if (!phone) return "";
+      return phone.startsWith("+") ? phone : `+${phone}`;
+    };
 
-    try {
-      const list: NasabahItem[] = JSON.parse(cached);
-      const targetItem = list.find((row) => row.no === targetNo);
-
-      if (targetItem) {
-        let defaultPic = targetItem.pic;
-        if (!defaultPic || defaultPic === "-") {
-          defaultPic = "No PIC";
-        }
+    getLead(targetNo)
+      .then((lead) => {
         setFormInput((prev) => ({
           ...prev,
-          ...targetItem,
-          pic: defaultPic,
+          ownerId: lead.owner.id,
+          kodeOwner: lead.owner.code || "",
+          namaOwner: lead.owner.name || "",
+          projectBrand: lead.owner.brand_name || "",
+          noHpOwner: ensurePlusPrefix(lead.owner.phone),
+          pic: lead.active_sales?.name || "No PIC",
+          statusAkun: stageToStatusAkun(lead.stage),
+          remarks: scoreToRemarkLabel(lead.current_score),
         }));
-          
-        if (targetItem.ownerId) {
-          fetchOwnerOutlets(targetItem.ownerId).then(outletsData => {
-            if (outletsData && outletsData.length > 0) {
-              setOutletRows(outletsData.map(o => ({
-                namaOutlet: o.name,
-                noHpOutlet: o.phone || ""
-              })));
-            } else {
-              setOutletRows([{ namaOutlet: "", noHpOutlet: "" }]);
-            }
+
+        if (lead.owner.id) {
+          listOutlets(lead.owner.id).then(({ items }) => {
+            const rows =
+              items && items.length > 0
+                ? items.map((o) => ({
+                    namaOutlet: o.name,
+                    noHpOutlet: ensurePlusPrefix(o.phone),
+                  }))
+                : [{ namaOutlet: "", noHpOutlet: "" }];
+
+            setOutletRows(rows);
+            // `outlet`/`noHpOutlet` (tunggal) dipakai validasi wajib-isi
+            // (`REQUIRED_PROFILE_FIELDS`) — harus disinkronkan dengan baris
+            // pertama `outletRows`, bukan hanya array-nya, kalau tidak
+            // submit edit gagal diam-diam (validasi menahan tanpa alert).
+            setFormInput((prev) => ({
+              ...prev,
+              outlet: rows[0]?.namaOutlet || "",
+              noHpOutlet: rows[0]?.noHpOutlet || "",
+            }));
           }).catch(console.error);
-        } else {
-          const outlets = buildOutletRowsFromOwner(targetItem);
-          setOutletRows(outlets.length > 0 ? outlets : [{ namaOutlet: "", noHpOutlet: "" }]);
         }
-      }
-    } catch {
-      // ignore
-    }
+      })
+      .catch(console.error);
   }, []);
 
   const handleInputChange = (
@@ -704,7 +734,7 @@ export default function FormInputDummyPage() {
 
         // Hapus outlet lama lalu buat baru agar ter-update dengan benar
         try {
-          const existingOutletsData = await fetchOwnerOutlets(actualOwnerId);
+          const { items: existingOutletsData } = await listOutlets(actualOwnerId);
           if (existingOutletsData && existingOutletsData.length > 0) {
             const existingIds = existingOutletsData.map(o => o.id);
             await bulkForceDeleteOutlets(actualOwnerId, existingIds);
@@ -742,7 +772,7 @@ export default function FormInputDummyPage() {
           phone: nextFormInput.noHpOwner || "",
         };
         const createdOwner = await createOwner(payloadCreateOwner);
-        const newOwnerId = createdOwner.data.id;
+        const newOwnerId = createdOwner.id;
 
         // 2. Buat Outlet
         if (newOwnerId) {
@@ -755,8 +785,8 @@ export default function FormInputDummyPage() {
         }
 
         // 3. Ambil Lead yang otomatis dibuat oleh backend untuk Owner ini
-        const leads = await getLeads();
-        const autoCreatedLead = leads.find((l: any) => l.owner?.id === newOwnerId);
+        const { items: leads } = await listLeads({ limit: 1000 });
+        const autoCreatedLead = leads.find((l) => l.owner?.id === newOwnerId);
 
         // 4. Assign PIC jika dipilih (hanya Supervisor)
         const targetPicUser = nextFormInput.pic !== "No PIC" ? supervisorList.find(s => s.name === nextFormInput.pic) : null;

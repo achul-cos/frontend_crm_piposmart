@@ -79,6 +79,15 @@ const MENU_ITEMS: MenuItem[] = [
     ),
   },
   {
+    text: "Kelolaan Mitra",
+    href: "/menu/kelolaan-mitra",
+    icon: (className) => (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a8.97 8.97 0 003.75.78M18 18.72a8.97 8.97 0 01-3.75.78M18 18.72v-3.47m-3.75 4.25a8.97 8.97 0 01-3.75-.78m3.75.78v-3.47m-3.75 2.69a8.97 8.97 0 01-3.75.78M10.5 18.72v-3.47m0 3.47a8.97 8.97 0 003.75.78M6.75 19.5A8.97 8.97 0 013 18.72v-3.47m3.75 4.25v-3.47M3 15.25c0-1.24 2.239-2.25 5-2.25s5 1.01 5 2.25m-10 0c0 1.24 2.239 2.25 5 2.25s5-1.01 5-2.25m2.25 0c0-1.24 2.239-2.25 5-2.25s5 1.01 5 2.25m-10 0c0 1.24 2.239 2.25 5 2.25s5-1.01 5-2.25M8 10.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm8 0a3.5 3.5 0 100-7 3.5 3.5 0 000 7z" />
+      </svg>
+    ),
+  },
+  {
     text: "Paket Langganan",
     href: "/menu/paket-langganan",
     icon: (className) => (

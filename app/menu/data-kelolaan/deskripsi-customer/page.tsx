@@ -3,7 +3,12 @@
 import React, { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getLeadInteractions, getLeadTrainings, getLeadClosings, fetchOwnerOutlets } from "@/app/lib/api";
+import {
+  listLeadInteractions as getLeadInteractions,
+  listLeadTrainings as getLeadTrainings,
+  listLeadClosings as getLeadClosings,
+} from "@/app/lib/api/leads";
+import { listOutlets } from "@/app/lib/api/owners";
 
 type CallHistoryItem = {
   waktuCall: string;
@@ -589,9 +594,9 @@ function DeskripsiLanggananContent() {
 
   useEffect(() => {
     if (customer.ownerId) {
-      fetchOwnerOutlets(customer.ownerId).then(data => {
-        if (data) {
-          setRealOutlets(data.map(o => ({
+      listOutlets(customer.ownerId).then(({ items }) => {
+        if (items) {
+          setRealOutlets(items.map(o => ({
             namaOutlet: o.name,
             noHpOutlet: o.phone || ""
           })));

@@ -4,7 +4,7 @@ import React, { useMemo, useEffect } from "react";
 import type { CallCustomer } from "../../page";
 import { INITIAL_PAKETS, INITIAL_MASTER_PROMOS, KATEGORI_LABELS } from "@/app/lib/paket-langganan-data";
 import { Receipt, CalendarDays, CheckCircle2, Package } from "lucide-react";
-import type { CatalogPackage, CatalogPlan, CatalogPromotion } from "@/app/lib/api";
+import type { CatalogPackage, CatalogPlan, CatalogPromotion } from "@/app/lib/api/catalog";
 
 export type Remark3SalesPayload = {
   packageType: string;    // display: package code/name (for UI)

@@ -37,6 +37,11 @@ const MENU_PERMISSIONS: Record<string, string[] | null> = {
   "/": null,
   "/menu/sop": null,
   "/menu/data-kelolaan": ["leads.work"],
+  // Kelolaan Mitra (menu partner) masih 100% mock — belum ada endpoint backend
+  // yang disambungkan, jadi belum ada permission nyata untuk digatekan.
+  // Dibuka untuk semua pengguna login sampai integrasi (FE-08, mengikuti
+  // Sprint 11 backend) menetapkan permission yang tepat.
+  "/menu/kelolaan-mitra": null,
   "/menu/paket-langganan": ["catalog.manage"],
   "/menu/laporan-penjualan": ["reports.read_all", "reports.read_own"],
   "/menu/setting": null,

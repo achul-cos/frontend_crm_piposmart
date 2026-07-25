@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { getCatalogPackages, getCatalogPlans, getEligiblePromotions, type CatalogPackage, type CatalogPlan, type CatalogPromotion } from "@/app/lib/api";
+import {
+  listCatalogPackages as getCatalogPackages,
+  listCatalogPlans as getCatalogPlans,
+  listEligiblePromotions as getEligiblePromotions,
+  type CatalogPackage,
+  type CatalogPlan,
+  type CatalogPromotion,
+} from "@/app/lib/api/catalog";
 import RemarkOptionsSection, {
   getRemarkLabelFromValue,
   getRemarkScoreFromValue,

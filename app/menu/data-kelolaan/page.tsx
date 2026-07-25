@@ -1,11 +1,27 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Filter, Lock, RefreshCw, Search } from "lucide-react";
+import Link from "next/link";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  Filter,
+  Lock,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
 
 import { listLeads, type ListLeadsParams } from "@/app/lib/api/leads";
+import { softDeleteOwner } from "@/app/lib/api/owners";
 import { toNasabahItems, displayValue } from "@/app/lib/mappers/nasabah";
+import { useSession } from "@/app/lib/auth/session";
+import { can } from "@/app/lib/auth/rbac";
 import Badge, { stageTone } from "@/app/components/ui/Badge";
 import Pagination from "@/app/components/ui/Pagination";
 import {
@@ -15,16 +31,16 @@ import {
 } from "@/app/components/ui/states";
 
 /**
- * Kelolaan Customer — versi terintegrasi (Sprint FE-01).
+ * Kelolaan Customer — versi terintegrasi (Sprint FE-01, alur tulis Sprint
+ * FE-02).
  *
  * Membaca data ASLI dari `GET /api/v1/leads`. Paginasi, pencarian, dan filter
  * dikirim ke server (bukan memfilter array di memory seperti versi mock).
  *
- * Scope FE-01 sengaja READ-ONLY: tombol tulis (tambah/edit/hapus/assign)
- * dinonaktifkan dan diberi keterangan "tersedia di FE-02". Ini menjaga
- * kejujuran — begitu tabel menampilkan data asli, tidak boleh ada aksi yang
- * diam-diam menulis ke localStorage. Versi mock yang lama tetap tersimpan di
- * `./legacy` sebagai referensi migrasi.
+ * Tambah/Edit memakai halaman `./form` (dibangun sesi paralel, sudah
+ * dimigrasikan FE-02 dari pola auth lama ke `app/lib/api/*`). Hapus memanggil
+ * soft-delete langsung dari sini. Versi mock lama tetap tersimpan di
+ * `./_legacy` sebagai referensi.
  */
 
 const STAGE_OPTIONS = [
@@ -42,25 +58,23 @@ const OWNERSHIP_OPTIONS = [
   { value: "unassigned", label: "Belum Ada PIC" },
 ];
 
-function DisabledActionHint() {
-  return (
-    <span
-      className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-gray-300"
-      title="Alur tulis (tambah/edit/hapus/assign) tersedia mulai Sprint FE-02"
-    >
-      <Lock className="h-3 w-3" />
-      FE-02
-    </span>
-  );
-}
-
 export default function DataKelolaanPage() {
+  const { permissions } = useSession();
+  const canManageOwners = can("owners.manage", permissions);
+  const queryClient = useQueryClient();
+
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("");
   const [ownership, setOwnership] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{
+    ownerId: number;
+    namaOwner: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const params = useMemo<ListLeadsParams>(
     () => ({
@@ -93,31 +107,72 @@ export default function DataKelolaanPage() {
     setQuery(searchInput.trim());
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await softDeleteOwner(deleteTarget.ownerId);
+      // Data berpindah ke Trash (soft-delete), bukan hilang permanen — bisa
+      // dipulihkan lewat halaman Trash. Invalidate supaya tabel refetch dan
+      // baris yang baru dihapus langsung hilang dari tampilan default.
+      await queryClient.invalidateQueries({ queryKey: ["leads"] });
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Gagal menghapus data.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-black tracking-tight text-gray-900">
-            Kelolaan Customer
-          </h1>
-          <Badge tone="success">Data Live • API</Badge>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black tracking-tight text-gray-900">
+              Kelolaan Customer
+            </h1>
+            <Badge tone="success">Data Live • API</Badge>
+          </div>
+          <p className="text-sm font-semibold text-gray-400">
+            Menampilkan lead pelanggan langsung dari database backend
+            (`/api/v1/leads`). Paginasi dan filter diproses di server.
+          </p>
         </div>
-        <p className="text-sm font-semibold text-gray-400">
-          Menampilkan lead pelanggan langsung dari database backend
-          (`/api/v1/leads`). Paginasi dan filter diproses di server.
-        </p>
+
+        {canManageOwners && (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/menu/data-kelolaan/trash"
+              className="flex h-10 items-center gap-1.5 rounded-xl border border-gray-100 bg-white px-4 text-xs font-black text-gray-500 transition hover:bg-gray-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Trash
+            </Link>
+            <Link
+              href="/menu/data-kelolaan/form"
+              className="flex h-10 items-center gap-1.5 rounded-xl bg-[#C92C1E] px-4 text-xs font-black text-white transition hover:bg-[#A82216]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Tambah Owner
+            </Link>
+          </div>
+        )}
       </div>
 
-      {/* Banner mode read-only */}
+      {/* Nilai kosong: field yang belum punya sumber data di backend */}
       <div className="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3">
         <Lock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
         <div className="text-xs font-semibold text-amber-800">
-          Mode baca-saja (Sprint FE-01). Aksi tambah, edit, hapus, dan
-          penugasan PIC akan diaktifkan pada Sprint FE-02. Nilai bertanda
-          <span className="mx-1 font-black">—</span>
-          berarti field tersebut belum memiliki sumber data di backend pada
-          sprint ini.
+          Nilai bertanda <span className="mx-1 font-black">—</span> berarti
+          field tersebut belum memiliki sumber data di backend pada sprint
+          ini.
         </div>
       </div>
 
@@ -177,8 +232,6 @@ export default function DataKelolaanPage() {
               />
               Refresh
             </button>
-
-            <DisabledActionHint />
           </div>
         </div>
       </div>
@@ -249,7 +302,40 @@ export default function DataKelolaanPage() {
                       {displayValue(item, "tanggalFu")}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <DisabledActionHint />
+                      {canManageOwners && item.leadId ? (
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={`/menu/data-kelolaan/form?id=${item.leadId}`}
+                            className="text-gray-500 transition hover:scale-110 hover:text-[#C92C1E]"
+                            title="Edit profil owner"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              item.ownerId &&
+                              setDeleteTarget({
+                                ownerId: item.ownerId,
+                                namaOwner: item.namaOwner || item.kodeOwner,
+                              })
+                            }
+                            disabled={!item.ownerId}
+                            className="text-gray-500 transition hover:scale-110 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                            title={
+                              item.ownerId
+                                ? "Hapus owner (soft-delete)"
+                                : "ID owner tidak tersedia"
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-semibold text-gray-300">
+                          —
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -270,6 +356,51 @@ export default function DataKelolaanPage() {
           />
         )}
       </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-black text-gray-900">
+              Hapus Owner?
+            </h3>
+            <p className="mt-2 text-sm font-medium text-gray-500">
+              <span className="font-black text-gray-700">
+                {deleteTarget.namaOwner}
+              </span>{" "}
+              akan dipindah ke Trash (soft-delete) — masih bisa dipulihkan
+              lewat halaman Trash.
+            </p>
+
+            {deleteError && (
+              <p className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+                className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={isDeleting}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeleting ? "Menghapus..." : "Hapus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

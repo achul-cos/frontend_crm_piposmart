@@ -68,3 +68,75 @@ export function listOutlets(
     `/owners/${ownerId}/outlets${buildQuery(params as QueryParams)}`,
   );
 }
+
+export type CreateOwnerPayload = Partial<
+  Pick<
+    Owner,
+    | "code"
+    | "name"
+    | "phone"
+    | "email"
+    | "brand_name"
+    | "province"
+    | "city"
+    | "address"
+  >
+>;
+
+export function createOwner(payload: CreateOwnerPayload): Promise<Owner> {
+  return apiFetch<Owner>("/owners", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateOwner(
+  ownerId: number,
+  payload: CreateOwnerPayload,
+): Promise<Owner> {
+  return apiFetch<Owner>(`/owners/${ownerId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function restoreOwner(ownerId: number): Promise<Owner> {
+  return apiFetch<Owner>(`/owners/${ownerId}/restore`, { method: "PATCH" });
+}
+
+/** Backend membalas `{status: "force_deleted"}`, bukan body kosong. */
+export function hardDeleteOwner(ownerId: number): Promise<{ status: string }> {
+  return apiFetch(`/owners/${ownerId}/force`, { method: "DELETE" });
+}
+
+/** Backend membalas `{status: "deleted"}`, bukan body kosong. */
+export function softDeleteOwner(ownerId: number): Promise<{ status: string }> {
+  return apiFetch(`/owners/${ownerId}`, { method: "DELETE" });
+}
+
+export type CreateOutletPayload = {
+  code: string;
+  name: string;
+  phone?: string;
+  address?: string;
+};
+
+export function bulkCreateOutlets(
+  ownerId: number,
+  items: CreateOutletPayload[],
+): Promise<unknown> {
+  return apiFetch(`/owners/${ownerId}/outlets/bulk`, {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+}
+
+export function bulkForceDeleteOutlets(
+  ownerId: number,
+  ids: number[],
+): Promise<unknown> {
+  return apiFetch(`/owners/${ownerId}/outlets/bulk/force`, {
+    method: "DELETE",
+    body: JSON.stringify({ ids }),
+  });
+}
