@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LIST_PIC } from "../dummy/page";
+import { getLeads, createOwner, updateOwner, bulkCreateOwnerOutlets, fetchOwnerOutlets, getSalesList, getSupervisorList, assignSalesToLead, assignSupervisorToLead, getLead, bulkForceDeleteOutlets, getProfile, type CreateLeadRequest, type UserResponse } from "@/app/lib/api";
 
 type OwnerOutletItem = {
   namaOutlet: string;
@@ -11,6 +11,7 @@ type OwnerOutletItem = {
 };
 
 interface NasabahItem {
+  ownerId?: number;
   totalFu: number;
   tanggalFu: string;
   tahun: string;
@@ -431,14 +432,49 @@ export default function FormInputDummyPage() {
   });
   const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
   const [outletRows, setOutletRows] = useState<OwnerOutletItem[]>([]);
+  const [salesList, setSalesList] = useState<UserResponse[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
+  const [loggedInUser, setLoggedInUser] = useState("Satria");
+  const [loggedInRole, setLoggedInRole] = useState("Developer");
+  const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(loggedInRole);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const userName = localStorage.getItem("piposmart_user_name") || "Satria";
+    const userRole = localStorage.getItem("piposmart_user_role") || "Developer";
+
+    setLoggedInUser(userName);
+    setLoggedInRole(userRole);
+
+    const isAdminUser = ["Developer", "Admin", "ADMIN", "Direktur"].includes(userRole);
+
+    if (isAdminUser) {
+      getSupervisorList().then(setSupervisorList).catch(console.error);
+
+      if (userRole === "Supervisor" || userRole === "SUPERVISOR") {
+        getProfile().then(me => {
+          if (me && me.id) {
+            setSupervisorList(prev => {
+              if (prev.find(s => s.id === me.id)) return prev;
+              return [...prev, { id: me.id, name: me.name, role: "SUPERVISOR" } as UserResponse];
+            });
+          }
+        }).catch(console.error);
+      }
+    }
+
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id");
 
-    if (!idParam) return;
+    if (!idParam) {
+      // Create mode
+      if (!isAdminUser) {
+        setFormInput((prev) => ({ ...prev, pic: "No PIC" }));
+      }
+      return;
+    }
 
     const targetNo = Number(idParam);
     setEditId(targetNo);
@@ -448,14 +484,37 @@ export default function FormInputDummyPage() {
 
     try {
       const list: NasabahItem[] = JSON.parse(cached);
-      const matchItem = list.find((item) => item.no === targetNo);
+      const targetItem = list.find((row) => row.no === targetNo);
 
-      if (matchItem) {
-        setFormInput(matchItem);
-        setOutletRows(buildOutletRowsFromOwner(matchItem));
+      if (targetItem) {
+        let defaultPic = targetItem.pic;
+        if (!defaultPic || defaultPic === "-") {
+          defaultPic = "No PIC";
+        }
+        setFormInput((prev) => ({
+          ...prev,
+          ...targetItem,
+          pic: defaultPic,
+        }));
+          
+        if (targetItem.ownerId) {
+          fetchOwnerOutlets(targetItem.ownerId).then(outletsData => {
+            if (outletsData && outletsData.length > 0) {
+              setOutletRows(outletsData.map(o => ({
+                namaOutlet: o.name,
+                noHpOutlet: o.phone || ""
+              })));
+            } else {
+              setOutletRows([{ namaOutlet: "", noHpOutlet: "" }]);
+            }
+          }).catch(console.error);
+        } else {
+          const outlets = buildOutletRowsFromOwner(targetItem);
+          setOutletRows(outlets.length > 0 ? outlets : [{ namaOutlet: "", noHpOutlet: "" }]);
+        }
       }
     } catch {
-      setFormInput((prev) => prev);
+      // ignore
     }
   }, []);
 
@@ -466,6 +525,7 @@ export default function FormInputDummyPage() {
 
     if (name === "kodeOwner") {
       const matchedOwner = getOwnerProfileByKodeOwner(value);
+      const matchedOutlets = buildOutletRowsFromOwner(matchedOwner);
 
       setFormInput((prev) => ({
         ...prev,
@@ -473,14 +533,14 @@ export default function FormInputDummyPage() {
         namaOwner: matchedOwner?.namaOwner || "",
         projectBrand: matchedOwner?.projectBrand || "",
         noHpOwner: matchedOwner?.noHpOwner || "",
-        noHpOutlet: matchedOwner?.noHpOutlet || "",
+        noHpOutlet: matchedOutlets[0]?.noHpOutlet || matchedOwner?.noHpOutlet || "",
         pic: matchedOwner?.pic || "No PIC",
         sumberNasabah: matchedOwner?.sumberNasabah || "Instagram",
-        outlet: "",
-        outlets: [],
+        outlet: matchedOutlets[0]?.namaOutlet || matchedOwner?.outlet || "",
+        outlets: matchedOutlets,
       }));
 
-      setOutletRows([]);
+      setOutletRows(matchedOutlets.length > 0 ? matchedOutlets : [{ namaOutlet: "", noHpOutlet: "" }]);
       setValidationErrors((prev) => ({
         ...prev,
         kodeOwner: "",
@@ -572,9 +632,11 @@ export default function FormInputDummyPage() {
     });
   };
 
-  const handleSaveData = (event: React.FormEvent) => {
-    event.preventDefault();
-
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
+    
     const normalizedOutlets = normalizeOutletRows(outletRows);
     const existingOutlets = getExistingOutletsByKodeOwner(formInput.kodeOwner);
     const mergedOutlets = Array.from(
@@ -609,142 +671,112 @@ export default function FormInputDummyPage() {
 
     if (Object.values(errors).some(Boolean)) {
       setValidationErrors(errors);
+      setIsSaving(false);
       return;
     }
 
     setValidationErrors({});
 
-    const cached = localStorage.getItem("piposmart_nasabah_data");
-    let currentList: NasabahItem[] = [];
+    try {
+      if (editId !== null) {
+        // Cari actual Owner ID melalui data Lead
+        let actualOwnerId = null;
+        try {
+          const leadData = await getLead(editId);
+          if (leadData?.owner?.id) {
+            actualOwnerId = leadData.owner.id;
+          }
+        } catch (e) {
+          console.error("Gagal mengambil data Lead", e);
+        }
 
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        currentList = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        currentList = [];
-      }
-    }
+        if (!actualOwnerId) {
+          throw new Error("Gagal menemukan ID Owner untuk Lead ini. Pastikan data tersinkronisasi.");
+        }
 
-    const getNextNo = (list: NasabahItem[]) =>
-      list.length > 0
-        ? Math.max(...list.map((item) => Number(item.no) || 0)) + 1
-        : 1;
-
-    if (editId !== null) {
-      currentList = currentList.map((item) =>
-        item.no === editId
-          ? {
-              ...item,
-              kodeOwner: nextFormInput.kodeOwner || "",
-              namaOwner: nextFormInput.namaOwner || "",
-              projectBrand: nextFormInput.projectBrand || "",
-              outlet: nextFormInput.outlet || "",
-              outlets: mergedOutlets,
-              noHpOwner: nextFormInput.noHpOwner || "",
-              noHpOutlet: normalizedOutlets[0]?.noHpOutlet || nextFormInput.noHpOutlet || "",
-              pic: nextFormInput.pic || "Satria",
-              sumberNasabah: nextFormInput.sumberNasabah || "Instagram",
-              remarks: nextFormInput.remarks || "0",
-              scor: Number(nextFormInput.scor ?? 0),
-              tanggalFu: getToday(),
-              tahun: getCurrentYear(),
-              bulan: getCurrentMonthName(),
-              tanggalDibagikan: getToday(),
-              createDateProject: getToday(),
-            }
-          : item,
-      );
-
-      const existingOutletNames = new Set(
-        currentList
-          .filter(
-            (item) =>
-              String(item.kodeOwner || "").trim() ===
-              String(nextFormInput.kodeOwner || "").trim(),
-          )
-          .map((item) => String(item.outlet || "").trim().toLowerCase())
-          .filter(Boolean),
-      );
-
-      normalizedOutlets.forEach((outletItem) => {
-        const outletName = outletItem.namaOutlet.trim();
-        const outletKey = outletName.toLowerCase();
-
-        if (!outletName || existingOutletNames.has(outletKey)) return;
-
-        const nextNo = getNextNo(currentList);
-
-        currentList.push({
-          ...(currentList.find((item) => item.no === editId) as NasabahItem),
-          no: nextNo,
-          outlet: outletName,
-          outlets: mergedOutlets,
-          noHpOutlet: outletItem.noHpOutlet || "",
-          totalTransaksi: 0,
-          tanggalFu: getToday(),
-          tahun: getCurrentYear(),
-          bulan: getCurrentMonthName(),
-          tanggalDibagikan: getToday(),
-          createDateProject: getToday(),
-        });
-
-        existingOutletNames.add(outletKey);
-      });
-
-      alert("Data profil dan outlet tambahan berhasil diperbarui.");
-    } else {
-      normalizedOutlets.forEach((outletItem, index) => {
-        const outletName = outletItem.namaOutlet.trim();
-
-        if (!outletName) return;
-
-        const nextNo = getNextNo(currentList);
-
-        const itemBaru: NasabahItem = {
-          totalFu: 0,
-          tanggalFu: getToday(),
-          tahun: getCurrentYear(),
-          bulan: getCurrentMonthName(),
-          no: nextNo,
-          pic: nextFormInput.pic || "Satria",
-          tanggalDibagikan: getToday(),
-          statusAkun: "Akun Baru",
-          kodeBaris: "",
-          kodeOwner: nextFormInput.kodeOwner || "",
-          namaOwner: nextFormInput.namaOwner || "",
-          projectBrand: nextFormInput.projectBrand || "",
-          outlet: outletName,
-          outlets: mergedOutlets,
-          noHpOwner: nextFormInput.noHpOwner || "",
-          noHpOutlet: outletItem.noHpOutlet || "",
-          createDateProject: getToday(),
-          expiredDate: "",
-          totalTransaksi: 0,
-          scor: Number(nextFormInput.scor ?? 0),
-          callStatus: "PENDING",
-          chatStatus: "PENDING",
-          validitas: "VALID",
-          remarks: nextFormInput.remarks || "0",
-          sumberNasabah: nextFormInput.sumberNasabah || "Instagram",
-          finalisasiClosing: "",
-          skemaId: "",
-          nominal: 0,
-          noted: "",
+        const payloadUpdate = {
+          code: nextFormInput.kodeOwner || "",
+          name: nextFormInput.namaOwner || "",
+          brand_name: nextFormInput.projectBrand || "",
+          phone: nextFormInput.noHpOwner || "",
         };
+        await updateOwner(actualOwnerId, payloadUpdate);
 
-        currentList.push(itemBaru);
-      });
+        // Hapus outlet lama lalu buat baru agar ter-update dengan benar
+        try {
+          const existingOutletsData = await fetchOwnerOutlets(actualOwnerId);
+          if (existingOutletsData && existingOutletsData.length > 0) {
+            const existingIds = existingOutletsData.map(o => o.id);
+            await bulkForceDeleteOutlets(actualOwnerId, existingIds);
+          }
+        } catch (err) {
+          console.error("Gagal menghapus outlet lama", err);
+        }
 
-      alert(
-        normalizedOutlets.length > 1
-          ? `${normalizedOutlets.length} outlet berhasil ditambahkan.`
-          : "Data profil berhasil ditambahkan.",
-      );
+        const outletsPayload = normalizedOutlets.map((o, idx) => ({
+          code: `${nextFormInput.kodeOwner || "OUT"}-${idx + 1}`,
+          name: o.namaOutlet,
+          phone: o.noHpOutlet
+        }));
+        await bulkCreateOwnerOutlets(actualOwnerId, outletsPayload);
+
+        // Jika PIC berubah, assign PIC baru (Admin hanya bisa assign ke Supervisor)
+        if (nextFormInput.pic && nextFormInput.pic !== "No PIC") {
+          const targetPicUser = supervisorList.find(s => s.name === nextFormInput.pic);
+          if (targetPicUser) {
+            try {
+              await assignSupervisorToLead(editId, targetPicUser.id);
+            } catch (err) {
+              console.error("Gagal assign PIC", err);
+            }
+          }
+        }
+
+        alert("Data profil dan outlet berhasil diperbarui di backend.");
+      } else {
+        // 1. Buat Owner
+        const payloadCreateOwner = {
+          code: nextFormInput.kodeOwner || "",
+          name: nextFormInput.namaOwner || "",
+          brand_name: nextFormInput.projectBrand || "",
+          phone: nextFormInput.noHpOwner || "",
+        };
+        const createdOwner = await createOwner(payloadCreateOwner);
+        const newOwnerId = createdOwner.data.id;
+
+        // 2. Buat Outlet
+        if (newOwnerId) {
+          const outletsPayload = normalizedOutlets.map((o, idx) => ({
+            code: `${nextFormInput.kodeOwner || "OUT"}-${idx + 1}`,
+            name: o.namaOutlet,
+            phone: o.noHpOutlet
+          }));
+          await bulkCreateOwnerOutlets(newOwnerId, outletsPayload);
+        }
+
+        // 3. Ambil Lead yang otomatis dibuat oleh backend untuk Owner ini
+        const leads = await getLeads();
+        const autoCreatedLead = leads.find((l: any) => l.owner?.id === newOwnerId);
+
+        // 4. Assign PIC jika dipilih (hanya Supervisor)
+        const targetPicUser = nextFormInput.pic !== "No PIC" ? supervisorList.find(s => s.name === nextFormInput.pic) : null;
+        if (autoCreatedLead?.id && targetPicUser) {
+             await assignSupervisorToLead(autoCreatedLead.id, targetPicUser.id).catch(e => console.error(e));
+        }
+
+        // Catatan: source_type (sumberNasabah) saat ini diset otomatis ke "MANUAL" oleh backend
+        // dan belum ada endpoint UpdateLead untuk mengubahnya dari frontend.
+
+        alert("Data profil, prospek (Lead), dan outlet berhasil ditambahkan ke backend.");
+      }
+
+      router.push("/menu/data-kelolaan");
+    } catch (err) {
+      console.error("Gagal menyimpan ke backend", err);
+      alert(`Gagal menyimpan ke backend: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setIsSaving(false);
     }
-
-    localStorage.setItem("piposmart_nasabah_data", JSON.stringify(currentList));
-    router.push("/menu/data-kelolaan");
   };
 
 
@@ -791,7 +823,7 @@ export default function FormInputDummyPage() {
       </div>
 
       <form
-        onSubmit={handleSaveData}
+        onSubmit={handleSave}
         className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs"
       >
         <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/30 p-4">
@@ -866,17 +898,25 @@ export default function FormInputDummyPage() {
               <select
                 required
                 name="pic"
-                value={formInput.pic || "No PIC"}
+                value={formInput.pic || (isAdmin ? "No PIC" : loggedInUser)}
                 onChange={handleInputChange}
-                className={`w-full cursor-pointer rounded-xl border bg-white p-2.5 text-xs font-black text-[#C92C1E] focus:outline-none focus:border-[#C92C1E] ${
+                disabled={!isAdmin}
+                className={`w-full rounded-xl border p-2.5 text-xs font-black text-[#C92C1E] focus:outline-none focus:border-[#C92C1E] ${
                   validationErrors.pic ? "border-red-500 bg-red-50" : "border-gray-200"
-                }`}
+                } ${isAdmin ? "cursor-pointer bg-white" : "cursor-not-allowed bg-gray-100 opacity-80"}`}
               >
-                {LIST_PIC.map((pic) => (
-                  <option key={pic} value={pic}>
-                    {pic}
-                  </option>
-                ))}
+                {isAdmin ? (
+                  <>
+                    <option value="No PIC">Belum ada PIC</option>
+                    {supervisorList.map((pic) => (
+                      <option key={`${pic.id}-${pic.name}`} value={pic.name}>
+                        {pic.name}
+                      </option>
+                    ))}
+                  </>
+                ) : (
+                  <option value={formInput.pic || "No PIC"}>{formInput.pic || "No PIC"}</option>
+                )}
               </select>
               {validationErrors.pic && (
                 <p className="text-[10px] font-bold text-red-600">
@@ -895,9 +935,12 @@ export default function FormInputDummyPage() {
 
           <button
             type="submit"
-            className="cursor-pointer rounded-xl bg-[#C92C1E] px-6 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]"
+            disabled={isSaving || !isAdmin}
+            className={`cursor-pointer rounded-xl px-6 py-2.5 text-xs font-black text-white shadow-sm transition ${
+              isSaving || !isAdmin ? "bg-gray-400 cursor-not-allowed" : "bg-[#C92C1E] hover:bg-[#A82216]"
+            }`}
           >
-            {editId !== null ? "Simpan Perubahan" : "Tambah Owner"}
+            {isSaving ? "Menyimpan..." : (editId !== null ? "Simpan Perubahan" : "Tambah Owner")}
           </button>
         </div>
       </form>
