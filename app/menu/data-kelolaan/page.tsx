@@ -1,10 +1,28 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GrafikCustomer from "./grafik/page";
-import { generateDummyOwners, LIST_PIC } from "./dummy/page";
+import {
+  type OwnerListParams,
+  getLeads,
+  type BackendLead,
+  getSalesList,
+  getSupervisorList,
+  getProfile,
+  bulkAssignSupervisorToLeads,
+  bulkAssignSalesToLeads,
+  createInteraction,
+  createLeadClosing,
+  getLeadInteractions,
+  getLeadTrainings,
+  softDeleteOwner,
+  bulkSoftDeleteOwners,
+  updateOwner,
+  scheduleTraining,
+  type UserResponse,
+} from "@/app/lib/api";
 import CallPage, { CallFormResult } from "./call/page";
 import ActionButtons, { EditProfileModal } from "./action/page";
 
@@ -19,6 +37,7 @@ interface NasabahItem {
   statusAkun: string;
   kodeBaris: string;
   kodeOwner: string;
+  ownerId?: number;
   namaOwner: string;
   projectBrand: string;
   outlet: string;
@@ -37,6 +56,7 @@ interface NasabahItem {
   skemaId?: string;
   nominal: number;
   noted: string;
+  outlets?: any[];
   callHistories?: {
     waktuCall: string;
     picSales: string;
@@ -174,11 +194,6 @@ type ProfileFieldKey = (typeof REQUIRED_PROFILE_FIELDS)[number]["key"];
 type ProfileValidationErrors = Partial<Record<ProfileFieldKey, string>>;
 
 const isValidInternationalPhone = (value?: string) => {
-  const phone = value?.trim() || "";
-  return /^\+\d{1,3}\d{6,14}$/.test(phone);
-};
-
-const isValidInternationalPhone = (value?: string) => {
   const digitsOnly = String(value || "").replace(/\D/g, "");
 
   return digitsOnly.length >= 8 && digitsOnly.length <= 16;
@@ -206,16 +221,14 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
   return errors;
 };
 
-
-
-
 const getOwnerFilterDate = (item: Partial<NasabahItem>) => {
-  return (
+  const rawDate = (
     item.tanggalFu ||
     item.createDateProject ||
     item.tanggalDibagikan ||
     ""
   );
+  return rawDate ? rawDate.split("T")[0] : "";
 };
 
 const getOwnerFilterMonth = (item: Partial<NasabahItem>) => {
@@ -229,7 +242,6 @@ const getOwnerFilterMonth = (item: Partial<NasabahItem>) => {
   return item.bulan || "";
 };
 
-
 const TrashIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -242,7 +254,6 @@ const EditIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 7.125L16.875 4.5" />
   </svg>
 );
-
 
 const UserIcon = () => (
   <svg className="w-3.5 h-3.5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -273,9 +284,6 @@ const RefreshIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.253 8H18" />
   </svg>
 );
-
-
-
 
 function getQuickSkorBadgeClass(item: NasabahItem) {
   const value = getSkorValueFromItem(item);
@@ -327,8 +335,6 @@ function SkorBadge({ item }: { item: NasabahItem }) {
   );
 }
 
-
-
 function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "phone" | "sales" }) {
   const className = "h-4 w-4 text-[#C92C1E]";
 
@@ -379,8 +385,6 @@ function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "pho
   );
 }
 
-
-
 function SummaryMetricCard({
   title,
   value,
@@ -417,6 +421,13 @@ export default function DataKelolaanPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [salesList, setSalesList] = useState<UserResponse[]>([]);
+  const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
+
+  const combinedPicList = useMemo(() => {
+    return [...supervisorList, ...salesList];
+  }, [supervisorList, salesList]);
 
   const [filterMode, setFilterMode] = useState<"harian" | "bulanan">("harian");
 
@@ -452,21 +463,82 @@ export default function DataKelolaanPage() {
   const [loggedInRole, setLoggedInRole] = useState("Developer");
   const [activeTodayDate, setActiveTodayDate] = useState(() => getTodayInputDate());
 
+  const mapBackendLeadToNasabahItem = useCallback((lead: BackendLead): NasabahItem => {
+    return {
+      no: lead.id,
+      pic: lead.current_owner?.name || "-",
+      tanggalDibagikan: lead.created_at,
+      statusAkun: lead.status,
+      kodeBaris: lead.code,
+      kodeOwner: lead.owner?.code || "-",
+      ownerId: lead.owner?.id,
+      namaOwner: lead.owner?.name || "-",
+      projectBrand: lead.owner?.brand_name || "-",
+      outlet: String(lead.outlet_id || "-"),
+      noHpOwner: lead.owner?.phone || "-",
+      noHpOutlet: "-",
+      createDateProject: lead.created_at,
+      expiredDate: "-",
+      totalTransaksi: 0,
+      scor: lead.current_score || 0,
+      callStatus: lead.stage,
+      chatStatus: lead.status,
+      validitas: "Valid",
+      remarks: "-",
+      sumberNasabah: lead.source_type,
+      finalisasiClosing: "-",
+      nominal: 0,
+      noted: "-",
+      outlets: [],
+      totalFu: 0,
+      tanggalFu: "",
+      tahun: new Date().getFullYear().toString(),
+      bulan: (new Date().getMonth() + 1).toString().padStart(2, '0'),
+    };
+  }, []);
+
+  const loadOwnersFromBackend = useCallback(() => {
+    setIsLoading(true);
+    getLeads()
+      .then((leads) => {
+        const mappedData = leads.map(mapBackendLeadToNasabahItem);
+        setDataNasabah(mappedData);
+        localStorage.setItem("piposmart_nasabah_data", JSON.stringify(mappedData));
+      })
+      .catch((err) => {
+        console.error("Gagal memuat lead dari backend:", err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [mapBackendLeadToNasabahItem]);
+
   useEffect(() => {
     const userName = localStorage.getItem("piposmart_user_name");
-    const userRole = localStorage.getItem("piposmart_user_role");
+    const currentUserRole = localStorage.getItem("piposmart_user_role");
 
     if (userName) setLoggedInUser(userName);
-    if (userRole) setLoggedInRole(userRole);
+    if (currentUserRole) setLoggedInRole(currentUserRole);
 
-    const cached = localStorage.getItem("piposmart_nasabah_data");
-    if (cached) {
-      try {
-        setDataNasabah(JSON.parse(cached));
-      } catch {
-        setDataNasabah([]);
-      }
+    const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(currentUserRole || "");
+    const isSupervisor = ["Supervisor", "SUPERVISOR"].includes(currentUserRole || "");
+
+    if (isAdmin) {
+      getSalesList().then(setSalesList).catch(console.error);
+      getSupervisorList().then(setSupervisorList).catch(console.error);
+    } else if (isSupervisor) {
+      getSalesList().then(setSalesList).catch(console.error);
+      getProfile().then(me => {
+        if (me && me.id) {
+          setSupervisorList(prev => {
+            if (prev.find(s => s.id === me.id)) return prev;
+            return [...prev, { id: me.id, name: me.name, role_code: "SUPERVISOR" } as unknown as UserResponse];
+          });
+        }
+      }).catch(console.error);
     }
+
+    loadOwnersFromBackend();
 
     const deletedCached = localStorage.getItem("piposmart_deleted_nasabah_data");
     if (deletedCached) {
@@ -477,7 +549,7 @@ export default function DataKelolaanPage() {
         setTrashCount(0);
       }
     }
-  }, []);
+  }, [loadOwnersFromBackend]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -520,16 +592,6 @@ export default function DataKelolaanPage() {
   const saveDataNasabah = (nextData: NasabahItem[]) => {
     setDataNasabah(nextData);
     localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
-  };
-
-  const handleGenerateDummy = () => {
-    const mockExcelData: NasabahItem[] = generateDummyOwners(1000);
-
-    saveDataNasabah(mockExcelData);
-    setTrashCount(0);
-    localStorage.removeItem("piposmart_deleted_nasabah_data");
-
-    alert("Berhasil inject 1000 data dummy owner.");
   };
 
   const handleExportData = () => {
@@ -582,7 +644,6 @@ export default function DataKelolaanPage() {
 
     if (action === "delete") {
       setDeleteTargetMode("page");
-      setDeleteCustomLimit(String(Math.min(rowsPerPage, filteredData.length || 1)));
     }
   };
 
@@ -600,15 +661,11 @@ export default function DataKelolaanPage() {
     );
   };
 
-  const moveItemsToTrash = (itemsToDelete: NasabahItem[]) => {
+  const moveItemsToTrash = async (itemsToDelete: NasabahItem[]) => {
     if (itemsToDelete.length === 0) {
       alert("Belum ada data yang dipilih untuk dihapus.");
       return;
     }
-
-    const deleteIds = new Set(itemsToDelete.map((item) => item.no));
-    const nextData = dataNasabah.filter((item) => !deleteIds.has(item.no));
-
     const oldTrashRaw = localStorage.getItem("piposmart_deleted_nasabah_data");
     let oldTrash: NasabahItem[] = [];
 
@@ -621,10 +678,11 @@ export default function DataKelolaanPage() {
       }
     }
 
-    const oldTrashIds = new Set(oldTrash.map((item) => item.no));
+    const deleteSet = new Set(itemsToDelete.map((i) => i.no));
+    const nextData = dataNasabah.filter((row) => !deleteSet.has(row.no));
     const nextTrash = [
-      ...itemsToDelete.filter((item) => !oldTrashIds.has(item.no)),
-      ...oldTrash,
+      ...itemsToDelete,
+      ...oldTrash.filter((row) => !deleteSet.has(row.no)),
     ];
 
     saveDataNasabah(nextData);
@@ -634,6 +692,17 @@ export default function DataKelolaanPage() {
     setSelectedIds([]);
     setSelectionMode(false);
     setSelectionAction(null);
+
+    // Call API to soft delete
+    const ownerIds = itemsToDelete.map(item => item.ownerId).filter((id): id is number => id !== undefined);
+    if (ownerIds.length > 0) {
+      try {
+        await bulkSoftDeleteOwners(ownerIds);
+        console.log("Successfully soft deleted owners via API");
+      } catch (err) {
+        console.error("Failed to soft delete owners via API", err);
+      }
+    }
 
     alert(`${itemsToDelete.length} data dipindahkan ke Riwayat Hapus.`);
   };
@@ -688,7 +757,7 @@ export default function DataKelolaanPage() {
     moveItemsToTrash(targetItems);
   };
 
-  const handleHapusSatuData = (item: NasabahItem) => {
+  const handleHapusSatuData = async (item: NasabahItem) => {
     const yakin = confirm(
       `Yakin ingin memindahkan data "${item.namaOwner}" ke Riwayat Hapus?`,
     );
@@ -714,22 +783,165 @@ export default function DataKelolaanPage() {
     setTrashCount(nextTrash.length);
     localStorage.setItem("piposmart_deleted_nasabah_data", JSON.stringify(nextTrash));
 
+    if (item.ownerId) {
+      try {
+        await softDeleteOwner(item.ownerId);
+      } catch (err) {
+        console.error("Failed to soft delete owner via API", err);
+      }
+    }
+
     alert("Data dipindahkan ke Riwayat Hapus.");
   };
 
-  const handleOpenCallAction = (item: NasabahItem) => {
-    setCallModalItem(item);
+  const handleOpenCallAction = async (item: NasabahItem) => {
+    try {
+      // Tarik riwayat interaksi & training dari backend secara paralel
+      const [interactions, trainings] = await Promise.all([
+        getLeadInteractions(item.no),
+        getLeadTrainings(item.no),
+      ]);
+
+      // Map riwayat call/chat dari backend → format callHistories
+      const callHistories = interactions.map((i) => ({
+        waktuCall: new Date(i.interaction_at).toLocaleString("id-ID"),
+        picSales: i.sales?.name || i.created_by?.name || "-",
+        remark: i.remark_score !== undefined && i.remark_score !== null
+          ? String(i.remark_score)
+          : "-",
+        conclusion: i.note || "-",
+      }));
+
+      // Map riwayat training dari backend → format trainingHistories
+      const trainingHistories = trainings.map((t) => ({
+        waktuTraining: t.scheduled_at
+          ? new Date(t.scheduled_at).toLocaleString("id-ID")
+          : "-",
+        lokasiTraining: t.location || t.training_type || "-",
+      }));
+
+      // Merge ke item agar tampil di modal
+      const enrichedItem: NasabahItem = {
+        ...item,
+        callHistories,
+        trainingHistories,
+        totalFu: callHistories.length,
+      };
+
+      setCallModalItem(enrichedItem);
+    } catch (err) {
+      console.error("Gagal memuat riwayat interaksi:", err);
+      // Tetap buka modal meski gagal memuat riwayat
+      setCallModalItem(item);
+    }
   };
 
-  const handleSaveCallResult = (result: CallFormResult) => {
-    const nextData = dataNasabah.map((item) =>
-      item.no === result.customerId
-        ? {
-            ...item,
-            ...result.nextCustomer,
+  const handleSaveCallResult = async (result: CallFormResult) => {
+    // 1. Panggil API jika remark-nya valid
+    try {
+      const { rawPayload, customerId } = result;
+      if (rawPayload && rawPayload.selectedRemarkScore === "3") {
+        if (!rawPayload.salesPayload) throw new Error("Missing sales payload for closing");
+        
+        // Use backend plan_id if available, else parse from packageType (legacy fallback)
+        const planId = rawPayload.salesPayload.planId
+          || parseInt(rawPayload.salesPayload.packageType.replace(/\D/g, "")) || 1;
+        
+        await createLeadClosing(customerId, {
+          plan_id: planId,
+          promotion_id: rawPayload.salesPayload.promotionId ?? undefined,
+          discount_amount: String(rawPayload.salesPayload.discount || 0),
+          unique_transfer_code: rawPayload.salesPayload.transferCode || 0,
+          closed_at: new Date(rawPayload.callTime).toISOString(),
+          interaction_type: "CALL",
+          contact_name: result.nextCustomer?.namaOwner || "-",
+          contact_phone: result.nextCustomer?.noHpOwner || "-",
+          customer_response: rawPayload.conclusion || "-",
+          note: `Call: ${rawPayload.callStatus}, Chat: ${rawPayload.chatStatus}`,
+        });
+      } else if (
+        rawPayload &&
+        rawPayload.selectedRemarkScore &&
+        rawPayload.selectedRemarkScore !== "3"
+      ) {
+        await createInteraction(customerId, {
+          type: "CALL", // default to call
+          remark_score: Number(rawPayload.selectedRemarkScore),
+          note: `Call: ${rawPayload.callStatus}, Chat: ${rawPayload.chatStatus} - ${rawPayload.conclusion}`,
+          follow_up_at: rawPayload.followUpDate ? rawPayload.followUpDate + "T00:00:00Z" : undefined,
+          interaction_at: new Date(rawPayload.callTime).toISOString(),
+        });
+
+        if (rawPayload.selectedRemarkScore === "2" && rawPayload.trainingPayload) {
+          const sType = rawPayload.trainingPayload.sessionType.toLowerCase();
+          const mappedType = sType.includes("offline") ? "OFFLINE" : "ONLINE";
+          
+          await scheduleTraining(customerId, {
+            training_type: mappedType,
+            scheduled_at: new Date(rawPayload.trainingPayload.schedule).toISOString(),
+            location: rawPayload.trainingPayload.sessionType,
+            note: rawPayload.conclusion,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Gagal memanggil API createInteraction:", err);
+      alert(`Gagal menyimpan interaksi ke server: ${err instanceof Error ? err.message : 'Unknown'}`);
+      return;
+    }
+
+    // 2. Update state lokal
+    const nextData = dataNasabah.map((item) => {
+      if (item.no === result.customerId) {
+        const raw = result.rawPayload;
+        let updatedCallHistories = item.callHistories || [];
+        let updatedTrainingHistories = item.trainingHistories || [];
+        let updatedPurchaseHistories = item.purchaseHistories || [];
+
+        if (raw) {
+          updatedCallHistories = [
+            ...updatedCallHistories,
+            {
+              waktuCall: new Date(raw.callTime).toLocaleString("id-ID"),
+              picSales: loggedInUser,
+              remark: raw.selectedRemarkScore,
+              conclusion: raw.conclusion,
+            },
+          ];
+
+          if (raw.selectedRemarkScore === "2" && raw.trainingPayload) {
+            updatedTrainingHistories = [
+              ...updatedTrainingHistories,
+              {
+                waktuTraining: raw.trainingPayload.schedule,
+                lokasiTraining: raw.trainingPayload.sessionType,
+              },
+            ];
           }
-        : item,
-    );
+
+          if (raw.selectedRemarkScore === "3" && raw.salesPayload) {
+            updatedPurchaseHistories = [
+              ...updatedPurchaseHistories,
+              {
+                paket: raw.salesPayload.packageType,
+                waktuMulai: new Date(raw.callTime).toLocaleString("id-ID"),
+                waktuBerakhir: "-",
+                hargaAktual: Number(raw.salesPayload.discount) || 0,
+              },
+            ];
+          }
+        }
+
+        return {
+          ...item,
+          ...result.nextCustomer,
+          callHistories: updatedCallHistories,
+          trainingHistories: updatedTrainingHistories,
+          purchaseHistories: updatedPurchaseHistories,
+        };
+      }
+      return item;
+    });
 
     saveDataNasabah(nextData);
     setCallModalItem(null);
@@ -752,7 +964,7 @@ export default function DataKelolaanPage() {
     setBulkSelectedPic("");
   };
 
-  const handleSaveBulkPic = (event: React.FormEvent) => {
+  const handleSaveBulkPic = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (selectedIds.length === 0) {
@@ -775,6 +987,21 @@ export default function DataKelolaanPage() {
     setSelectedIds([]);
     setSelectionMode(false);
     setSelectionAction(null);
+
+    const targetUser = combinedPicList.find(p => p.name === bulkSelectedPic);
+    if (targetUser) {
+      const ids = Array.from(selectedSet);
+      try {
+        if (targetUser.role === "SUPERVISOR" || targetUser.role === "Supervisor") {
+          await bulkAssignSupervisorToLeads(ids, targetUser.id);
+        } else {
+          await bulkAssignSalesToLeads(ids, targetUser.id);
+        }
+      } catch (err: any) {
+        console.error(err);
+        alert(`Gagal menyimpan PIC ke server: ${err?.message || err}`);
+      }
+    }
 
     alert(`${selectedSet.size} data berhasil diganti ke PIC ${bulkSelectedPic}.`);
   };
@@ -836,7 +1063,7 @@ export default function DataKelolaanPage() {
         (brandKeyword === "" ||
           item.projectBrand?.toLowerCase().includes(brandKeyword));
 
-      const matchesPic = picFilter === "Semua" || item.pic === picFilter;
+      const matchesPic = picFilter === "Semua" || (picFilter === "No PIC" ? isInvalidPic(item.pic) : item.pic === picFilter);
 
       const matchesSkor =
         skorFilter === "Semua" ||
@@ -1051,10 +1278,14 @@ export default function DataKelolaanPage() {
   };
 
   const openEditModal = (item: NasabahItem, mode: EditModalMode) => {
-    setEditingItem({ ...item });
-    setModalMode(mode);
-    setProfileValidationErrors({});
-    setEditModalOpen(true);
+    if (mode === "profil") {
+      router.push(`/menu/data-kelolaan/form?id=${item.no}`);
+    } else {
+      setEditingItem({ ...item });
+      setModalMode(mode);
+      setProfileValidationErrors({});
+      setEditModalOpen(true);
+    }
   };
 
   const closeEditModal = () => {
@@ -1076,7 +1307,7 @@ export default function DataKelolaanPage() {
   };
 
 
-  const handleSaveEditModal = (event: React.FormEvent) => {
+  const handleSaveEditModal = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!editingItem) return;
@@ -1189,6 +1420,38 @@ export default function DataKelolaanPage() {
     saveDataNasabah(nextData);
     closeEditModal();
 
+    if (normalizedEditingItem.ownerId && modalMode === "profil") {
+      try {
+        await updateOwner(normalizedEditingItem.ownerId, {
+          name: normalizedEditingItem.namaOwner,
+          phone: normalizedEditingItem.noHpOwner,
+          brand_name: normalizedEditingItem.projectBrand,
+        });
+        console.log("Successfully updated owner profile on backend");
+      } catch (err) {
+        console.error("Failed to update owner profile on backend", err);
+      }
+    }
+
+    if (normalizedEditingItem.pic && normalizedEditingItem.no) {
+      const originalItem = dataNasabah.find(item => item.no === normalizedEditingItem.no);
+      if (originalItem && originalItem.pic !== normalizedEditingItem.pic) {
+        const targetUser = combinedPicList.find(p => p.name === normalizedEditingItem.pic);
+        if (targetUser) {
+          try {
+            if (targetUser.role === "SUPERVISOR" || targetUser.role === "Supervisor") {
+              await bulkAssignSupervisorToLeads([normalizedEditingItem.no], targetUser.id);
+            } else {
+              await bulkAssignSalesToLeads([normalizedEditingItem.no], targetUser.id);
+            }
+            console.log("Successfully assigned PIC on backend");
+          } catch (err: any) {
+            console.error("Failed to assign PIC on backend", err?.message || err);
+          }
+        }
+      }
+    }
+
     alert("Data profil berhasil diperbarui.");
   };
 
@@ -1238,14 +1501,6 @@ export default function DataKelolaanPage() {
           >
             <DownloadIcon />
             Export Data
-          </button>
-
-          <button
-            onClick={handleGenerateDummy}
-            className="px-3.5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 transition shadow-xs cursor-pointer flex items-center gap-1.5"
-          >
-            <RefreshIcon />
-            Inject 1000 Dummy
           </button>
 
           <Link
@@ -1573,9 +1828,12 @@ export default function DataKelolaanPage() {
                           className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
                         >
                           <option value="Semua">Semua PIC</option>
-                          {LIST_PIC.map((pic) => (
-                            <option key={pic} value={pic}>
-                              {pic}
+                          <option value="Admin">Admin</option>
+                          <option value="Supervisor">Supervisor</option>
+                          <option value="No PIC">Belum Ada PIC</option>
+                          {combinedPicList.map((pic) => (
+                            <option key={`${pic.id}-${pic.name}`} value={pic.name}>
+                              {pic.name}
                             </option>
                           ))}
                         </select>
@@ -1801,9 +2059,9 @@ export default function DataKelolaanPage() {
                   className="w-full cursor-pointer rounded-xl border border-red-100 bg-white p-3 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
                 >
                   <option value="">Pilih PIC Sales</option>
-                  {LIST_PIC.map((pic) => (
-                    <option key={pic} value={pic}>
-                      {pic}
+                  {combinedPicList.map((pic) => (
+                    <option key={`${pic.id}-${pic.name}`} value={pic.name}>
+                      {pic.name}
                     </option>
                   ))}
                 </select>
@@ -1838,7 +2096,7 @@ export default function DataKelolaanPage() {
         open={editModalOpen}
         item={editingItem}
         errors={profileValidationErrors}
-        listPic={LIST_PIC}
+        listPic={combinedPicList.map(p => p.name)}
         onClose={closeEditModal}
         onSubmit={handleSaveEditModal}
         onChangeField={updateEditingField}
