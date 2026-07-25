@@ -20,7 +20,7 @@ export default function DeleteDialog({
         </div>
         <h3 className="text-center text-lg font-black text-gray-900">Hapus Promo?</h3>
         <p className="mt-2 text-center text-sm font-medium text-gray-500">
-          Promo <span className="font-black text-gray-700">&quot;{promo.namaPromo}&quot;</span> akan
+          Promo <span className="font-black text-gray-700">&quot;{promo?.namaPromo}&quot;</span> akan
           dihapus permanen. Tindakan ini tidak dapat dibatalkan.
         </p>
         <div className="mt-6 flex gap-3">
