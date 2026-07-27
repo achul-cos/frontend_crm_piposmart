@@ -1,565 +1,610 @@
-"use client";
+﻿"use client";
+
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import JenisMitraFormModal from "./form/page";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  createPartnerType,
+  createPartnerTypeCommissionRule,
+  deactivatePartnerTypeCommissionRule,
+  getCatalogPackages,
+  getCatalogPlans,
+  getPartnerType,
+  getPartnerTypeCommissionRule,
+  getProfile,
+  listPartnerTypeCommissionRules,
+  listPartnerTypes,
+  updatePartnerType,
+  type CatalogPackage,
+  type CatalogPlan,
+  type PartnerCommissionRuleItem,
+  type PartnerTypeItem,
+} from "@/app/lib/api";
 
-type JenisMitraItem = {
-  id: string;
-  jenisMitra: string;
-  paketBerlangganan: string;
-  hargaBerlangganan: number;
-  komisi: number;
+type TypeFormState = {
+  code: string;
+  name: string;
+  commissionMode: "PERCENTAGE" | "FIXED";
+  commissionValue: string;
+  description: string;
 };
 
-type JenisMitraForm = Omit<JenisMitraItem, "id">;
-
-const STORAGE_KEY = "piposmart_master_jenis_mitra";
-
-const PAKET_LANGGANAN = [
-  { paketBerlangganan: "Basic (12 Bulan)", hargaBerlangganan: 858000, referal: 120000, partnership: 150000, strategic: 240000 },
-  { paketBerlangganan: "Business (12 Bulan)", hargaBerlangganan: 1298000, referal: 180000, partnership: 210000, strategic: 320000 },
-  { paketBerlangganan: "Business (18 Bulan)", hargaBerlangganan: 1999000, referal: 270000, partnership: 315000, strategic: 480000 },
-  { paketBerlangganan: "Business (24 Bulan)", hargaBerlangganan: 2596000, referal: 360000, partnership: 420000, strategic: 640000 },
-  { paketBerlangganan: "Pro (12 Bulan)", hargaBerlangganan: 1688000, referal: 220000, partnership: 250000, strategic: 400000 },
-  { paketBerlangganan: "Pro (18 Bulan)", hargaBerlangganan: 2688000, referal: 330000, partnership: 375000, strategic: 600000 },
-  { paketBerlangganan: "Pro (24 Bulan)", hargaBerlangganan: 3368000, referal: 440000, partnership: 500000, strategic: 800000 },
-];
-
-const defaultJenisMitra: JenisMitraItem[] = PAKET_LANGGANAN.flatMap((paket) => [
-  {
-    id: `referal-${paket.paketBerlangganan.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-    jenisMitra: "Referal",
-    paketBerlangganan: paket.paketBerlangganan,
-    hargaBerlangganan: paket.hargaBerlangganan,
-    komisi: paket.referal,
-  },
-  {
-    id: `partnership-${paket.paketBerlangganan.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-    jenisMitra: "Partnership",
-    paketBerlangganan: paket.paketBerlangganan,
-    hargaBerlangganan: paket.hargaBerlangganan,
-    komisi: paket.partnership,
-  },
-  {
-    id: `strategic-${paket.paketBerlangganan.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-    jenisMitra: "Strategic",
-    paketBerlangganan: paket.paketBerlangganan,
-    hargaBerlangganan: paket.hargaBerlangganan,
-    komisi: paket.strategic,
-  },
-]);
-
-const emptyForm: JenisMitraForm = {
-  jenisMitra: "",
-  paketBerlangganan: "",
-  hargaBerlangganan: 0,
-  komisi: 0,
+type TierDraft = {
+  tier_order: number;
+  min_closings: number;
+  max_closings: string;
+  mode: "PERCENTAGE" | "FIXED";
+  value: string;
 };
 
-const formatRupiah = (value: number) => {
-  if (!value) return "Rp0";
-
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
+type RuleFormState = {
+  packageId: string;
+  mode: "PERCENTAGE" | "FIXED" | "TIER";
+  value: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+  tiers: TierDraft[];
 };
 
-const formatNumber = (value: number) => {
+const EMPTY_TYPE_FORM: TypeFormState = {
+  code: "",
+  name: "",
+  commissionMode: "PERCENTAGE",
+  commissionValue: "",
+  description: "",
+};
+
+const EMPTY_RULE_FORM: RuleFormState = {
+  packageId: "",
+  mode: "PERCENTAGE",
+  value: "",
+  effectiveFrom: "",
+  effectiveTo: "",
+  tiers: [
+    { tier_order: 1, min_closings: 1, max_closings: "", mode: "PERCENTAGE", value: "" },
+  ],
+};
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  return "Terjadi kesalahan yang tidak diketahui.";
+}
+
+function formatDateTime(value?: string | null) {
   if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
 
-  return new Intl.NumberFormat("id-ID").format(value);
-};
-
-const makeId = (jenisMitra: string, paket: string) => {
-  const slug = `${jenisMitra}-${paket}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-
-  return slug || `jenis-mitra-${Date.now()}`;
-};
-
-const normalizeJenisMitraName = (value: string) => {
-  const lower = String(value || "").toLowerCase();
-
-  if (lower.includes("refer")) return "Referal";
-  if (lower.includes("partner")) return "Partnership";
-  if (lower.includes("strateg")) return "Strategic";
-
-  return value || "Tanpa Nama";
-};
-
-const getJenisMitraTableStyle = (jenisMitra: string) => {
-  const normalized = normalizeJenisMitraName(jenisMitra).toLowerCase();
-
-  if (normalized.includes("refer")) {
-    return {
-      borderClass: "border-orange-100",
-      headerClass: "border-orange-100 bg-orange-50 text-orange-800",
-      titleClass: "text-orange-700",
-      totalClass: "text-orange-500",
-      valueBoxClass: "border-orange-100 bg-orange-50",
-      valueTextClass: "text-orange-700",
-    };
-  }
-
-  if (normalized.includes("partner")) {
-    return {
-      borderClass: "border-red-100",
-      headerClass: "border-red-100 bg-red-50 text-[#C92C1E]",
-      titleClass: "text-[#C92C1E]",
-      totalClass: "text-[#C92C1E]",
-      valueBoxClass: "border-red-100 bg-red-50",
-      valueTextClass: "text-[#C92C1E]",
-    };
-  }
-
-  if (normalized.includes("strateg")) {
-    return {
-      borderClass: "border-violet-100",
-      headerClass: "border-violet-100 bg-violet-50 text-violet-800",
-      titleClass: "text-violet-700",
-      totalClass: "text-violet-500",
-      valueBoxClass: "border-violet-100 bg-violet-50",
-      valueTextClass: "text-violet-700",
-    };
-  }
-
-  return {
-    borderClass: "border-gray-200",
-    headerClass: "border-gray-200 bg-gray-50 text-gray-700",
-    titleClass: "text-gray-700",
-    totalClass: "text-gray-500",
-    valueBoxClass: "border-gray-100 bg-gray-50",
-    valueTextClass: "text-gray-700",
-  };
-};
-
-const normalizeJenisMitraData = (items: unknown): JenisMitraItem[] => {
-  if (!Array.isArray(items)) return defaultJenisMitra;
-
-  const normalized = items.flatMap((item: any, index: number) => {
-    const paketBerlangganan = item.paketBerlangganan || item.paketLangganan || "";
-    const hargaBerlangganan = Number(item.hargaBerlangganan || 0);
-
-    if (!paketBerlangganan) return [];
-
-    if (item.jenisMitra || item.komisi) {
-      return [
-        {
-          id: item.id || `${makeId(item.jenisMitra || "jenis-mitra", paketBerlangganan)}-${Date.now()}-${index}`,
-          jenisMitra: item.jenisMitra || "Referal",
-          paketBerlangganan,
-          hargaBerlangganan,
-          komisi: Number(item.komisi || 0),
-        },
-      ];
-    }
-
-    const rows: JenisMitraItem[] = [];
-
-    if (Number(item.komisiReferral || 0) > 0) {
-      rows.push({
-        id: `${item.id || "legacy"}-referal-${index}`,
-        jenisMitra: "Referal",
-        paketBerlangganan,
-        hargaBerlangganan,
-        komisi: Number(item.komisiReferral || 0),
-      });
-    }
-
-    if (Number(item.komisiPartnership || 0) > 0) {
-      rows.push({
-        id: `${item.id || "legacy"}-partnership-${index}`,
-        jenisMitra: "Partnership",
-        paketBerlangganan,
-        hargaBerlangganan,
-        komisi: Number(item.komisiPartnership || 0),
-      });
-    }
-
-    if (Number(item.komisiStrategic || 0) > 0) {
-      rows.push({
-        id: `${item.id || "legacy"}-strategic-${index}`,
-        jenisMitra: "Strategic",
-        paketBerlangganan,
-        hargaBerlangganan,
-        komisi: Number(item.komisiStrategic || 0),
-      });
-    }
-
-    return rows;
-  });
-
-  return normalized.length ? normalized : defaultJenisMitra;
-};
+function formatFlatCommission(item?: PartnerTypeItem | null) {
+  if (!item) return "-";
+  const amount = Number(item.commission_value || 0);
+  if (item.commission_mode === "PERCENTAGE") return `${amount}%`;
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(amount);
+}
 
 export default function JenisMitraPage() {
-  const [jenisMitraData, setJenisMitraData] = useState<JenisMitraItem[]>([]);
+  const [currentRole, setCurrentRole] = useState("");
+  const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+  const [selectedType, setSelectedType] = useState<PartnerTypeItem | null>(null);
+  const [commissionRules, setCommissionRules] = useState<PartnerCommissionRuleItem[]>([]);
+  const [packages, setPackages] = useState<CatalogPackage[]>([]);
+  const [plans, setPlans] = useState<CatalogPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingType, setSavingType] = useState(false);
+  const [savingRule, setSavingRule] = useState(false);
+  const [pageError, setPageError] = useState("");
+  const [typeFormError, setTypeFormError] = useState("");
+  const [ruleFormError, setRuleFormError] = useState("");
+  const [typeFormSuccess, setTypeFormSuccess] = useState("");
+  const [ruleFormSuccess, setRuleFormSuccess] = useState("");
   const [search, setSearch] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<JenisMitraForm>(emptyForm);
+  const [showTypeForm, setShowTypeForm] = useState(false);
+  const [editingType, setEditingType] = useState<PartnerTypeItem | null>(null);
+  const [typeForm, setTypeForm] = useState<TypeFormState>(EMPTY_TYPE_FORM);
+  const [ruleForm, setRuleForm] = useState<RuleFormState>(EMPTY_RULE_FORM);
+
+  const canManage = currentRole === "" || currentRole === "ADMIN" || currentRole === "SUPERVISOR";
+
+  const selectedPackagePlans = useMemo(() => {
+    if (!ruleForm.packageId) return plans;
+    return plans.filter((plan) => plan.package?.id === Number(ruleForm.packageId));
+  }, [plans, ruleForm.packageId]);
+
+  const filteredPartnerTypes = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return partnerTypes;
+    return partnerTypes.filter((item) => [item.code, item.name, item.description || ""].join(" ").toLowerCase().includes(keyword));
+  }, [partnerTypes, search]);
+
+
+  const activeRuleCount = useMemo(() => {
+    return commissionRules.filter((rule) => rule.active).length;
+  }, [commissionRules]);
+
+  const loadSelectedType = async (typeId: number) => {
+    setLoading(true);
+    try {
+      const [typeDetail, ruleList] = await Promise.all([
+        getPartnerType(typeId),
+        listPartnerTypeCommissionRules(typeId),
+      ]);
+      const detailedRules = await Promise.all(
+        ruleList.items.map(async (rule) => {
+          try {
+            return await getPartnerTypeCommissionRule(typeId, rule.id);
+          } catch {
+            return rule;
+          }
+        }),
+      );
+      setSelectedType(typeDetail);
+      setCommissionRules(detailedRules);
+    } catch (error) {
+      setPageError(getErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reloadTypes = async (preferredId?: number | null) => {
+    const typesResult = await listPartnerTypes();
+    setPartnerTypes(typesResult.items);
+    const nextId = preferredId || typesResult.items[0]?.id || null;
+    setSelectedTypeId(nextId);
+    if (nextId) {
+      await loadSelectedType(nextId);
+    } else {
+      setSelectedType(null);
+      setCommissionRules([]);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const cached = localStorage.getItem(STORAGE_KEY);
-
-    if (cached) {
+    let cancelled = false;
+    const bootstrap = async () => {
+      setLoading(true);
+      setPageError("");
       try {
-        const parsed = normalizeJenisMitraData(JSON.parse(cached));
-        setJenisMitraData(parsed);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } catch {
-        setJenisMitraData(defaultJenisMitra);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultJenisMitra));
+        const [profileResult, packagesResult, plansResult, typesResult] = await Promise.allSettled([
+          getProfile(),
+          getCatalogPackages(),
+          getCatalogPlans(),
+          listPartnerTypes(),
+        ]);
+
+        if (cancelled) return;
+        setCurrentRole(profileResult.status === "fulfilled" ? profileResult.value.role || "" : typeof window !== "undefined" ? localStorage.getItem("piposmart_user_role") || "" : "");
+        setPackages(packagesResult.status === "fulfilled" ? packagesResult.value : []);
+        setPlans(plansResult.status === "fulfilled" ? plansResult.value : []);
+
+        if (typesResult.status === "fulfilled") {
+          setPartnerTypes(typesResult.value.items);
+          const firstId = typesResult.value.items[0]?.id || null;
+          setSelectedTypeId(firstId);
+          if (firstId) {
+            await loadSelectedType(firstId);
+          } else {
+            setLoading(false);
+          }
+        } else {
+          setPageError(getErrorMessage(typesResult.reason));
+          setLoading(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPageError(getErrorMessage(error));
+          setLoading(false);
+        }
       }
-    } else {
-      setJenisMitraData(defaultJenisMitra);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultJenisMitra));
-    }
+    };
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const saveJenisMitraData = (nextData: JenisMitraItem[]) => {
-    setJenisMitraData(nextData);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
+  useEffect(() => {
+    if (!selectedTypeId) return;
+    if (selectedType?.id === selectedTypeId) return;
+    void loadSelectedType(selectedTypeId);
+  }, [selectedTypeId]);
+
+  const startCreateType = () => {
+    setEditingType(null);
+    setTypeForm(EMPTY_TYPE_FORM);
+    setTypeFormError("");
+    setTypeFormSuccess("");
+    setShowTypeForm(true);
   };
 
-  const filteredData = useMemo(() => {
-    const keyword = search.toLowerCase().trim();
-
-    return jenisMitraData.filter((item) => {
-      return (
-        keyword === "" ||
-        item.jenisMitra.toLowerCase().includes(keyword) ||
-        item.paketBerlangganan.toLowerCase().includes(keyword)
-      );
+  const startEditType = () => {
+    if (!selectedType) return;
+    setEditingType(selectedType);
+    setTypeForm({
+      code: selectedType.code,
+      name: selectedType.name,
+      commissionMode: selectedType.commission_mode,
+      commissionValue: selectedType.commission_value,
+      description: selectedType.description || "",
     });
-  }, [jenisMitraData, search]);
-
-  const groupedJenisMitraData = useMemo(() => {
-    const grouped = new Map<string, JenisMitraItem[]>();
-
-    filteredData.forEach((item) => {
-      const key = item.jenisMitra.trim() || "Tanpa Nama";
-      const existing = grouped.get(key) || [];
-
-      grouped.set(key, [...existing, item]);
-    });
-
-    const priority = ["Referal", "Referral", "Partnership", "Strategic"];
-
-    return Array.from(grouped.entries()).sort(([firstName], [secondName]) => {
-      const firstPriority = priority.findIndex(
-        (item) => item.toLowerCase() === firstName.toLowerCase(),
-      );
-      const secondPriority = priority.findIndex(
-        (item) => item.toLowerCase() === secondName.toLowerCase(),
-      );
-
-      const safeFirstPriority = firstPriority === -1 ? 999 : firstPriority;
-      const safeSecondPriority = secondPriority === -1 ? 999 : secondPriority;
-
-      if (safeFirstPriority !== safeSecondPriority) {
-        return safeFirstPriority - safeSecondPriority;
-      }
-
-      return firstName.localeCompare(secondName);
-    });
-  }, [filteredData]);
-
-  const totalHargaBerlangganan = jenisMitraData.reduce(
-    (total, item) => total + Number(item.hargaBerlangganan || 0),
-    0,
-  );
-
-  const totalKomisi = jenisMitraData.reduce(
-    (total, item) => total + Number(item.komisi || 0),
-    0,
-  );
-
-
-  const totalKomisiStrategic = jenisMitraData
-    .filter((item) => normalizeJenisMitraName(item.jenisMitra) === "Strategic")
-    .reduce((total, item) => total + Number(item.komisi || 0), 0);
-
-  const openCreateModal = () => {
-    setEditingId(null);
-    setForm(emptyForm);
-    setIsModalOpen(true);
+    setTypeFormError("");
+    setTypeFormSuccess("");
+    setShowTypeForm(true);
   };
 
-  const openEditModal = (item: JenisMitraItem) => {
-    setEditingId(item.id);
-    setForm({
-      jenisMitra: item.jenisMitra,
-      paketBerlangganan: item.paketBerlangganan,
-      hargaBerlangganan: item.hargaBerlangganan,
-      komisi: item.komisi,
-    });
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingId(null);
-    setForm(emptyForm);
-  };
-
-  const handleSaveForm = (payload: JenisMitraForm) => {
-    if (editingId) {
-      const nextData = jenisMitraData.map((item) =>
-        item.id === editingId
-          ? {
-              ...item,
-              ...payload,
-              jenisMitra: payload.jenisMitra.trim(),
-              paketBerlangganan: payload.paketBerlangganan.trim(),
-            }
-          : item,
-      );
-
-      saveJenisMitraData(nextData);
-      closeModal();
+  const handleTypeSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setTypeFormError("");
+    setTypeFormSuccess("");
+    if (!typeForm.name.trim()) {
+      setTypeFormError("Nama partner type wajib diisi.");
+      return;
+    }
+    if (!editingType && !typeForm.code.trim()) {
+      setTypeFormError("Code partner type wajib diisi.");
+      return;
+    }
+    if (!typeForm.commissionValue.trim()) {
+      setTypeFormError("Nilai komisi dasar wajib diisi.");
       return;
     }
 
-    const newItem: JenisMitraItem = {
-      id: `${makeId(payload.jenisMitra, payload.paketBerlangganan)}-${Date.now()}`,
-      ...payload,
-      jenisMitra: payload.jenisMitra.trim(),
-      paketBerlangganan: payload.paketBerlangganan.trim(),
-    };
-
-    saveJenisMitraData([newItem, ...jenisMitraData]);
-    closeModal();
+    setSavingType(true);
+    try {
+      if (editingType) {
+        await updatePartnerType(editingType.id, {
+          name: typeForm.name.trim(),
+          commission_mode: typeForm.commissionMode,
+          commission_value: typeForm.commissionValue.trim(),
+          description: typeForm.description.trim(),
+        });
+        setTypeFormSuccess("Partner type berhasil diperbarui.");
+        await reloadTypes(editingType.id);
+      } else {
+        const created = await createPartnerType({
+          code: typeForm.code.trim().toUpperCase(),
+          name: typeForm.name.trim(),
+          commission_mode: typeForm.commissionMode,
+          commission_value: typeForm.commissionValue.trim(),
+          description: typeForm.description.trim() || undefined,
+        });
+        setTypeFormSuccess("Partner type baru berhasil dibuat.");
+        await reloadTypes(created.id);
+      }
+    } catch (error) {
+      setTypeFormError(getErrorMessage(error));
+    } finally {
+      setSavingType(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    const yakin = confirm("Yakin ingin menghapus jenis mitra ini?");
-    if (!yakin) return;
+  const handleRuleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedTypeId) {
+      setRuleFormError("Pilih partner type terlebih dahulu.");
+      return;
+    }
+    setRuleFormError("");
+    setRuleFormSuccess("");
 
-    saveJenisMitraData(jenisMitraData.filter((item) => item.id !== id));
+    if (!ruleForm.effectiveFrom) {
+      setRuleFormError("Tanggal effective from wajib diisi.");
+      return;
+    }
+    if (ruleForm.mode !== "TIER" && !ruleForm.value.trim()) {
+      setRuleFormError("Nilai rule wajib diisi untuk mode PERCENTAGE/FIXED.");
+      return;
+    }
+    if (ruleForm.mode === "TIER") {
+      const invalidTier = ruleForm.tiers.some((tier) => !tier.value.trim());
+      if (invalidTier) {
+        setRuleFormError("Setiap tier wajib memiliki nilai komisi.");
+        return;
+      }
+    }
+
+    setSavingRule(true);
+    try {
+      await createPartnerTypeCommissionRule(selectedTypeId, {
+        package_id: ruleForm.packageId ? Number(ruleForm.packageId) : undefined,
+        mode: ruleForm.mode,
+        value: ruleForm.mode === "TIER" ? undefined : ruleForm.value.trim(),
+        effective_from: new Date(ruleForm.effectiveFrom).toISOString(),
+        effective_to: ruleForm.effectiveTo ? new Date(ruleForm.effectiveTo).toISOString() : undefined,
+        tiers: ruleForm.mode === "TIER" ? ruleForm.tiers.map((tier) => ({
+          tier_order: tier.tier_order,
+          min_closings: tier.min_closings,
+          max_closings: tier.max_closings ? Number(tier.max_closings) : undefined,
+          mode: tier.mode,
+          value: tier.value.trim(),
+        })) : undefined,
+      });
+      setRuleFormSuccess("Commission rule berhasil dibuat.");
+      setRuleForm(EMPTY_RULE_FORM);
+      await loadSelectedType(selectedTypeId);
+    } catch (error) {
+      setRuleFormError(getErrorMessage(error));
+    } finally {
+      setSavingRule(false);
+    }
   };
 
-  const renderActionButtons = (item: JenisMitraItem) => (
-    <div className="flex items-center justify-center gap-3">
-      <button
-        type="button"
-        onClick={() => openEditModal(item)}
-        className="text-gray-600 transition hover:scale-110 hover:text-[#C92C1E]"
-        title="Edit jenis mitra"
-      >
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 7.125L16.875 4.5" />
-        </svg>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => handleDelete(item.id)}
-        className="text-gray-500 transition hover:scale-110 hover:text-red-600"
-        title="Hapus jenis mitra"
-      >
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-      </button>
-    </div>
-  );
-
-  const renderTable = ({
-    title,
-    description,
-    total,
-    data,
-    borderClass,
-    headerClass,
-    titleClass,
-    totalClass,
-    valueBoxClass,
-    valueTextClass,
-    tableKey,
-  }: {
-    title: string;
-    description: string;
-    total: number;
-    data: JenisMitraItem[];
-    borderClass: string;
-    headerClass: string;
-    titleClass: string;
-    totalClass: string;
-    valueBoxClass: string;
-    valueTextClass: string;
-    tableKey?: string;
-  }) => (
-    <div key={tableKey} className={`overflow-hidden rounded-3xl border bg-white ${borderClass}`}>
-      <div className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${headerClass}`}>
-        <div>
-          <h3 className={`text-sm font-black ${titleClass}`}>{title}</h3>
-          <p className="mt-1 text-xs font-bold opacity-70">{description}</p>
-        </div>
-        <div className="rounded-2xl bg-white px-4 py-2 text-right">
-          <p className={`text-[10px] font-black uppercase ${totalClass}`}>Total</p>
-          <p className={`text-sm font-black ${titleClass}`}>{formatRupiah(total)}</p>
-        </div>
-      </div>
-
-      <div className="w-full max-w-full overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-xs">
-          <thead className={headerClass}>
-            <tr>
-              <th className="w-36 p-3 font-black">Jenis Mitra</th>
-              <th className="w-52 p-3 font-black">Paket Langganan</th>
-              <th className="w-32 p-3 text-right font-black">Harga</th>
-              <th className="w-32 p-3 text-right font-black">Komisi</th>
-              <th className="w-24 p-3 text-center font-black">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-xs font-bold text-gray-400">
-                  Data jenis mitra tidak ditemukan.
-                </td>
-              </tr>
-            ) : (
-              data.map((item) => (
-                <tr key={item.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                  <td className="p-3 align-top font-black text-gray-900">{item.jenisMitra}</td>
-                  <td className="p-3 align-top font-bold text-gray-700">{item.paketBerlangganan}</td>
-                  <td className="p-3 text-right align-top font-black text-gray-900">{formatNumber(item.hargaBerlangganan)}</td>
-                  <td className="p-3 text-right align-top">
-                    <div className={`ml-auto inline-flex min-w-[115px] justify-end rounded-2xl border px-4 py-3 font-black ${valueBoxClass} ${valueTextClass}`}>
-                      {formatNumber(item.komisi)}
-                    </div>
-                  </td>
-                  <td className="p-3 text-center align-top">{renderActionButtons(item)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const handleDeactivateRule = async (rule: PartnerCommissionRuleItem) => {
+    if (!selectedTypeId || !window.confirm(`Nonaktifkan rule #${rule.id}?`)) return;
+    setSavingRule(true);
+    setRuleFormError("");
+    setRuleFormSuccess("");
+    try {
+      await deactivatePartnerTypeCommissionRule(selectedTypeId, rule.id);
+      setRuleFormSuccess("Rule berhasil dinonaktifkan.");
+      await loadSelectedType(selectedTypeId);
+    } catch (error) {
+      setRuleFormError(getErrorMessage(error));
+    } finally {
+      setSavingRule(false);
+    }
+  };
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6 overflow-hidden font-sans text-[#1C1C1E]">
+    <div className="w-full space-y-6 font-sans text-[#1C1C1E]">
       <section className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-sm">
         <div className="relative p-6 md:p-8">
           <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[80px] bg-red-50" />
-
-          <div className="relative z-10 flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative z-10 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="inline-flex rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
-                Master Jenis Mitra
-              </div>
-              <h1 className="mt-4 break-words text-2xl font-black tracking-tight text-gray-950 md:text-3xl">
-                Jenis-Jenis Mitra & Paket Komisi
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-gray-500">
-                Tambah jenis mitra seperti Referal, Partnership, atau Strategic. Paket, bulan, dan harga mengikuti Paket Langganan.
-              </p>
+              <div className="inline-flex rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">Jenis Mitra</div>
+              <h1 className="mt-4 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">Master Partner Type dan Rule Komisi</h1>
+              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-gray-500">Halaman ini memakai backend `partner-types` dan `commission-rules`. Rule komisi saat ini package-scoped dan effective-dated, dengan opsi mode TIER bila spesifikasi komisinya bertingkat.</p>
             </div>
-
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:shrink-0">
-              <Link
-                href="/menu/kelolaan-mitra"
-                className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-center text-xs font-black text-[#C92C1E] transition hover:bg-red-100"
-              >
-                Kembali ke Menu
-              </Link>
-
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]"
-              >
-                + Tambah Jenis Mitra
-              </button>
-            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><Link href="/menu/kelolaan-mitra" className="rounded-2xl border border-gray-200 px-5 py-3 text-center text-xs font-black text-gray-600 transition hover:bg-gray-50">Kembali ke Mitra</Link>{canManage ? <button type="button" onClick={startCreateType} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]">+ Tambah Partner Type</button> : null}</div>
           </div>
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Data</p>
-          <p className="mt-3 text-3xl font-black text-gray-950">{jenisMitraData.length}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Jumlah data jenis mitra</p>
-        </div>
+      {pageError ? <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{pageError}</div> : null}
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Harga Paket</p>
-          <p className="mt-3 text-2xl font-black text-gray-950">{formatRupiah(totalHargaBerlangganan)}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Akumulasi harga paket</p>
-        </div>
-
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Komisi</p>
-          <p className="mt-3 text-2xl font-black text-gray-950">{formatRupiah(totalKomisi)}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Akumulasi semua komisi</p>
-        </div>
-
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">Strategic</p>
-          <p className="mt-3 text-2xl font-black text-[#C92C1E]">{formatRupiah(totalKomisiStrategic)}</p>
-          <p className="mt-1 text-xs font-medium text-red-400">Akumulasi strategic</p>
-        </div>
-      </section>
-
-      <section className="min-w-0 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-sm font-black text-gray-900">Tabel Komisi Terpisah</h2>
+            <h2 className="text-sm font-black text-gray-900">Tabel Jenis Mitra</h2>
             <p className="mt-1 text-xs font-medium text-gray-400">
-              Tabel otomatis mengikuti nama jenis mitra yang dibuat.
+              Master ini dipakai saat membuat mitra baru. Komisi dasar menjadi fallback, sedangkan komisi per paket dikelola lewat commission rule.
             </p>
           </div>
-
-          <div className="grid w-full grid-cols-1 gap-2 xl:w-[420px]">
+          <div className="w-full lg:max-w-sm">
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Cari jenis mitra / paket"
-              className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              placeholder="Cari code / nama jenis mitra"
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
             />
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-5">
-          {groupedJenisMitraData.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-xs font-bold text-gray-400">
-              Data jenis mitra tidak ditemukan.
-            </div>
-          ) : (
-            groupedJenisMitraData.map(([jenisMitra, data]) => {
-              const style = getJenisMitraTableStyle(jenisMitra);
+        <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
+          Nonaktifkan jenis mitra belum saya hubungkan ke aksi backend, karena kontrak API saat ini hanya menyediakan create dan update partner type, serta deactivate untuk commission rule.
+        </div>
 
-              return renderTable({
-                tableKey: jenisMitra,
-                title: `Komisi ${jenisMitra}`,
-                description: `Tabel khusus nominal ${jenisMitra} setiap paket.`,
-                total: data.reduce((total, item) => total + Number(item.komisi || 0), 0),
-                data,
-                ...style,
-              });
-            })
-          )}
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 text-left">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Code</th>
+                <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Nama</th>
+                <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Komisi Dasar</th>
+                <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Rule Aktif</th>
+                <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {filteredPartnerTypes.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm font-bold text-gray-400">
+                    Belum ada jenis mitra yang sesuai pencarian.
+                  </td>
+                </tr>
+              ) : (
+                filteredPartnerTypes.map((item) => {
+                  const isSelected = selectedTypeId === item.id;
+                  return (
+                    <tr key={item.id} className={isSelected ? "bg-red-50/60" : "bg-white"}>
+                      <td className="px-4 py-4 text-sm font-black text-gray-900">{item.code}</td>
+                      <td className="px-4 py-4 text-sm font-bold text-gray-600">{item.name}</td>
+                      <td className="px-4 py-4 text-sm font-bold text-gray-600">{formatFlatCommission(item)}</td>
+                      <td className="px-4 py-4 text-sm font-bold text-gray-600">{selectedTypeId === item.id ? activeRuleCount : "Lihat detail"}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTypeId(item.id)}
+                            className={`rounded-2xl px-4 py-2 text-xs font-black transition ${isSelected ? "bg-[#C92C1E] text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                          >
+                            {isSelected ? "Terpilih" : "Detail"}
+                          </button>
+                          {canManage ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedTypeId(item.id);
+                                setTimeout(() => startEditType(), 0);
+                              }}
+                              className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50"
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {canManage ? (
+                            <button
+                              type="button"
+                              disabled
+                              title="Backend belum menyediakan endpoint nonaktifkan partner type"
+                              className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-300"
+                            >
+                              Nonaktifkan
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <JenisMitraFormModal
-        open={isModalOpen}
-        mode={editingId ? "edit" : "create"}
-        initialForm={form}
-        onClose={closeModal}
-        onSave={handleSaveForm}
-      />
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="space-y-5">
+          <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-sm font-black text-gray-900">Detail Jenis Mitra</h2>
+                <p className="mt-1 text-xs font-medium text-gray-400">
+                  Komisi dasar di partner type tetap menjadi fallback jika tidak ada rule backend yang cocok.
+                </p>
+              </div>
+              {canManage && selectedType ? (
+                <button
+                  type="button"
+                  onClick={startEditType}
+                  className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50"
+                >
+                  Edit Jenis Mitra
+                </button>
+              ) : null}
+            </div>
+
+            {loading ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm font-bold text-gray-400">
+                Memuat detail partner type...
+              </div>
+            ) : selectedType ? (
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Code</p>
+                  <p className="mt-2 text-sm font-black text-gray-900">{selectedType.code}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Nama</p>
+                  <p className="mt-2 text-sm font-black text-gray-900">{selectedType.name}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Mode Dasar</p>
+                  <p className="mt-2 text-sm font-black text-gray-900">{selectedType.commission_mode}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Nilai Dasar</p>
+                  <p className="mt-2 text-sm font-black text-gray-900">{formatFlatCommission(selectedType)}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Rule Aktif</p>
+                  <p className="mt-2 text-sm font-black text-gray-900">{activeRuleCount}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 md:col-span-2 xl:col-span-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Deskripsi</p>
+                  <p className="mt-2 text-sm font-bold text-gray-600">{selectedType.description || "Belum ada deskripsi partner type."}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm font-bold text-gray-400">
+                Belum ada partner type yang dipilih.
+              </div>
+            )}
+          </section>
+
+          <form onSubmit={handleRuleSubmit} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-sm font-black text-gray-900">Komisi Per Paket</h2>
+                <p className="mt-1 text-xs font-medium text-gray-400">
+                  Buat rule baru untuk mengubah komisi berdasarkan paket. Backend akan memakai rule aktif sesuai effective date dan paket yang cocok.
+                </p>
+              </div>
+              <span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black text-[#C92C1E]">
+                {selectedType ? selectedType.code : "Belum pilih type"}
+              </span>
+            </div>
+            {ruleFormError ? <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{ruleFormError}</div> : null}
+            {ruleFormSuccess ? <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{ruleFormSuccess}</div> : null}
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"><select value={ruleForm.packageId} onChange={(event) => setRuleForm((current) => ({ ...current, packageId: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Semua Paket</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select value={ruleForm.mode} onChange={(event) => setRuleForm((current) => ({ ...current, mode: event.target.value as "PERCENTAGE" | "FIXED" | "TIER" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option><option value="TIER">TIER</option></select>{ruleForm.mode === "TIER" ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">Mode TIER memakai daftar bracket di bawah.</div> : <input value={ruleForm.value} onChange={(event) => setRuleForm((current) => ({ ...current, value: event.target.value }))} placeholder={ruleForm.mode === "PERCENTAGE" ? "Contoh: 7.5" : "Contoh: 250000"} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />}<input type="datetime-local" value={ruleForm.effectiveFrom} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><input type="datetime-local" value={ruleForm.effectiveTo} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveTo: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">{selectedPackagePlans.length === 0 ? "Belum ada plan aktif untuk paket ini atau rule berlaku untuk semua paket." : `Plan aktif terkait paket ini: ${selectedPackagePlans.map((plan) => `${plan.name} (${plan.tenure_months} bln)`).join(", ")}`}</div></div>
+            {ruleForm.mode === "TIER" ? <div className="mt-4 space-y-3">{ruleForm.tiers.map((tier, index) => <div key={index} className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-5"><input type="number" min={1} value={tier.min_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, min_closings: Number(event.target.value) || 1 } : item) }))} placeholder="Min closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><input value={tier.max_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, max_closings: event.target.value } : item) }))} placeholder="Max closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><select value={tier.mode} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, mode: event.target.value as "PERCENTAGE" | "FIXED" } : item) }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option></select><input value={tier.value} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, value: event.target.value } : item) }))} placeholder="Nilai komisi tier" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: current.tiers.filter((_, tierIndex) => tierIndex !== index).map((item, itemIndex) => ({ ...item, tier_order: itemIndex + 1 })) }))} disabled={ruleForm.tiers.length === 1} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">Hapus Tier</button></div>)}<button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: [...current.tiers, { tier_order: current.tiers.length + 1, min_closings: current.tiers.length + 1, max_closings: "", mode: "PERCENTAGE", value: "" }] }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 transition hover:bg-gray-50">+ Tambah Tier</button></div> : null}
+            <div className="mt-4 flex justify-end"><button type="submit" disabled={!canManage || savingRule || !selectedTypeId} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingRule ? "Menyimpan Rule..." : "Simpan Commission Rule"}</button></div>
+          </form>
+        </div>
+
+        <div className="space-y-5">
+          {showTypeForm ? <form onSubmit={handleTypeSubmit} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><h2 className="text-sm font-black text-gray-900">{editingType ? "Edit Partner Type" : "Tambah Partner Type"}</h2><p className="mt-1 text-xs font-medium text-gray-400">Form master partner type tetap dipakai untuk fallback komisi dasar.</p></div><button type="button" onClick={() => setShowTypeForm(false)} className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50">Tutup</button></div>{typeFormError ? <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{typeFormError}</div> : null}{typeFormSuccess ? <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{typeFormSuccess}</div> : null}<div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2"><input value={typeForm.code} onChange={(event) => setTypeForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} disabled={Boolean(editingType)} placeholder="Code partner type" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold uppercase outline-none focus:border-[#C92C1E] disabled:bg-gray-50" /><input value={typeForm.name} onChange={(event) => setTypeForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nama partner type" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><select value={typeForm.commissionMode} onChange={(event) => setTypeForm((current) => ({ ...current, commissionMode: event.target.value as "PERCENTAGE" | "FIXED" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option></select><input value={typeForm.commissionValue} onChange={(event) => setTypeForm((current) => ({ ...current, commissionValue: event.target.value }))} placeholder={typeForm.commissionMode === "PERCENTAGE" ? "Contoh: 5.00" : "Contoh: 150000"} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><textarea value={typeForm.description} onChange={(event) => setTypeForm((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Deskripsi partner type" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E] md:col-span-2" /></div><div className="mt-4 flex justify-end"><button type="submit" disabled={savingType} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingType ? "Menyimpan..." : editingType ? "Simpan Perubahan" : "Tambah Partner Type"}</button></div></form> : <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm font-bold text-gray-400">Pilih tambah atau edit jenis mitra untuk membuka form master.</div>}
+
+          <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-black text-gray-900">Tabel Rule Komisi</h2><p className="mt-1 text-xs font-medium text-gray-400">Aturan komisi per paket yang aktif dan nonaktif untuk jenis mitra terpilih.</p></div><span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[10px] font-black text-gray-500">{commissionRules.length} Rule</span></div>
+            <div className="mt-4 overflow-x-auto rounded-2xl border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 text-left">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Paket</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Mode</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Nilai</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Periode</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Status</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-500">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {commissionRules.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-sm font-bold text-gray-400">
+                        Belum ada commission rule untuk partner type ini.
+                      </td>
+                    </tr>
+                  ) : (
+                    commissionRules.map((rule) => (
+                      <tr key={rule.id}>
+                        <td className="px-4 py-4 text-sm font-black text-gray-900">{rule.package_name || "Semua Paket"}</td>
+                        <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.mode}</td>
+                        <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.value || (rule.tiers && rule.tiers.length > 0 ? `${rule.tiers.length} tier` : "-")}</td>
+                        <td className="px-4 py-4 text-sm font-bold text-gray-600">{formatDateTime(rule.effective_from)} - {formatDateTime(rule.effective_to)}</td>
+                        <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.active ? "ACTIVE" : "INACTIVE"}</td>
+                        <td className="px-4 py-4">{canManage && rule.active ? <button type="button" onClick={() => void handleDeactivateRule(rule)} className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-100">Nonaktifkan</button> : <span className="text-xs font-bold text-gray-300">-</span>}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 space-y-2">
+              {commissionRules.filter((rule) => rule.tiers && rule.tiers.length > 0).map((rule) => (
+                <div key={`tier-${rule.id}`} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-sm font-black text-gray-900">Tier rule #{rule.id} - {rule.package_name || "Semua Paket"}</p>
+                  <div className="mt-3 space-y-2">
+                    {rule.tiers?.map((tier) => (
+                      <div key={tier.id} className="rounded-2xl border border-white bg-white px-4 py-3 text-xs font-bold text-gray-600">
+                        Tier {tier.tier_order}: closing {tier.min_closings} sampai {tier.max_closings || "tak terbatas"}  {tier.mode}  {tier.value}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
     </div>
   );
 }
+
+
+
