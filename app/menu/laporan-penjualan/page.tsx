@@ -5,7 +5,7 @@ import { Download, FileSpreadsheet, FileText, RotateCcw } from "lucide-react";
 
 import { SalesTransaction } from "./types";
 import { generateDummyTransactions, differenceInDays, getPresetDateRange } from "./utils";
-import { LIST_PIC } from "../data-kelolaan/dummy/page";
+import { LIST_PIC } from "../lead/dummy/page";
 import { INITIAL_PAKETS, INITIAL_MASTER_PROMOS } from "@/app/lib/paket-langganan-data";
 
 import FilterCard from "./components/FilterCard";
@@ -136,7 +136,7 @@ export default function LaporanPenjualanPage() {
   }, [transactions, search, filterPic, filterPaket, filterPromo, filterStatus, dateDari, dateSampai, dateType]);
 
   // Filter options mapping
-  const picOptions = LIST_PIC.filter((p) => p.includes("(Sales)"));
+  const picOptions = LIST_PIC.filter((p: string) => p.includes("(Sales)"));
   const paketOptions = useMemo(() => INITIAL_PAKETS.map((p) => ({ value: p.id, label: p.namaPaket })), []);
   const promoOptions = useMemo(() => {
     let promos = INITIAL_MASTER_PROMOS;

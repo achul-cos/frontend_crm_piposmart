@@ -46,6 +46,7 @@ export interface OwnerListParams {
   page?: number;
   limit?: number;
   sort?: string;
+  status?: string;
 }
 
 export interface BackendOwner {
@@ -55,9 +56,9 @@ export interface BackendOwner {
   phone: string;
   email?: string;
   brand_name: string;
+  address?: string;
   province?: string;
   city?: string;
-  address?: string;
   status: string;
   outlet_count?: number;
   created_at?: string;
@@ -66,9 +67,14 @@ export interface BackendOwner {
 
 export interface BackendOutlet {
   id: number;
+  owner_id: number;
+  code: string;
   name: string;
   phone: string;
+  province?: string;
+  city?: string;
   address?: string;
+  status: string;
 }
 
 export interface OwnerOutletListResponse {
@@ -184,7 +190,7 @@ export async function updateOwner(
 
 export async function bulkCreateOwnerOutlets(
   ownerId: number,
-  items: { code: string; name: string; phone?: string; address?: string }[],
+  items: { code: string; name: string; phone?: string; province?: string; city?: string; address?: string }[],
 ) {
   const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/bulk`, {
     method: "POST",
@@ -193,7 +199,29 @@ export async function bulkCreateOwnerOutlets(
   });
   return handleResponse(res);
 }
+export async function bulkUpdateOwnerOutlets(
+  ownerId: number,
+  items: { id: number; code?: string; name?: string; phone?: string; province?: string; city?: string; address?: string }[],
+) {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/bulk`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ items }),
+  });
+  return handleResponse(res);
+}
 
+export async function bulkSoftDeleteOwnerOutlets(
+  ownerId: number,
+  ids: number[],
+) {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/bulk`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ids }),
+  });
+  return handleResponse(res);
+}
 export async function bulkForceDeleteOutlets(
   ownerId: number,
   ids: number[],
@@ -760,4 +788,64 @@ export async function getProfile(): Promise<UserResponse> {
   });
   const responseData = await handleResponse<UserResponse>(res);
   return responseData;
+}
+
+
+// -----------------------------------------------------------------------------
+// IMPORTS API
+// -----------------------------------------------------------------------------
+
+export interface ImportBatchResponse {
+  id: number;
+  code: string;
+  profile: string;
+  original_filename: string;
+  status: string; // 'UPLOADED' | 'VALIDATING' | 'VALIDATED' | 'VALIDATION_FAILED'
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+}
+
+export async function uploadImportFile(file: File, profile: string = "OWNER_OUTLET"): Promise<ImportBatchResponse> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("piposmart_access_token") || "" : "";
+  
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("profile", profile);
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  const json = await handleResponse<{ data: ImportBatchResponse }>(res);
+  return json.data;
+}
+
+export async function getImportBatch(id: number): Promise<ImportBatchResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/${id}`, {
+    headers: getAuthHeaders(),
+  });
+  const json = await handleResponse<{ data: ImportBatchResponse }>(res);
+  return json.data;
+}
+
+export async function commitImportBatch(id: number): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/${id}/commit`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<{ message: string }>(res);
+}
+
+export async function bulkReleaseLeads(leadIds: number[], reason: string) {
+  const res = await fetch(`${API_BASE_URL}/api/v1/leads/bulk/release`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ lead_ids: leadIds, reason }),
+  });
+  return handleResponse(res);
 }
