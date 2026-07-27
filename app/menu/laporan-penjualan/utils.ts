@@ -1,5 +1,5 @@
 import { SalesTransaction } from "./types";
-import { generateDummyOwners } from "../data-kelolaan/dummy/page";
+import { generateDummyOwners } from "../lead/dummy/page";
 import { INITIAL_MASTER_PROMOS, INITIAL_PAKETS } from "@/app/lib/paket-langganan-data";
 
 export const formatRupiah = (value: number) =>
@@ -42,7 +42,7 @@ export const generateDummyTransactions = (): SalesTransaction[] => {
   const dummyCustomers = generateDummyOwners(1000);
   const transactions: SalesTransaction[] = [];
 
-  dummyCustomers.forEach((cust, i) => {
+  dummyCustomers.forEach((cust: any, i: number) => {
 
     // Cycle through all promos sequentially to ensure bundling is included
     const promoIndex = i % INITIAL_MASTER_PROMOS.length;
