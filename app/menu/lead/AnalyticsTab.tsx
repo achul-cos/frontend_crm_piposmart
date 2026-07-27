@@ -1168,7 +1168,7 @@ function CollapsibleChartSection({
 }
 
 
-export default function GrafikCustomer({ dataNasabah }: { dataNasabah: NasabahItem[] }) {
+export default function AnalyticsTab({ dataNasabah }: { dataNasabah: NasabahItem[] }) {
   if (!dataNasabah) return null;
   const today = new Date();
   const [skorChartFilter, setSkorChartFilter] = useState<ChartFilterState>(() => createDefaultChartFilter(today));

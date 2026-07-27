@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import GrafikCustomer from "./grafik/page";
+
 import {
   type OwnerListParams,
   getLeads,
@@ -22,9 +22,11 @@ import {
   updateOwner,
   scheduleTraining,
   type UserResponse,
+  bulkReleaseLeads,
 } from "@/app/lib/api";
 import CallPage, { CallFormResult } from "./call/page";
 import ActionButtons, { EditProfileModal } from "./action/page";
+import AnalyticsTab from "./AnalyticsTab";
 
 interface NasabahItem {
   totalFu: number;
@@ -33,6 +35,7 @@ interface NasabahItem {
   bulan: string;
   no: number;
   pic: string;
+  picRole?: string;
   tanggalDibagikan: string;
   statusAkun: string;
   kodeBaris: string;
@@ -127,31 +130,11 @@ const LIST_SKOR = [
 ];
 
 const getSkorValueFromItem = (item?: Partial<NasabahItem> | null) => {
-  const remarksValue = String(item?.remarks ?? "").trim();
-
-  if (LIST_SKOR.some((skor) => skor.value === remarksValue)) {
-    return remarksValue;
-  }
-
-  const scorValue = String(item?.scor ?? "0").trim();
-
-  if (LIST_SKOR.some((skor) => skor.value === scorValue)) {
-    return scorValue;
-  }
-
-  return "0";
+  return String(item?.scor ?? "0");
 };
 
 const getLatestRemarkScore = (item?: Partial<NasabahItem> | null) => {
-  const latestCall = item?.callHistories?.[item.callHistories.length - 1];
-  const latestRemark = String(latestCall?.remark || item?.remarks || "").trim();
-  const remarkScore = latestRemark.match(/\((\d)\)/)?.[1];
-
-  if (remarkScore && LIST_SKOR.some((skor) => skor.value === remarkScore)) {
-    return remarkScore;
-  }
-
-  return getSkorValueFromItem(item);
+  return String(item?.scor ?? "0");
 };
 
 const isInvalidPic = (pic?: string) => {
@@ -288,11 +271,11 @@ const RefreshIcon = () => (
 function getQuickSkorBadgeClass(item: NasabahItem) {
   const value = getSkorValueFromItem(item);
 
-  if (value === "3") return "bg-blue-100 text-blue-700";
-  if (value === "2") return "bg-yellow-100 text-yellow-800";
-  if (value === "1") return "bg-orange-100 text-orange-800";
+  if (value === "3") return "bg-blue-50 text-blue-700 border border-blue-200";
+  if (value === "2") return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (value === "1") return "bg-orange-50 text-orange-700 border border-orange-200";
 
-  return "bg-red-100 text-red-700";
+  return "bg-gray-50 text-gray-600 border border-gray-200";
 }
 
 function PicBadge({
@@ -327,7 +310,7 @@ function getSkorLabelFromItem(item: NasabahItem) {
 function SkorBadge({ item }: { item: NasabahItem }) {
   return (
     <span
-      className={`inline-flex max-w-[180px] items-center justify-center rounded-md px-2 py-1 text-center text-[10px] font-black ${getQuickSkorBadgeClass(item)}`}
+      className={`inline-flex max-w-[180px] items-center justify-center rounded-full px-2.5 py-1 text-center text-[10px] font-black uppercase tracking-tight ${getQuickSkorBadgeClass(item)}`}
       title={getSkorLabelFromItem(item)}
     >
       <span className="truncate">{getSkorLabelFromItem(item)}</span>
@@ -389,28 +372,34 @@ function SummaryMetricCard({
   title,
   value,
   description,
+  isPrimary = false,
 }: {
   title: string;
   value: string | number;
   description: string;
+  isPrimary?: boolean;
 }) {
+  if (isPrimary) {
+    return (
+      <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+        <div className="relative z-10">
+          <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
+          <h2 className="text-3xl font-black">{value}</h2>
+          <p className="text-red-200 text-[10px] font-medium mt-2 max-w-[90%]">{description}</p>
+        </div>
+        <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.001 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      </div>
+    );
+  }
+
   return (
-    <div className="group relative overflow-hidden rounded-[28px] border-2 border-red-100 bg-gradient-to-br from-white via-red-50/80 to-[#FFF3EF] px-5 py-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#C92C1E]/40 hover:shadow-lg">
-      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[#C92C1E]/10 transition-all duration-200 group-hover:scale-125" />
-      <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-[#FDE2DD]" />
-
+    <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors min-h-[140px]">
       <div className="relative z-10">
-        <p className="min-h-[34px] text-center text-sm font-black leading-tight text-[#8F2118]">
-          {title}
-        </p>
-
-        <p className="mt-2 text-center text-[52px] font-black leading-none tracking-tight text-[#C92C1E] drop-shadow-sm">
-          {value}
-        </p>
-
-        <p className="mx-auto mt-3 min-h-[34px] max-w-[210px] rounded-2xl bg-white/70 px-3 py-2 text-center text-[10px] font-bold leading-snug text-[#9F4A42]">
-          {description}
-        </p>
+        <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
+        <h2 className="text-3xl font-black text-gray-900">{value}</h2>
+        <p className="text-gray-400 text-[10px] font-medium mt-2">{description}</p>
       </div>
     </div>
   );
@@ -424,6 +413,7 @@ export default function DataKelolaanPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
+  const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
 
   const combinedPicList = useMemo(() => {
     return [...supervisorList, ...salesList];
@@ -443,6 +433,9 @@ export default function DataKelolaanPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
+  const [sort, setSort] = useState<string>("no");
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
+
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectionAction, setSelectionAction] = useState<"edit" | "delete" | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -458,15 +451,20 @@ export default function DataKelolaanPage() {
 
   const [bulkPicModalOpen, setBulkPicModalOpen] = useState(false);
   const [bulkSelectedPic, setBulkSelectedPic] = useState("");
+  const [bulkActionReason, setBulkActionReason] = useState("");
 
   const [loggedInUser, setLoggedInUser] = useState("Satria");
   const [loggedInRole, setLoggedInRole] = useState("Developer");
+  const [isAdminState, setIsAdminState] = useState(false);
+  const [isSupervisorState, setIsSupervisorState] = useState(false);
+  const [isSalesState, setIsSalesState] = useState(false);
   const [activeTodayDate, setActiveTodayDate] = useState(() => getTodayInputDate());
 
   const mapBackendLeadToNasabahItem = useCallback((lead: BackendLead): NasabahItem => {
     return {
       no: lead.id,
       pic: lead.current_owner?.name || "-",
+      picRole: lead.current_owner_role,
       tanggalDibagikan: lead.created_at,
       statusAkun: lead.status,
       kodeBaris: lead.code,
@@ -522,6 +520,11 @@ export default function DataKelolaanPage() {
 
     const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(currentUserRole || "");
     const isSupervisor = ["Supervisor", "SUPERVISOR"].includes(currentUserRole || "");
+    const isSales = ["Sales", "SALES"].includes(currentUserRole || "");
+
+    setIsAdminState(isAdmin);
+    setIsSupervisorState(isSupervisor);
+    setIsSalesState(isSales);
 
     if (isAdmin) {
       getSalesList().then(setSalesList).catch(console.error);
@@ -945,6 +948,7 @@ export default function DataKelolaanPage() {
 
     saveDataNasabah(nextData);
     setCallModalItem(null);
+    loadOwnersFromBackend();
 
     alert("Hasil Call & Chat berhasil disimpan.");
   };
@@ -956,12 +960,14 @@ export default function DataKelolaanPage() {
     }
 
     setBulkSelectedPic("");
+    setBulkActionReason("");
     setBulkPicModalOpen(true);
   };
 
   const closeBulkPicModal = () => {
     setBulkPicModalOpen(false);
     setBulkSelectedPic("");
+    setBulkActionReason("");
   };
 
   const handleSaveBulkPic = async (event: React.FormEvent) => {
@@ -972,38 +978,68 @@ export default function DataKelolaanPage() {
       return;
     }
 
-    if (!bulkSelectedPic) {
-      alert("Pilih PIC Sales terlebih dahulu.");
-      return;
+    if (isSalesState) {
+      if (!bulkActionReason.trim()) {
+        alert("Alasan wajib diisi.");
+        return;
+      }
+    } else {
+      if (!bulkSelectedPic) {
+        alert("Pilih PIC terlebih dahulu.");
+        return;
+      }
     }
 
     const selectedSet = new Set(selectedIds);
-    const nextData = dataNasabah.map((item) =>
-      selectedSet.has(item.no) ? { ...item, pic: bulkSelectedPic } : item,
-    );
+    const ids = Array.from(selectedSet);
 
-    saveDataNasabah(nextData);
-    closeBulkPicModal();
-    setSelectedIds([]);
-    setSelectionMode(false);
-    setSelectionAction(null);
+    try {
+      if (isSalesState) {
+        await bulkReleaseLeads(ids, bulkActionReason);
+      } else {
+        const targetList = isAdminState ? supervisorList : salesList;
+        const targetUser = targetList.find(p => p.name === bulkSelectedPic);
+        
+        if (!targetUser) {
+          alert("PIC tidak ditemukan di sistem.");
+          return;
+        }
 
-    const targetUser = combinedPicList.find(p => p.name === bulkSelectedPic);
-    if (targetUser) {
-      const ids = Array.from(selectedSet);
-      try {
-        if (targetUser.role === "SUPERVISOR" || targetUser.role === "Supervisor") {
+        if (isAdminState) {
           await bulkAssignSupervisorToLeads(ids, targetUser.id);
         } else {
           await bulkAssignSalesToLeads(ids, targetUser.id);
         }
-      } catch (err: any) {
-        console.error(err);
-        alert(`Gagal menyimpan PIC ke server: ${err?.message || err}`);
       }
-    }
 
-    alert(`${selectedSet.size} data berhasil diganti ke PIC ${bulkSelectedPic}.`);
+      // Optimistic UI update
+      const nextData = dataNasabah.map((item) => {
+        if (selectedSet.has(item.no)) {
+          if (isSalesState) {
+            // When released, the PIC goes back to admin (or is cleared). We'll set it to "-" or "Admin"
+            return { ...item, pic: "-" };
+          }
+          return { ...item, pic: bulkSelectedPic };
+        }
+        return item;
+      });
+      saveDataNasabah(nextData);
+      loadOwnersFromBackend();
+
+      closeBulkPicModal();
+      setSelectedIds([]);
+      setSelectionMode(false);
+      setSelectionAction(null);
+      
+      if (isSalesState) {
+        alert(`${selectedSet.size} data berhasil dikembalikan ke Admin.`);
+      } else {
+        alert(`${selectedSet.size} data berhasil diganti ke PIC ${bulkSelectedPic}.`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`Gagal menyimpan aksi: ${err?.message || err}`);
+    }
   };
 
   const daftarPicUnik = useMemo(() => {
@@ -1050,7 +1086,7 @@ export default function DataKelolaanPage() {
   }, [dataNasabah]);
 
   const filteredData = useMemo(() => {
-    return dataNasabah.filter((item) => {
+    let result = dataNasabah.filter((item) => {
       const kodeKeyword = searchKodeOwner.toLowerCase().trim();
       const namaKeyword = searchNamaOwner.toLowerCase().trim();
       const brandKeyword = searchNamaBrand.toLowerCase().trim();
@@ -1063,13 +1099,26 @@ export default function DataKelolaanPage() {
         (brandKeyword === "" ||
           item.projectBrand?.toLowerCase().includes(brandKeyword));
 
-      const matchesPic = picFilter === "Semua" || (picFilter === "No PIC" ? isInvalidPic(item.pic) : item.pic === picFilter);
+      const matchesPic = () => {
+        if (picFilter === "Semua") return true;
+        if (picFilter === "No PIC") return isInvalidPic(item.pic);
+        if (picFilter === "ROLE:ADMIN") {
+          return item.picRole === "ADMIN" || item.picRole === "Admin" || item.picRole === "Developer" || item.picRole === "Direktur";
+        }
+        if (picFilter === "ROLE:SUPERVISOR") {
+          return item.picRole === "SUPERVISOR" || item.picRole === "Supervisor";
+        }
+        if (picFilter === "ROLE:SALES") {
+          return item.picRole === "SALES" || item.picRole === "Sales";
+        }
+        return item.pic === picFilter;
+      };
 
       const matchesSkor =
         skorFilter === "Semua" ||
         String(item.remarks ?? item.scor ?? "0") === skorFilter;
 
-      let matchesFilter = true;
+      let matchesFilter = matchesPic();
 
       if (filterMode === "harian") {
         const itemDate = getOwnerFilterDate(item);
@@ -1111,7 +1160,27 @@ export default function DataKelolaanPage() {
         }
       }
 
-      return matchesSearch && matchesPic && matchesSkor && matchesFilter;
+      return matchesSearch && matchesFilter && matchesSkor;
+    });
+
+    const isDesc = sort.startsWith("-");
+    const key = sort.replace("-", "");
+
+    return result.sort((a, b) => {
+      let valA: any = a.no;
+      let valB: any = b.no;
+
+      if (key === "kodeOwner") { valA = a.kodeOwner; valB = b.kodeOwner; }
+      else if (key === "namaOwner") { valA = a.namaOwner; valB = b.namaOwner; }
+      else if (key === "projectBrand") { valA = a.projectBrand; valB = b.projectBrand; }
+      else if (key === "noHpOwner") { valA = a.noHpOwner; valB = b.noHpOwner; }
+
+      if (typeof valA === "string") valA = valA.toLowerCase();
+      if (typeof valB === "string") valB = valB.toLowerCase();
+
+      if (valA < valB) return isDesc ? 1 : -1;
+      if (valA > valB) return isDesc ? -1 : 1;
+      return 0;
     });
   }, [
     dataNasabah,
@@ -1125,6 +1194,7 @@ export default function DataKelolaanPage() {
     startMonthFilter,
     endMonthFilter,
     filterMode,
+    sort
   ]);
 
 
@@ -1278,14 +1348,10 @@ export default function DataKelolaanPage() {
   };
 
   const openEditModal = (item: NasabahItem, mode: EditModalMode) => {
-    if (mode === "profil") {
-      router.push(`/menu/data-kelolaan/form?id=${item.no}`);
-    } else {
-      setEditingItem({ ...item });
-      setModalMode(mode);
-      setProfileValidationErrors({});
-      setEditModalOpen(true);
-    }
+    setEditingItem({ ...item });
+    setModalMode(mode);
+    setProfileValidationErrors({});
+    setEditModalOpen(true);
   };
 
   const closeEditModal = () => {
@@ -1452,66 +1518,92 @@ export default function DataKelolaanPage() {
       }
     }
 
+    loadOwnersFromBackend();
     alert("Data profil berhasil diperbarui.");
   };
 
-  return (
-    <div className="space-y-6 font-sans text-[#1C1C1E] max-w-full overflow-x-hidden overflow-y-visible">
-      {/* ACTION TOP BAR */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-200/60 shadow-xs">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-gray-900">
-            Data Kelolaan Owner
-          </h1>
-          <p className="text-xs text-gray-500 font-medium mt-0.5">
-            Workspace Monitoring Kemitraan PT. PIPOSMART DIGITAL INDONESIA.
-          </p>
-          <div className="text-xs text-gray-400 font-bold mt-1.5 flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <UserIcon />
-              Logged in:{" "}
-              <span className="text-[#C92C1E] font-black">{loggedInUser}</span>
-            </div>
-            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full border border-red-200 bg-red-50 text-[#C92C1E] uppercase tracking-wider shadow-sm">
-              {loggedInRole}
-            </span>
+  const renderFilterHeader = (key: string, label: string, value: string, setter: (val: string) => void) => {
+    const isSorted = sort.replace('-', '') === key;
+    const isDesc = sort.startsWith('-');
+    
+    return (
+    <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
+      <div className="flex items-center gap-2 select-none">
+        <div 
+          className="flex items-center gap-1 cursor-pointer hover:text-red-700 transition-colors"
+          onClick={() => setSort(sort === key ? `-${key}` : key)}
+          title={`Urutkan berdasarkan ${label}`}
+        >
+          {label}
+          <div className="flex flex-col -space-y-1 opacity-40 group-hover:opacity-100 transition-opacity">
+            <svg className={`w-2.5 h-2.5 ${isSorted && !isDesc ? 'text-[#C92C1E] opacity-100' : ''}`} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+            <svg className={`w-2.5 h-2.5 ${isSorted && isDesc ? 'text-[#C92C1E] opacity-100' : ''}`} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
           </div>
         </div>
+        <svg 
+          className={`w-3.5 h-3.5 transition-colors cursor-pointer ml-1 ${value ? 'text-[#C92C1E]' : 'text-gray-400 hover:text-gray-600'}`} 
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          onClick={() => setOpenFilter(openFilter === key ? null : key)}
+        >
+          <title>{`Filter ${label}`}</title>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+      </div>
+      {openFilter === key && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
+          <div className="absolute top-full left-4 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-20 p-2 transform origin-top">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-600">Cari {label}</span>
+            </div>
+            <input 
+              type="text" 
+              placeholder={`Ketik untuk mencari...`} 
+              className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 font-normal focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]" 
+              value={value} 
+              onChange={(e) => setter(e.target.value)} 
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setOpenFilter(null);
+                }
+              }}
+            />
+          </div>
+        </>
+      )}
+    </th>
+    );
+  };
 
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept=".json"
-            onChange={handleImportData}
-            className="hidden"
-          />
-
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3.5 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition shadow-2xs cursor-pointer flex items-center gap-1.5"
-          >
-            <UploadIcon />
-            Import Data
-          </button>
-
-          <button
-            onClick={handleExportData}
-            className="px-3.5 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition shadow-2xs cursor-pointer flex items-center gap-1.5"
-          >
-            <DownloadIcon />
-            Export Data
-          </button>
-
-          <Link
-            href="/menu/data-kelolaan/form"
-            className="px-4 py-2.5 bg-[#C92C1E] text-white rounded-xl text-xs font-black hover:bg-[#A82216] transition shadow-sm flex items-center gap-1.5"
-          >
-            <PlusIcon />
-            Tambah Data Manual
-          </Link>
+  return (
+    <div className="min-h-screen space-y-6 bg-gray-50/50 p-4 sm:p-6 pb-24 font-sans text-gray-900 max-w-full overflow-x-hidden overflow-y-visible">
+      {/* Menu Header */}
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden mb-6">
+        <div className="p-5 border-b-2 border-[#C92C1E] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-1">
+              <span>Menu</span>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+              <span className="text-[#C92C1E]">Lead & Kepemilikan</span>
+            </div>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Manajemen Lead & Kepemilikan</h1>
+          </div>
         </div>
       </div>
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".json"
+        onChange={handleImportData}
+        className="hidden"
+      />
 
       {/* SUMMARY CUSTOMER */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -1519,6 +1611,7 @@ export default function DataKelolaanPage() {
           title="Total Owner"
           value={summaryData.totalCustomer}
           description="Jumlah semua owner yang masuk ke data kelolaan."
+          isPrimary={true}
         />
 
         <SummaryMetricCard
@@ -1546,6 +1639,37 @@ export default function DataKelolaanPage() {
         />
       </div>
 
+      {/* Tabs / Segmented Control */}
+      <div className="flex bg-gray-100 p-1.5 rounded-xl w-max shadow-sm border border-gray-200/50">
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
+            activeTab === 'list'
+              ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+          }`}
+        >
+          Daftar Lead
+        </button>
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${
+            activeTab === 'analytics'
+              ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+          </svg>
+          Analitik
+        </button>
+      </div>
+
+      {activeTab === 'analytics' ? (
+        <AnalyticsTab dataNasabah={dataNasabah} />
+      ) : (
+        <>
       {/* PANEL FILTER & SEARCHING */}
       <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start">
@@ -1631,25 +1755,47 @@ export default function DataKelolaanPage() {
           )}
         </div>
 
+        <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
+          <button
+            onClick={handleExportData}
+            className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
+          >
+            <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export Data
+          </button>
 
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
+          >
+            <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import Data
+          </button>
+
+          <Link
+            href="/menu/data-kelolaan/form"
+            className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700 shadow-sm shadow-red-200"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Tambah Data Manual
+          </Link>
+        </div>
       </div>
+      {/* TABLE HEADER ACTIONS */}
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-2">
+        <div>
+          <h2 className="text-base font-black text-gray-800 uppercase tracking-tight">
+            Tabel Data Lead & Kepemilikan
+          </h2>
+        </div>
 
-      {/* TABLE WORKSPACE */}
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden w-full">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 py-3 border-b border-gray-100 bg-white">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
-            <div>
-              <p className="text-xs font-black text-gray-800 uppercase">
-                Tabel Profil Owner
-              </p>
-              <p className="text-[11px] text-gray-400 font-medium">
-                Edit profil tetap muncul di depan layar sebagai modal, bukan pindah halaman.
-              </p>
-            </div>
-
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/menu/data-kelolaan/trash"
               className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-black hover:bg-gray-50 transition cursor-pointer flex items-center gap-1.5"
@@ -1659,23 +1805,23 @@ export default function DataKelolaanPage() {
             </Link>
 
             {!selectionMode ? (
-              <>
-                <button
-                  onClick={() => handleStartSelectionMode("edit")}
-                  className="px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <EditIcon className="w-3.5 h-3.5" />
-                  Pilih untuk Edit PIC
-                </button>
+              <button
+                onClick={() => handleStartSelectionMode("edit")}
+                className="px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <EditIcon className="w-3.5 h-3.5" />
+                {isAdminState ? "Pilih untuk Assign Supervisor" : isSupervisorState ? "Pilih untuk Assign Sales" : "Pilih untuk Lepas Lead (Invalid)"}
+              </button>
+            ) : null}
 
-                <button
-                  onClick={() => handleStartSelectionMode("delete")}
-                  className="px-3.5 py-2 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <TrashIcon className="w-3.5 h-3.5" />
-                  Pilih untuk Hapus
-                </button>
-              </>
+            {!selectionMode ? (
+              <button
+                onClick={() => handleStartSelectionMode("delete")}
+                className="px-3.5 py-2 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <TrashIcon className="w-3.5 h-3.5" />
+                Pilih untuk Hapus
+              </button>
             ) : (
               <>
                 <div
@@ -1701,7 +1847,7 @@ export default function DataKelolaanPage() {
                     disabled={selectedIds.length === 0}
                     className="px-3.5 py-2 bg-emerald-600 border border-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Edit PIC Terpilih ({selectedIds.length})
+                    {isAdminState ? "Assign Supervisor Terpilih" : isSupervisorState ? "Assign Sales Terpilih" : "Lepas Lead Terpilih"} ({selectedIds.length})
                   </button>
                 )}
 
@@ -1760,104 +1906,136 @@ export default function DataKelolaanPage() {
           </div>
         </div>
 
+      {/* TABLE WORKSPACE */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden w-full">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs md:text-sm font-semibold text-gray-600 border-collapse table-auto">
+          <table className="w-full text-left text-sm md:text-base font-semibold text-gray-600 border-collapse table-auto">
             <thead>
               <tr
-                className="bg-[#C92C1E] text-white uppercase text-[10px] md:text-[11px] tracking-wider font-black"
+                className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200"
               >
                 {selectionMode && (
-                  <th className="p-3 text-center">
+                  <th className="px-4 py-4 text-center w-12">
                     <input
                       type="checkbox"
                       checked={isAllCurrentPageSelected}
                       onChange={handleToggleSelectAllCurrentPage}
-                      className="h-4 w-4 cursor-pointer accent-white"
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       title="Pilih semua data di halaman ini"
                     />
                   </th>
                 )}
 
-                <th className="p-3 text-center align-top">No</th>
-                    <th className="p-3 text-center align-top min-w-[140px]">
-                      <div className="space-y-2">
-                        <span>Kode Owner</span>
-                        <input
-                          type="text"
-                          value={searchKodeOwner}
-                          onChange={(e) => setSearchKodeOwner(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          placeholder="Search Kode"
-                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-200"
-                        />
-                      </div>
-                    </th>
-                    <th className="p-3 align-top min-w-[180px]">
-                      <div className="space-y-2">
-                        <span>Nama Owner</span>
-                        <input
-                          type="text"
-                          value={searchNamaOwner}
-                          onChange={(e) => setSearchNamaOwner(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          placeholder="Search Owner"
-                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-200"
-                        />
-                      </div>
-                    </th>
-                    <th className="p-3 align-top min-w-[180px]">
-                      <div className="space-y-2">
-                        <span>Nama Brand</span>
-                        <input
-                          type="text"
-                          value={searchNamaBrand}
-                          onChange={(e) => setSearchNamaBrand(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          placeholder="Search Brand"
-                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-200"
-                        />
-                      </div>
-                    </th>
-                    <th className="p-3 text-center align-top min-w-[150px]">
-                      <div className="space-y-2">
-                        <span>PIC Sales</span>
-                        <select
-                          value={picFilter}
-                          onChange={(e) => setPicFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
+                <th className="px-4 py-4 text-center font-bold">No</th>
+                {renderFilterHeader("kodeOwner", "Kode", searchKodeOwner, setSearchKodeOwner)}
+                {renderFilterHeader("namaOwner", "Nama Owner", searchNamaOwner, setSearchNamaOwner)}
+                {renderFilterHeader("projectBrand", "Brand", searchNamaBrand, setSearchNamaBrand)}
+                <th className="px-4 py-4 min-w-[150px] font-bold">Kontak</th>
+                    <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
+                      <div 
+                        className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
+                        onClick={() => setOpenFilter(openFilter === 'pic' ? null : 'pic')}
+                      >
+                        <span className="flex items-center gap-1.5 text-center truncate max-w-[120px]">
+                          {picFilter === 'Semua' ? 'PIC Sales' : (
+                            picFilter === 'No PIC' ? 'Belum Ada PIC' :
+                            picFilter === 'ROLE:ADMIN' ? 'Semua Admin' :
+                            picFilter === 'ROLE:SUPERVISOR' ? 'Semua Supervisor' :
+                            picFilter === 'ROLE:SALES' ? 'Semua Sales' : picFilter
+                          )}
+                        </span>
+                        <svg 
+                          className={`w-3.5 h-3.5 transition-colors ml-1 flex-shrink-0 ${picFilter !== 'Semua' ? 'text-[#C92C1E]' : 'text-gray-400 group-hover:text-gray-600'}`} 
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
                         >
-                          <option value="Semua">Semua PIC</option>
-                          <option value="Admin">Admin</option>
-                          <option value="Supervisor">Supervisor</option>
-                          <option value="No PIC">Belum Ada PIC</option>
-                          {combinedPicList.map((pic) => (
-                            <option key={`${pic.id}-${pic.name}`} value={pic.name}>
-                              {pic.name}
-                            </option>
-                          ))}
-                        </select>
+                          <title>Filter PIC Sales</title>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
                       </div>
+                      {openFilter === 'pic' && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-20 p-2 transform origin-top text-left">
+                            <div className="flex items-center gap-2 mb-2">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                              </svg>
+                              <span className="text-sm font-semibold text-gray-600">Filter PIC Sales</span>
+                            </div>
+                            <select
+                              value={picFilter}
+                              onChange={(e) => {
+                                setPicFilter(e.target.value);
+                                setOpenFilter(null);
+                              }}
+                              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-700 shadow-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] transition-all"
+                            >
+                              <option value="Semua">Semua PIC</option>
+                              <option value="No PIC">Belum Ada PIC</option>
+                              <optgroup label="Berdasarkan Role">
+                                <option value="ROLE:ADMIN">Semua Admin</option>
+                                <option value="ROLE:SUPERVISOR">Semua Supervisor</option>
+                                <option value="ROLE:SALES">Semua Sales</option>
+                              </optgroup>
+                              <optgroup label="Berdasarkan Nama PIC">
+                                {combinedPicList.map((pic) => (
+                                  <option key={`${pic.id}-${pic.name}`} value={pic.name}>
+                                    {pic.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            </select>
+                          </div>
+                        </>
+                      )}
                     </th>
-                    <th className="p-3 text-center align-top min-w-[170px]">
-                      <div className="space-y-2">
-                        <span>Skor</span>
-                        <select
-                          value={skorFilter}
-                          onChange={(e) => setSkorFilter(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
+
+                    <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
+                      <div 
+                        className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
+                        onClick={() => setOpenFilter(openFilter === 'skor' ? null : 'skor')}
+                      >
+                        <span className="flex items-center gap-1.5 text-center truncate max-w-[120px]">
+                          {skorFilter === 'Semua' ? 'Skor' : (LIST_SKOR.find(s => s.value === skorFilter)?.label || skorFilter)}
+                        </span>
+                        <svg 
+                          className={`w-3.5 h-3.5 transition-colors ml-1 flex-shrink-0 ${skorFilter !== 'Semua' ? 'text-[#C92C1E]' : 'text-gray-400 group-hover:text-gray-600'}`} 
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
                         >
-                          <option value="Semua">Semua Skor</option>
-                          {LIST_SKOR.map((skor) => (
-                            <option key={skor.value} value={skor.value}>
-                              {skor.label}
-                            </option>
-                          ))}
-                        </select>
+                          <title>Filter Skor</title>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
                       </div>
+                      {openFilter === 'skor' && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-20 p-2 transform origin-top text-left">
+                            <div className="flex items-center gap-2 mb-2">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                              </svg>
+                              <span className="text-sm font-semibold text-gray-600">Filter Skor</span>
+                            </div>
+                            <select
+                              value={skorFilter}
+                              onChange={(e) => {
+                                setSkorFilter(e.target.value);
+                                setOpenFilter(null);
+                              }}
+                              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-700 shadow-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] transition-all"
+                            >
+                              <option value="Semua">Semua Skor</option>
+                              {LIST_SKOR.map((skor) => (
+                                <option key={skor.value} value={skor.value}>
+                                  {skor.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      )}
                     </th>
-                    <th className="p-3 text-center align-top">Action</th>
+                    <th className="px-4 py-4 text-center font-bold">Action</th>
               </tr>
             </thead>
 
@@ -1865,7 +2043,7 @@ export default function DataKelolaanPage() {
               {displayData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7 + (selectionMode ? 1 : 0)}
+                    colSpan={8 + (selectionMode ? 1 : 0)}
                     className="p-8 text-center text-gray-400 font-bold italic"
                   >
                     Data tidak ditemukan pada rentang filter ini.
@@ -1878,12 +2056,11 @@ export default function DataKelolaanPage() {
                     onClick={() => {
                       if (selectionMode) {
                         handleToggleSelectRow(row.no);
-                        return;
                       }
-
-                      router.push(`/menu/data-kelolaan/deskripsi-customer?id=${row.no}`);
                     }}
-                    className={`border-b border-gray-100 last:border-0 transition-colors cursor-pointer ${
+                    className={`border-b border-gray-100 last:border-0 transition-colors ${
+                      selectionMode ? "cursor-pointer" : ""
+                    } ${
                       selectedIds.includes(row.no)
                         ? "bg-red-100/70 hover:bg-red-100"
                         : "hover:bg-gray-50/80"
@@ -1891,44 +2068,48 @@ export default function DataKelolaanPage() {
                   >
                     {selectionMode && (
                       <td
-                        className="p-3 text-center"
+                        className="px-4 py-4 text-center"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(row.no)}
                           onChange={() => handleToggleSelectRow(row.no)}
-                          className="h-4 w-4 cursor-pointer accent-[#C92C1E]"
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                         />
                       </td>
                     )}
 
-                    <td className="p-3 text-center text-gray-400 font-bold">
+                        <td className="px-4 py-4 text-center text-gray-500 font-medium">
                           {startDataIndex + idx + 1}
                         </td>
 
-                        <td className="p-3 text-center font-mono font-bold text-gray-700 bg-gray-50/20">
+                        <td className="px-4 py-4 font-medium text-gray-900 whitespace-normal break-words">
                           {row.kodeOwner || "-"}
                         </td>
 
-                        <td className="p-3 font-black text-gray-900 whitespace-normal break-words">
+                        <td className="px-4 py-4 font-medium text-gray-900 whitespace-normal break-words">
                           {row.namaOwner || "-"}
                         </td>
 
-                        <td className="p-3 text-gray-500 whitespace-normal break-words">
+                        <td className="px-4 py-4 text-gray-700 whitespace-normal break-words">
                           {row.projectBrand || "-"}
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className="px-4 py-4 text-gray-700 whitespace-normal break-words">
+                          {row.noHpOwner || "-"}
+                        </td>
+
+                        <td className="px-4 py-4 text-center">
                           <PicBadge value={row.pic || ""} color="red" />
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className="px-4 py-4 text-center">
                           <SkorBadge item={row} />
                         </td>
 
                         <td
-                          className="p-3 text-center"
+                          className="px-4 py-4 text-center"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <ActionButtons
@@ -1936,6 +2117,8 @@ export default function DataKelolaanPage() {
                             onCall={handleOpenCallAction}
                             onEdit={openEditModal}
                             onDelete={handleHapusSatuData}
+                            canEdit={isAdminState}
+                            canDelete={isAdminState}
                           />
                         </td>
                   </tr>
@@ -2012,27 +2195,26 @@ export default function DataKelolaanPage() {
           </div>
         </div>
       </div>
-
-
-      <GrafikCustomer dataNasabah={dataNasabah} />
+        </>
+      )}
 
       <CallPage
         customer={callModalItem}
         onClose={() => setCallModalItem(null)}
         onSave={handleSaveCallResult}
-      />
-
-      {/* MODAL EDIT PIC DATA TERPILIH */}
+      />      {/* MODAL EDIT PIC DATA TERPILIH */}
       {bulkPicModalOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 p-3 sm:p-6">
           <div className="mx-auto my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b p-5">
               <div>
                 <h2 className="text-lg font-black text-gray-900">
-                  Edit PIC Data Terpilih
+                  {isAdminState ? "Assign Supervisor Terpilih" : isSupervisorState ? "Assign Sales Terpilih" : "Lepas Lead Terpilih"}
                 </h2>
                 <p className="text-xs font-medium text-gray-400">
-                  Pilih PIC Sales baru untuk {selectedIds.length} data owner yang dicentang.
+                  {isSalesState 
+                    ? `Masukkan alasan untuk melepaskan ${selectedIds.length} data ke Admin.`
+                    : `Pilih PIC baru untuk ${selectedIds.length} data owner yang dicentang.`}
                 </p>
               </div>
 
@@ -2041,34 +2223,58 @@ export default function DataKelolaanPage() {
                 onClick={closeBulkPicModal}
                 className="h-9 w-9 rounded-full bg-gray-100 font-black text-gray-600 hover:bg-gray-200"
               >
-                ×
+                ✕
               </button>
             </div>
 
             <form onSubmit={handleSaveBulkPic} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
               <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4">
-                <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
-                  <FieldIcon type="sales" />
-                  PIC Sales Baru
-                </label>
+                {isSalesState ? (
+                  <>
+                    <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Alasan Invalid
+                    </label>
+                    <textarea
+                      value={bulkActionReason}
+                      onChange={(e) => setBulkActionReason(e.target.value)}
+                      required
+                      rows={3}
+                      placeholder="Masukkan alasan mengapa lead ini dikembalikan..."
+                      className="w-full rounded-xl border border-red-100 bg-white p-3 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E] resize-none"
+                    ></textarea>
+                    <p className="mt-2 text-[11px] font-medium text-gray-400">
+                      Semua data yang dicentang akan dikembalikan ke Admin dengan alasan ini.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
+                      <FieldIcon type="sales" />
+                      {isAdminState ? "PIC Supervisor Baru" : "PIC Sales Baru"}
+                    </label>
 
-                <select
-                  value={bulkSelectedPic}
-                  onChange={(event) => setBulkSelectedPic(event.target.value)}
-                  required
-                  className="w-full cursor-pointer rounded-xl border border-red-100 bg-white p-3 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
-                >
-                  <option value="">Pilih PIC Sales</option>
-                  {combinedPicList.map((pic) => (
-                    <option key={`${pic.id}-${pic.name}`} value={pic.name}>
-                      {pic.name}
-                    </option>
-                  ))}
-                </select>
+                    <select
+                      value={bulkSelectedPic}
+                      onChange={(event) => setBulkSelectedPic(event.target.value)}
+                      required
+                      className="w-full cursor-pointer rounded-xl border border-red-100 bg-white p-3 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
+                    >
+                      <option value="">{isAdminState ? "Pilih Supervisor" : "Pilih Sales"}</option>
+                      {(isAdminState ? supervisorList : salesList).map((pic) => (
+                        <option key={`${pic.id}-${pic.name}`} value={pic.name}>
+                          {pic.name}
+                        </option>
+                      ))}
+                    </select>
 
-                <p className="mt-2 text-[11px] font-medium text-gray-400">
-                  Setelah disimpan, semua data yang dicentang akan berubah ke PIC yang dipilih.
-                </p>
+                    <p className="mt-2 text-[11px] font-medium text-gray-400">
+                      Setelah disimpan, semua data yang dicentang akan berubah ke PIC yang dipilih.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 border-t pt-4">
@@ -2084,7 +2290,7 @@ export default function DataKelolaanPage() {
                   type="submit"
                   className="rounded-xl bg-[#C92C1E] px-5 py-2 text-xs font-extrabold text-white shadow-sm hover:bg-[#A82216]"
                 >
-                  Simpan PIC
+                  {isSalesState ? "Lepas Lead" : "Simpan PIC"}
                 </button>
               </div>
             </form>

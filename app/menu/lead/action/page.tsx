@@ -32,6 +32,8 @@ type ActionButtonsProps<T extends ActionItem> = {
   onCall: (item: T) => void;
   onEdit: (item: T, mode: EditModalMode) => void;
   onDelete: (item: T) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 };
 
 type EditProfileModalProps<T extends EditProfileItem> = {
@@ -684,6 +686,8 @@ export default function ActionButtons<T extends ActionItem>({
   onCall,
   onEdit,
   onDelete,
+  canEdit = true,
+  canDelete = true,
 }: ActionButtonsProps<T>) {
   return (
     <div className="flex items-center justify-center gap-3">
@@ -696,23 +700,27 @@ export default function ActionButtons<T extends ActionItem>({
         <CallIcon className="h-5 w-5" />
       </button>
 
-      <button
-        type="button"
-        onClick={() => onEdit(item, editMode)}
-        className="text-gray-600 transition hover:scale-110 hover:text-[#C92C1E]"
-        title="Edit profil"
-      >
-        <EditIcon className="h-5 w-5" />
-      </button>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => onEdit(item, editMode)}
+          className="text-gray-600 transition hover:scale-110 hover:text-[#C92C1E]"
+          title="Edit profil"
+        >
+          <EditIcon className="h-5 w-5" />
+        </button>
+      )}
 
-      <button
-        type="button"
-        onClick={() => onDelete(item)}
-        className="text-gray-500 transition hover:scale-110 hover:text-red-600"
-        title="Hapus data"
-      >
-        <TrashIcon className="h-5 w-5" />
-      </button>
+      {canDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(item)}
+          className="text-gray-500 transition hover:scale-110 hover:text-red-600"
+          title="Hapus data"
+        >
+          <TrashIcon className="h-5 w-5" />
+        </button>
+      )}
     </div>
   );
 }
