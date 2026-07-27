@@ -66,9 +66,16 @@ export interface BackendOwner {
 
 export interface BackendOutlet {
   id: number;
+  owner_id?: number | null;
+  code?: string;
   name: string;
   phone: string;
+  province?: string;
+  city?: string;
   address?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface OwnerOutletListResponse {
@@ -567,6 +574,292 @@ export async function getEligiblePromotions(planId: number): Promise<CatalogProm
   return Array.isArray(data.data) ? data.data : [];
 }
 
+// ──────────────── Katalog: manajemen penuh Package/Plan/Promotion ─────────
+//
+// Dibangun terpisah dari getCatalogPackages/getCatalogPlans/getEligiblePromotions
+// di atas (yang tetap dipertahankan — masih dipakai `data-kelolaan/call` dan
+// `kelolaan-mitra/jenis-mitra`) karena kebutuhannya beda: halaman Katalog
+// butuh CRUD penuh + trash + bulk untuk KETIGA entitas, bukan cuma daftar
+// read-only untuk dropdown. Backend (`internal/catalog/`) simetris persis
+// untuk ketiganya (list/trash/unscoped/create/get/update/delete/restore/
+// force/bulk×3) — dipakai satu factory generik `makeCatalogCrud` alih-alih
+// menyalin 9 fungsi × 3 entitas.
+
+export interface CatalogListMeta {
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export type CatalogScope = "ACTIVE" | "DELETED" | "ALL";
+
+function buildCatalogQuery(params: Record<string, unknown>): string {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      sp.set(key, String(value));
+    }
+  });
+  const qs = sp.toString();
+  return qs ? `?${qs}` : "";
+}
+
+function makeCatalogCrud<TItem, TCreate, TUpdate extends Record<string, unknown>>(
+  resourcePath: "packages" | "plans" | "promotions",
+) {
+  const base = `${API_BASE_URL}/api/v1/catalog/${resourcePath}`;
+
+  return {
+    list: async (
+      params: Record<string, unknown> & { scope?: CatalogScope } = {},
+    ): Promise<{ items: TItem[]; pagination: CatalogListMeta }> => {
+      const { scope, ...rest } = params;
+      const suffix = scope === "DELETED" ? "/trash" : scope === "ALL" ? "/unscoped" : "";
+      const res = await fetch(`${base}${suffix}${buildCatalogQuery(rest)}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      const data = await handleResponse<{ data: { items: TItem[]; pagination: CatalogListMeta } }>(res);
+      return data.data;
+    },
+    create: async (payload: TCreate): Promise<TItem> => {
+      const res = await fetch(base, {
+        method: "POST",
+        credentials: "include",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const data = await handleResponse<{ data: TItem }>(res);
+      return data.data;
+    },
+    update: async (id: number, payload: TUpdate): Promise<TItem> => {
+      const res = await fetch(`${base}/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const data = await handleResponse<{ data: TItem }>(res);
+      return data.data;
+    },
+    remove: async (id: number): Promise<unknown> => {
+      const res = await fetch(`${base}/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      return handleResponse(res);
+    },
+    restore: async (id: number): Promise<unknown> => {
+      const res = await fetch(`${base}/${id}/restore`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      return handleResponse(res);
+    },
+    forceRemove: async (id: number): Promise<unknown> => {
+      const res = await fetch(`${base}/${id}/force`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      return handleResponse(res);
+    },
+    bulkRemove: async (ids: number[]): Promise<unknown> => {
+      const res = await fetch(`${base}/bulk`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ ids }),
+      });
+      return handleResponse(res);
+    },
+    bulkRestore: async (ids: number[]): Promise<unknown> => {
+      const res = await fetch(`${base}/bulk/restore`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ ids }),
+      });
+      return handleResponse(res);
+    },
+    bulkForceRemove: async (ids: number[]): Promise<unknown> => {
+      const res = await fetch(`${base}/bulk/force`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ ids }),
+      });
+      return handleResponse(res);
+    },
+  };
+}
+
+// --- Package ---
+
+export interface CatalogPackageItem {
+  id: number;
+  code: string;
+  name: string;
+  level_order: number;
+  description?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePackagePayload {
+  code: string;
+  name: string;
+  level_order: number;
+  description?: string;
+  active?: boolean;
+}
+
+export type UpdatePackagePayload = Partial<CreatePackagePayload>;
+
+export const packageApi = makeCatalogCrud<CatalogPackageItem, CreatePackagePayload, UpdatePackagePayload>(
+  "packages",
+);
+
+// --- Plan ---
+
+export interface CatalogPlanItem {
+  id: number;
+  package: { id: number; code: string; name: string };
+  code: string;
+  name: string;
+  tenure_months: number;
+  duration_days: number;
+  price: string;
+  currency: string;
+  effective_from: string;
+  effective_to?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePlanPayload {
+  package_id: number;
+  code: string;
+  name: string;
+  tenure_months: number;
+  price: string;
+  currency?: string;
+  effective_from: string;
+  effective_to?: string;
+  active?: boolean;
+}
+
+export type UpdatePlanPayload = Partial<CreatePlanPayload>;
+
+export const planApi = makeCatalogCrud<CatalogPlanItem, CreatePlanPayload, UpdatePlanPayload>("plans");
+
+// --- Promotion + Benefit ---
+
+export interface CatalogBenefitItem {
+  id: number;
+  promotion_id: number;
+  benefit_type: string;
+  package?: { id: number; code: string; name: string };
+  duration_days?: number;
+  quantity?: number;
+  description?: string;
+  metadata_json?: unknown;
+  created_at: string;
+}
+
+export interface CatalogPromotionItem {
+  id: number;
+  code: string;
+  name: string;
+  promotion_type: string;
+  charge_type: "FREE" | "PAID";
+  additional_charge: string;
+  priority: number;
+  description?: string;
+  effective_from: string;
+  effective_to?: string;
+  active: boolean;
+  benefits?: CatalogBenefitItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePromotionPayload {
+  code: string;
+  name: string;
+  promotion_type: string;
+  charge_type: "FREE" | "PAID";
+  additional_charge?: string;
+  priority?: number;
+  description?: string;
+  effective_from: string;
+  effective_to?: string;
+  active?: boolean;
+}
+
+export type UpdatePromotionPayload = Partial<CreatePromotionPayload>;
+
+export const promotionApi = makeCatalogCrud<
+  CatalogPromotionItem,
+  CreatePromotionPayload,
+  UpdatePromotionPayload
+>("promotions");
+
+export interface CreateBenefitPayload {
+  benefit_type: string;
+  package_id?: number;
+  duration_days?: number;
+  quantity?: number;
+  description?: string;
+}
+
+export async function listPromotionBenefits(promotionId: number): Promise<CatalogBenefitItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/catalog/promotions/${promotionId}/benefits`, {
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+  const data = await handleResponse<{ data: { items: CatalogBenefitItem[] } } | { data: CatalogBenefitItem[] }>(res);
+  const inner = (data as { data: unknown }).data;
+  if (Array.isArray(inner)) return inner as CatalogBenefitItem[];
+  return (inner as { items: CatalogBenefitItem[] })?.items || [];
+}
+
+export async function createPromotionBenefit(
+  promotionId: number,
+  payload: CreateBenefitPayload,
+): Promise<CatalogBenefitItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/catalog/promotions/${promotionId}/benefits`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await handleResponse<{ data: CatalogBenefitItem }>(res);
+  return data.data;
+}
+
+export async function deletePromotionBenefit(promotionId: number, benefitId: number): Promise<unknown> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/catalog/promotions/${promotionId}/benefits/${benefitId}`,
+    { method: "DELETE", credentials: "include", headers: getAuthHeaders() },
+  );
+  return handleResponse(res);
+}
+
+export async function setPromotionEligiblePlans(promotionId: number, planIds: number[]): Promise<unknown> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/catalog/promotions/${promotionId}/eligible-plans`, {
+    method: "PUT",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ plan_ids: planIds }),
+  });
+  return handleResponse(res);
+}
+
 export async function scheduleTraining(leadId: number, data: ScheduleTrainingRequest) {
   const res = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/trainings`, {
     method: "POST",
@@ -761,3 +1054,1088 @@ export async function getProfile(): Promise<UserResponse> {
   const responseData = await handleResponse<UserResponse>(res);
   return responseData;
 }
+
+// --- Partner domain API ------------------------------------------------------
+
+interface ApiEnvelope<T> {
+  data: T;
+  meta: {
+    request_id: string;
+  };
+}
+
+export interface ApiPagination {
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface PartnerTypeItem {
+  id: number;
+  code: string;
+  name: string;
+  commission_mode: "PERCENTAGE" | "FIXED";
+  commission_value: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartnerItem {
+  id: number;
+  partner_type: PartnerTypeItem;
+  code: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  bank_account_masked?: string | null;
+  status: "ACTIVE" | "INACTIVE";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartnerAssignmentItem {
+  id: number;
+  partner_id: number;
+  user_id: number;
+  user_name?: string | null;
+  user_role?: string | null;
+  assigned_by_id?: number | null;
+  assigned_by_name?: string | null;
+  assigned_at: string;
+  unassigned_at?: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartnerInteractionItem {
+  id: number;
+  partner_id: number;
+  interaction_type: "CALL" | "CHAT";
+  interaction_at: string;
+  note?: string | null;
+  created_at: string;
+}
+
+export interface PartnerReferralItem {
+  id: number;
+  partner_id: number;
+  lead_id: number;
+  referral_date: string;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface PartnerTypeListData {
+  items: PartnerTypeItem[];
+  pagination: ApiPagination;
+}
+
+export interface PartnerListData {
+  items: PartnerItem[];
+  pagination: ApiPagination;
+}
+
+export interface PartnerAssignmentListData {
+  items: PartnerAssignmentItem[];
+  pagination: ApiPagination;
+}
+
+export interface PartnerInteractionListData {
+  items: PartnerInteractionItem[];
+  pagination: ApiPagination;
+}
+
+export interface PartnerReferralListData {
+  items: PartnerReferralItem[];
+  pagination: ApiPagination;
+}
+
+export interface PartnerListParams {
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PartnerInteractionListParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface CreatePartnerTypePayload {
+  code: string;
+  name: string;
+  commission_mode: "PERCENTAGE" | "FIXED";
+  commission_value: string;
+  description?: string;
+}
+
+export interface UpdatePartnerTypePayload {
+  name?: string;
+  commission_mode?: "PERCENTAGE" | "FIXED";
+  commission_value?: string;
+  description?: string;
+}
+
+export interface CreatePartnerPayload {
+  partner_type_id: number;
+  code: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  bank_account?: string;
+  status?: "ACTIVE" | "INACTIVE";
+}
+
+export interface UpdatePartnerPayload {
+  name?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  bank_account?: string;
+  status?: "ACTIVE" | "INACTIVE";
+}
+
+export interface AssignPartnerPicPayload {
+  user_id: number;
+  assigned_by_id?: number;
+}
+
+export interface CreatePartnerInteractionPayload {
+  interaction_type: "CALL" | "CHAT";
+  interaction_at?: string;
+  note?: string;
+}
+
+export interface CreatePartnerReferralPayload {
+  lead_id: number;
+  referral_date?: string;
+  notes?: string;
+}
+
+function buildQueryString(params: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      query.set(key, String(value));
+    }
+  });
+
+  const value = query.toString();
+  return value ? `?${value}` : "";
+}
+
+export async function listPartnerTypes(): Promise<PartnerTypeListData> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerTypeListData>>(res);
+  return data.data;
+}
+
+export async function createPartnerType(
+  payload: CreatePartnerTypePayload,
+): Promise<PartnerTypeItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerTypeItem>>(res);
+  return data.data;
+}
+
+export async function updatePartnerType(
+  id: number,
+  payload: UpdatePartnerTypePayload,
+): Promise<PartnerTypeItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types/${id}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerTypeItem>>(res);
+  return data.data;
+}
+
+export async function listPartners(
+  params: PartnerListParams = {},
+): Promise<PartnerListData> {
+  const qs = buildQueryString({
+    search: params.search,
+    limit: params.limit,
+    offset: params.offset,
+  });
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerListData>>(res);
+  return data.data;
+}
+
+export async function getPartner(partnerId: number): Promise<PartnerItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerItem>>(res);
+  return data.data;
+}
+
+export async function createPartner(
+  payload: CreatePartnerPayload,
+): Promise<PartnerItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerItem>>(res);
+  return data.data;
+}
+
+export async function updatePartner(
+  partnerId: number,
+  payload: UpdatePartnerPayload,
+): Promise<PartnerItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerItem>>(res);
+  return data.data;
+}
+
+export async function deactivatePartner(partnerId: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  await handleResponse(res);
+}
+
+export async function getActivePartnerAssignment(
+  partnerId: number,
+): Promise<PartnerAssignmentItem | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/assignments/active`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    },
+  );
+
+  if (res.status === 404) {
+    return null;
+  }
+
+  const data = await handleResponse<ApiEnvelope<PartnerAssignmentItem>>(res);
+  return data.data;
+}
+
+export async function listPartnerAssignments(
+  partnerId: number,
+): Promise<PartnerAssignmentListData> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/assignments`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    },
+  );
+
+  const data = await handleResponse<ApiEnvelope<PartnerAssignmentListData>>(res);
+  return data.data;
+}
+
+export async function assignPartnerPic(
+  partnerId: number,
+  payload: AssignPartnerPicPayload,
+): Promise<PartnerAssignmentItem> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/assignments`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    },
+  );
+
+  const data = await handleResponse<ApiEnvelope<PartnerAssignmentItem>>(res);
+  return data.data;
+}
+
+export async function releasePartnerPic(partnerId: number): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/assignments/release`,
+    {
+      method: "DELETE",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    },
+  );
+
+  await handleResponse(res);
+}
+
+export async function listPartnerInteractions(
+  partnerId: number,
+  params: PartnerInteractionListParams = {},
+): Promise<PartnerInteractionListData> {
+  const qs = buildQueryString({
+    limit: params.limit,
+    offset: params.offset,
+  });
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/interactions${qs}`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    },
+  );
+
+  const data = await handleResponse<ApiEnvelope<PartnerInteractionListData>>(res);
+  return data.data;
+}
+
+export async function createPartnerInteraction(
+  partnerId: number,
+  payload: CreatePartnerInteractionPayload,
+): Promise<PartnerInteractionItem> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/interactions`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    },
+  );
+
+  const data = await handleResponse<ApiEnvelope<PartnerInteractionItem>>(res);
+  return data.data;
+}
+
+export async function listPartnerReferrals(
+  partnerId: number,
+): Promise<PartnerReferralListData> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/referrals`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    },
+  );
+
+  const data = await handleResponse<ApiEnvelope<PartnerReferralListData>>(res);
+  return data.data;
+}
+
+export async function createPartnerReferral(
+  partnerId: number,
+  payload: CreatePartnerReferralPayload,
+): Promise<PartnerReferralItem> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/referrals`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    },
+  );
+
+  const data = await handleResponse<ApiEnvelope<PartnerReferralItem>>(res);
+  return data.data;
+}
+
+export type PartnerCommissionRuleMode = "PERCENTAGE" | "FIXED" | "TIER";
+export type PartnerCommissionStatus = "PENDING" | "APPROVED" | "PAID" | "CANCELLED";
+
+export interface PartnerUserBrief {
+  id: number;
+  name: string;
+  role?: string;
+}
+
+export interface PartnerCommissionTierItem {
+  id: number;
+  tier_order: number;
+  min_closings: number;
+  max_closings?: number | null;
+  mode: "PERCENTAGE" | "FIXED";
+  value: string;
+}
+
+export interface PartnerCommissionRuleItem {
+  id: number;
+  partner_type_id: number;
+  package_id?: number | null;
+  package_code?: string | null;
+  package_name?: string | null;
+  mode: PartnerCommissionRuleMode;
+  value?: string | null;
+  effective_from: string;
+  effective_to?: string | null;
+  active: boolean;
+  created_by?: PartnerUserBrief | null;
+  tiers?: PartnerCommissionTierItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartnerCommissionRuleListData {
+  items: PartnerCommissionRuleItem[];
+  pagination: ApiPagination;
+}
+
+export interface CreatePartnerCommissionRulePayload {
+  package_id?: number;
+  mode: PartnerCommissionRuleMode;
+  value?: string;
+  effective_from: string;
+  effective_to?: string;
+  tiers?: Array<{
+    tier_order: number;
+    min_closings: number;
+    max_closings?: number;
+    mode: "PERCENTAGE" | "FIXED";
+    value: string;
+  }>;
+}
+
+export interface PartnerCommissionRuleListParams {
+  package_id?: number;
+  active_only?: boolean;
+}
+
+export interface PartnerCommissionItem {
+  id: number;
+  code: string;
+  partner_id: number;
+  partner_code?: string | null;
+  partner_name?: string | null;
+  referral_id: number;
+  closing_id: number;
+  closing_code?: string | null;
+  commission_mode: string;
+  commission_value: string;
+  commission_rule_id?: number | null;
+  tier_ordinal?: number | null;
+  base_amount: string;
+  commission_amount: string;
+  currency: string;
+  status: PartnerCommissionStatus;
+  note?: string;
+  approved_by?: PartnerUserBrief | null;
+  approved_at?: string | null;
+  paid_by?: PartnerUserBrief | null;
+  paid_at?: string | null;
+  active_payout_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartnerCommissionListData {
+  items: PartnerCommissionItem[];
+  pagination: ApiPagination;
+}
+
+export interface SyncPartnerCommissionsData {
+  created: number;
+  items: PartnerCommissionItem[];
+}
+
+export interface PartnerCommissionListParams {
+  status?: PartnerCommissionStatus;
+  page?: number;
+  limit?: number;
+}
+
+export async function approvePartnerCommission(
+  partnerId: number,
+  commissionId: number,
+): Promise<PartnerCommissionItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}/commissions/${commissionId}/approve`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionItem>>(res);
+  return data.data;
+}
+
+export async function payPartnerCommission(
+  partnerId: number,
+  commissionId: number,
+): Promise<PartnerCommissionItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}/commissions/${commissionId}/pay`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionItem>>(res);
+  return data.data;
+}
+
+export async function cancelPartnerCommission(
+  partnerId: number,
+  commissionId: number,
+): Promise<PartnerCommissionItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}/commissions/${commissionId}/cancel`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionItem>>(res);
+  return data.data;
+}
+export async function getPartnerType(id: number): Promise<PartnerTypeItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types/${id}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerTypeItem>>(res);
+  return data.data;
+}
+
+export async function listPartnerTypeCommissionRules(
+  partnerTypeId: number,
+  params: PartnerCommissionRuleListParams = {},
+): Promise<PartnerCommissionRuleListData> {
+  const qs = buildQueryString({
+    package_id: params.package_id,
+    active_only: params.active_only === undefined ? undefined : String(params.active_only),
+  });
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types/${partnerTypeId}/commission-rules${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionRuleListData>>(res);
+  return data.data;
+}
+
+export async function getPartnerTypeCommissionRule(
+  partnerTypeId: number,
+  ruleId: number,
+): Promise<PartnerCommissionRuleItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types/${partnerTypeId}/commission-rules/${ruleId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionRuleItem>>(res);
+  return data.data;
+}
+
+export async function createPartnerTypeCommissionRule(
+  partnerTypeId: number,
+  payload: CreatePartnerCommissionRulePayload,
+): Promise<PartnerCommissionRuleItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types/${partnerTypeId}/commission-rules`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionRuleItem>>(res);
+  return data.data;
+}
+
+export async function deactivatePartnerTypeCommissionRule(
+  partnerTypeId: number,
+  ruleId: number,
+): Promise<PartnerCommissionRuleItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types/${partnerTypeId}/commission-rules/${ruleId}/deactivate`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionRuleItem>>(res);
+  return data.data;
+}
+
+export async function listPartnerCommissions(
+  partnerId: number,
+  params: PartnerCommissionListParams = {},
+): Promise<PartnerCommissionListData> {
+  const qs = buildQueryString({
+    status: params.status,
+    page: params.page,
+    limit: params.limit,
+  });
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}/commissions${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<PartnerCommissionListData>>(res);
+  return data.data;
+}
+
+export async function syncPartnerCommissions(partnerId: number): Promise<SyncPartnerCommissionsData> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}/commissions/sync`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<SyncPartnerCommissionsData>>(res);
+  return data.data;
+}
+
+// ─── Outlet Global API (Modul Kelolaan Outlet) ─────────────────────────────
+//
+// Endpoint `/api/v1/outlets*` ADA di kode Go (`internal/customer/handler.go`)
+// tapi TIDAK terdokumentasi di openapi.yaml backend (basi) — dikonfirmasi
+// langsung lewat baca source, bukan spec. Tiga "tabel" (Umum/Langganan/
+// Sampah) sebenarnya SATU sumber data (`OutletOverviewItem`/
+// `OutletSubscriptionStatusItem`) dengan kolom berbeda ditampilkan, bukan
+// tiga endpoint yang tidak berhubungan.
+
+export interface OutletOwnerBrief {
+  id?: number;
+  code?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  brand_name?: string;
+  message?: string;
+}
+
+export interface OutletWalletBrief {
+  id: number;
+  account_code: string;
+  currency: string;
+  balance: string;
+  ledger_balance: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutletSubscriptionSummary {
+  total_subscriptions: number;
+  active_subscriptions: number;
+  latest_subscription_status?: string;
+  latest_subscription_start?: string;
+  latest_subscription_end?: string;
+}
+
+// "Tabel Informasi Umum Outlet" — GET /outlets (+ /trash, /unscoped)
+export interface OutletOverviewItem {
+  id: number;
+  owner: OutletOwnerBrief;
+  wallet: OutletWalletBrief;
+  code: string;
+  name: string;
+  phone?: string;
+  province?: string;
+  city?: string;
+  address?: string;
+  status: string;
+  subscription_summary: OutletSubscriptionSummary;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutletOverviewListData {
+  items: OutletOverviewItem[];
+  pagination: ApiPagination;
+}
+
+export interface ListGlobalOutletsParams {
+  q?: string;
+  code?: string;
+  name?: string;
+  phone?: string;
+  brand_name?: string;
+  province?: string;
+  city?: string;
+  owner_id?: number;
+  page?: number;
+  limit?: number;
+  sort?: string;
+}
+
+export type OutletScope = "active" | "trash" | "unscoped";
+
+export async function listGlobalOutlets(
+  params: ListGlobalOutletsParams = {},
+  scope: OutletScope = "active",
+): Promise<OutletOverviewListData> {
+  const suffix = scope === "active" ? "" : `/${scope}`;
+  const qs = buildQueryString({ ...params });
+  const res = await fetch(`${API_BASE_URL}/api/v1/outlets${suffix}${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<OutletOverviewListData>>(res);
+  return data.data;
+}
+
+export interface PackagePlanBrief {
+  package_id?: number;
+  package_code?: string;
+  package_name?: string;
+  plan_id?: number;
+  plan_code?: string;
+  plan_name?: string;
+  tenure_months?: number;
+}
+
+// "Tabel Langganan Outlet" (+ "Filter Status Langganan Berdasarkan Bulan") —
+// GET /outlets/subscription-statuses?month=YYYY-MM&subscription_status=...
+export interface OutletSubscriptionStatusItem {
+  outlet_id: number;
+  outlet_code: string;
+  outlet_name: string;
+  outlet_phone?: string;
+  outlet_province?: string;
+  outlet_city?: string;
+  outlet_address?: string;
+  owner: OutletOwnerBrief;
+  subscription_status_code: string;
+  subscription_status_label: string;
+  remaining_days?: number;
+  remaining_days_display: string;
+  last_subscription_end?: string;
+  last_subscription_end_display: string;
+  subscription_start_date?: string;
+  subscription_end_date?: string;
+  package_plan: PackagePlanBrief;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutletSubscriptionStatusListData {
+  reference_month: string;
+  reference_month_start: string;
+  reference_month_end: string;
+  items: OutletSubscriptionStatusItem[];
+  pagination: ApiPagination;
+}
+
+export interface ListOutletSubscriptionStatusesParams {
+  q?: string;
+  code?: string;
+  name?: string;
+  phone?: string;
+  brand_name?: string;
+  province?: string;
+  city?: string;
+  owner_id?: number;
+  subscription_status?: string;
+  month?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+}
+
+export async function listOutletSubscriptionStatuses(
+  params: ListOutletSubscriptionStatusesParams = {},
+): Promise<OutletSubscriptionStatusListData> {
+  const qs = buildQueryString({ ...params });
+  const res = await fetch(`${API_BASE_URL}/api/v1/outlets/subscription-statuses${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<OutletSubscriptionStatusListData>>(res);
+  return data.data;
+}
+
+// Detail Outlet — GET /outlets/:outlet_id (global, tidak perlu tahu owner_id di URL)
+export interface OutletDetail {
+  id: number;
+  owner: OutletOwnerBrief;
+  wallet: OutletWalletBrief;
+  code: string;
+  name: string;
+  phone?: string;
+  province?: string;
+  city?: string;
+  address?: string;
+  status: string;
+  subscription_summary: OutletSubscriptionSummary;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getGlobalOutlet(outletId: number): Promise<OutletDetail> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/outlets/${outletId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<OutletDetail>>(res);
+  return data.data;
+}
+
+// Create/Update Outlet — admin-only di backend (`actorCanManageOwners`,
+// `internal/customer/service.go`), tetap owner-scoped di URL (backend belum
+// punya create/update level-global), tapi dipicu dari halaman Kelolaan
+// Outlet lewat OwnerSearchPicker, bukan dari halaman Data Owner.
+export interface CreateOutletPayload {
+  code: string;
+  name: string;
+  phone?: string;
+  province?: string;
+  city?: string;
+  address?: string;
+}
+
+export async function createOutletForOwner(
+  ownerId: number,
+  payload: CreateOutletPayload,
+): Promise<BackendOutlet> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BackendOutlet>>(res);
+  return data.data;
+}
+
+export async function updateOutletForOwner(
+  ownerId: number,
+  outletId: number,
+  payload: Partial<CreateOutletPayload>,
+): Promise<BackendOutlet> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/${outletId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BackendOutlet>>(res);
+  return data.data;
+}
+
+export async function restoreOutletForOwner(
+  ownerId: number,
+  outletId: number,
+): Promise<BackendOutlet> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/${outletId}/restore`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BackendOutlet>>(res);
+  return data.data;
+}
+
+export async function forceDeleteOutletForOwner(
+  ownerId: number,
+  outletId: number,
+): Promise<unknown> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/${outletId}/force`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  return handleResponse(res);
+}
+
+// Bulk mutation outlet — backend hanya expose endpoint bulk yang OWNER-SCOPED
+// (`/owners/:owner_id/outlets/bulk*`), tidak ada versi lintas-owner. Untuk
+// mendukung UX "pilih banyak baris lintas-owner sekaligus" di tabel global,
+// caller wajib mengelompokkan ID terpilih per owner_id lebih dulu, lalu
+// memanggil fungsi ini satu kali per grup owner.
+export interface BulkOutletUpdateItem {
+  id: number;
+  code?: string;
+  name?: string;
+  phone?: string;
+  province?: string;
+  city?: string;
+  address?: string;
+}
+
+export interface BulkOutletUpdateResult {
+  items: BackendOutlet[];
+  total: number;
+}
+
+export async function bulkUpdateOutletsForOwner(
+  ownerId: number,
+  items: BulkOutletUpdateItem[],
+): Promise<BulkOutletUpdateResult> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/bulk`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ items }),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BulkOutletUpdateResult>>(res);
+  return data.data;
+}
+
+export interface BulkOutletActionResult {
+  ids: number[];
+  affected: number;
+}
+
+export async function bulkTrashOutletsForOwner(
+  ownerId: number,
+  ids: number[],
+): Promise<BulkOutletActionResult> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/bulk`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ids }),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BulkOutletActionResult>>(res);
+  return data.data;
+}
+
+export async function bulkForceDeleteOutletsForOwner(
+  ownerId: number,
+  ids: number[],
+): Promise<BulkOutletActionResult> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/bulk/force`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ids }),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BulkOutletActionResult>>(res);
+  return data.data;
+}
+
+// Riwayat wallet & subscription untuk Detail Outlet — dua-duanya di-scope
+// per OWNER di backend (wallet milik akun owner, dipakai bersama semua
+// outlet-nya), bukan per-outlet.
+export interface WalletTransactionItem {
+  id: number;
+  code: string;
+  transaction_type: string;
+  direction: string;
+  amount: string;
+  balance_before: string;
+  balance_after: string;
+  currency: string;
+  source_type: string;
+  source_reference?: string;
+  occurred_at: string;
+  note?: string;
+  created_by?: { id: number; name: string; role?: string };
+  created_at: string;
+}
+
+export interface WalletTransactionListData {
+  items: WalletTransactionItem[];
+  pagination: ApiPagination;
+}
+
+export async function listOwnerWalletTransactions(
+  ownerId: number,
+  params: { page?: number; limit?: number } = {},
+): Promise<WalletTransactionListData> {
+  const qs = buildQueryString({ ...params });
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/wallet/transactions${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<WalletTransactionListData>>(res);
+  return data.data;
+}
+
+export interface SubscriptionItem {
+  id: number;
+  code: string;
+  owner?: { id: number; code?: string; name?: string };
+  outlet_id?: number;
+  order?: { id: number; code?: string; name?: string };
+  package?: { id: number; code?: string; name?: string };
+  plan?: { id: number; code?: string; name?: string };
+  status: string;
+  active_from: string;
+  active_until: string;
+  total_duration_days?: number;
+  source_type?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriptionListData {
+  items: SubscriptionItem[];
+  pagination: ApiPagination;
+}
+
+export async function listSubscriptionsByOutlet(
+  outletId: number,
+  params: { page?: number; limit?: number } = {},
+): Promise<SubscriptionListData> {
+  const qs = buildQueryString({ outlet_id: outletId, ...params });
+  const res = await fetch(`${API_BASE_URL}/api/v1/subscriptions${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<SubscriptionListData>>(res);
+  return data.data;
+}
+
+
+

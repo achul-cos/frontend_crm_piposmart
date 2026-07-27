@@ -154,6 +154,26 @@ export default function RootLayout({
       ),
     },
     {
+      text: "Kelolaan Outlet",
+      href: "/menu/kelolaan-outlet",
+      colorClass: "text-[#C92C1E]",
+      icon: (className: string) => (
+        <svg
+          className={className}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3.75 21h16.5M4.5 21V8.25A2.25 2.25 0 016.75 6h10.5a2.25 2.25 0 012.25 2.25V21M8.25 6V3.75h7.5V6M8.25 11.25h.008M12 11.25h.008M15.75 11.25h.008M8.25 15h.008M12 15h.008M15.75 15h.008"
+          />
+        </svg>
+      ),
+    },
+    {
       text: "Paket Langganan",
       href: "/menu/paket-langganan",
       colorClass: "text-[#C92C1E]",

@@ -1,0 +1,607 @@
+﻿"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  createPartner,
+  createPartnerType,
+  createPartnerTypeCommissionRule,
+  deactivatePartner,
+  deactivatePartnerTypeCommissionRule,
+  getCatalogPackages,
+  getCatalogPlans,
+  getPartnerType,
+  getProfile,
+  listPartners,
+  listPartnerTypeCommissionRules,
+  listPartnerTypes,
+  updatePartner,
+  updatePartnerType,
+
+  type CatalogPackage,
+  type CatalogPlan,
+  type PartnerCommissionRuleItem,
+  type PartnerItem,
+  type PartnerTypeItem,
+} from "@/app/lib/api";
+
+type TableMode = "PARTNER_TYPES" | "ACTIVE_PARTNERS" | "INACTIVE_PARTNERS";
+
+type PartnerFormState = {
+  partnerTypeId: string;
+  code: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  bankAccount: string;
+  status: "ACTIVE" | "INACTIVE";
+};
+
+type TypeFormState = {
+  code: string;
+  name: string;
+  commissionMode: "PERCENTAGE" | "FIXED";
+  commissionValue: string;
+  description: string;
+};
+
+type RuleFormState = {
+  packageId: string;
+  mode: "PERCENTAGE" | "FIXED" | "TIER";
+  value: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+};
+
+const PAGE_SIZE = 20;
+const EMPTY_PARTNER_FORM: PartnerFormState = {
+  partnerTypeId: "",
+  code: "",
+  name: "",
+  phone: "",
+  email: "",
+  address: "",
+  bankAccount: "",
+  status: "ACTIVE",
+};
+const EMPTY_TYPE_FORM: TypeFormState = {
+  code: "",
+  name: "",
+  commissionMode: "PERCENTAGE",
+  commissionValue: "",
+  description: "",
+};
+const EMPTY_RULE_FORM: RuleFormState = {
+  packageId: "",
+  mode: "PERCENTAGE",
+  value: "",
+  effectiveFrom: "",
+  effectiveTo: "",
+};
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  return "Terjadi kesalahan yang tidak diketahui.";
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatMoney(value?: string | number | null) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+function formatFlatCommission(partnerType?: PartnerTypeItem | null) {
+  if (!partnerType) return "-";
+  const value = Number(partnerType.commission_value || 0);
+  return partnerType.commission_mode === "PERCENTAGE" ? `${value}%` : formatMoney(value);
+}
+
+function ModalShell({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-950/55" onClick={onClose}>
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="flex min-h-full items-start justify-center p-4 md:items-center md:p-6">
+          <div
+            className="w-full max-w-6xl rounded-3xl border border-gray-200 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 md:px-6">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C92C1E]">Kelolaan Mitra</p>
+                <h2 className="mt-1 text-lg font-black text-gray-950">{title}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-500 transition hover:bg-gray-50"
+              >
+                Tutup
+              </button>
+            </div>
+            <div className="max-h-[calc(100vh-5rem)] overflow-y-auto p-5 md:p-6">{children}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function KelolaanMitraPage() {
+  const [currentRole, setCurrentRole] = useState("");
+  const [tableMode, setTableMode] = useState<TableMode>("ACTIVE_PARTNERS");
+  const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
+  const [partners, setPartners] = useState<PartnerItem[]>([]);
+  const [packages, setPackages] = useState<CatalogPackage[]>([]);
+  const [plans, setPlans] = useState<CatalogPlan[]>([]);
+  const [selectedType, setSelectedType] = useState<PartnerTypeItem | null>(null);
+  const [commissionRules, setCommissionRules] = useState<PartnerCommissionRuleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [savingType, setSavingType] = useState(false);
+  const [savingRule, setSavingRule] = useState(false);
+  const [pageError, setPageError] = useState("");
+  const [searchDraft, setSearchDraft] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [typeSearch, setTypeSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [editingPartner, setEditingPartner] = useState<PartnerItem | null>(null);
+  const [editingType, setEditingType] = useState<PartnerTypeItem | null>(null);
+  const [partnerForm, setPartnerForm] = useState<PartnerFormState>(EMPTY_PARTNER_FORM);
+  const [typeForm, setTypeForm] = useState<TypeFormState>(EMPTY_TYPE_FORM);
+  const [ruleForm, setRuleForm] = useState<RuleFormState>(EMPTY_RULE_FORM);
+  const [partnerFormError, setPartnerFormError] = useState("");
+  const [typeFormError, setTypeFormError] = useState("");
+  const [ruleFormError, setRuleFormError] = useState("");
+
+  const isSales = currentRole === "SALES";
+  const isAdmin = currentRole === "" || currentRole === "ADMIN";
+  const canManageTypes = currentRole === "" || currentRole === "ADMIN" || currentRole === "SUPERVISOR";
+
+  useEffect(() => {
+    if (!showPartnerModal && !showTypeModal) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showPartnerModal, showTypeModal]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const bootstrap = async () => {
+      try {
+        const [profileResult, typesResult, packagesResult, plansResult] = await Promise.allSettled([
+          getProfile(),
+          listPartnerTypes(),
+          getCatalogPackages(),
+          getCatalogPlans(),
+        ]);
+        if (cancelled) return;
+        setCurrentRole(profileResult.status === "fulfilled" ? profileResult.value.role || "" : "");
+        if (typesResult.status === "fulfilled") {
+          setPartnerTypes(typesResult.value.items || []);
+        }
+        if (packagesResult.status === "fulfilled") setPackages(packagesResult.value || []);
+        if (plansResult.status === "fulfilled") setPlans(plansResult.value || []);
+      } catch {
+        if (!cancelled) setCurrentRole("");
+      }
+    };
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPartners = async () => {
+      setLoading(true);
+      setPageError("");
+      try {
+        const result = await listPartners({
+          search: appliedSearch,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+        });
+        if (cancelled) return;
+        setPartners(result.items || []);
+
+      } catch (error) {
+        if (!cancelled) {
+          setPageError(getErrorMessage(error));
+          setPartners([]);
+
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void loadPartners();
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedSearch, page]);
+
+  const filteredPartners = useMemo(() => {
+    return partners.filter((partner) => (typeFilter === "ALL" ? true : partner.partner_type.code === typeFilter));
+  }, [partners, typeFilter]);
+
+  const activePartners = useMemo(() => filteredPartners.filter((partner) => partner.status === "ACTIVE"), [filteredPartners]);
+  const inactivePartners = useMemo(() => filteredPartners.filter((partner) => partner.status === "INACTIVE"), [filteredPartners]);
+  const filteredPartnerTypes = useMemo(() => {
+    const keyword = typeSearch.trim().toLowerCase();
+    if (!keyword) return partnerTypes;
+    return partnerTypes.filter((item) => [item.code, item.name, item.description || ""].join(" ").toLowerCase().includes(keyword));
+  }, [partnerTypes, typeSearch]);
+  const activeRuleCount = useMemo(() => commissionRules.filter((rule) => rule.active).length, [commissionRules]);
+  const selectedPackagePlans = useMemo(() => {
+    if (!ruleForm.packageId) return plans;
+    return plans.filter((plan) => plan.package?.id === Number(ruleForm.packageId));
+  }, [plans, ruleForm.packageId]);
+
+  const loadTypeDetail = async (typeId: number) => {
+    const [detailResult, rulesResult] = await Promise.all([
+      getPartnerType(typeId),
+      listPartnerTypeCommissionRules(typeId),
+    ]);
+    setSelectedType(detailResult);
+    setCommissionRules(Array.isArray(rulesResult.items) ? rulesResult.items : []);
+  };
+
+  const openCreatePartnerModal = () => {
+    setEditingPartner(null);
+    setPartnerForm(EMPTY_PARTNER_FORM);
+    setPartnerFormError("");
+    setShowPartnerModal(true);
+  };
+
+  const openEditPartnerModal = (partner: PartnerItem) => {
+    setEditingPartner(partner);
+    setPartnerForm({
+      partnerTypeId: String(partner.partner_type.id),
+      code: partner.code,
+      name: partner.name,
+      phone: partner.phone || "",
+      email: partner.email || "",
+      address: partner.address || "",
+      bankAccount: "",
+      status: partner.status,
+    });
+    setPartnerFormError("");
+    setShowPartnerModal(true);
+  };
+
+  const openCreateTypeModal = () => {
+    setEditingType(null);
+    setSelectedType(null);
+    setCommissionRules([]);
+    setTypeForm(EMPTY_TYPE_FORM);
+    setRuleForm(EMPTY_RULE_FORM);
+    setTypeFormError("");
+    setRuleFormError("");
+    setShowTypeModal(true);
+  };
+
+  const openEditTypeModal = async (partnerType: PartnerTypeItem) => {
+    setEditingType(partnerType);
+    setTypeForm({
+      code: partnerType.code,
+      name: partnerType.name,
+      commissionMode: partnerType.commission_mode,
+      commissionValue: partnerType.commission_value,
+      description: partnerType.description || "",
+    });
+    setRuleForm(EMPTY_RULE_FORM);
+    setTypeFormError("");
+    setRuleFormError("");
+    await loadTypeDetail(partnerType.id);
+    setShowTypeModal(true);
+  };
+
+  const refreshPartners = async () => {
+    const result = await listPartners({
+      search: appliedSearch,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    });
+    setPartners(result.items || []);
+
+  };
+
+  const refreshTypes = async (preferredId?: number) => {
+    const result = await listPartnerTypes();
+    const items = result.items || [];
+    setPartnerTypes(items);
+    if (preferredId) {
+      const matched = items.find((item) => item.id === preferredId);
+      if (matched) {
+        await loadTypeDetail(matched.id);
+      }
+    }
+  };
+
+  const handlePartnerSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPartnerFormError("");
+    if (!partnerForm.name.trim()) return setPartnerFormError("Nama mitra wajib diisi.");
+    if (!editingPartner && !partnerForm.partnerTypeId) return setPartnerFormError("Jenis mitra wajib dipilih.");
+    if (!editingPartner && !partnerForm.code.trim()) return setPartnerFormError("Code mitra wajib diisi.");
+
+    setSaving(true);
+    try {
+      if (editingPartner) {
+        await updatePartner(editingPartner.id, {
+          name: partnerForm.name.trim(),
+          phone: partnerForm.phone.trim() || undefined,
+          email: partnerForm.email.trim() || undefined,
+          address: partnerForm.address.trim() || undefined,
+          bank_account: partnerForm.bankAccount.trim() || undefined,
+          status: partnerForm.status,
+        });
+      } else {
+        await createPartner({
+          partner_type_id: Number(partnerForm.partnerTypeId),
+          code: partnerForm.code.trim().toUpperCase(),
+          name: partnerForm.name.trim(),
+          phone: partnerForm.phone.trim() || undefined,
+          email: partnerForm.email.trim() || undefined,
+          address: partnerForm.address.trim() || undefined,
+          bank_account: partnerForm.bankAccount.trim() || undefined,
+          status: partnerForm.status,
+        });
+      }
+      setShowPartnerModal(false);
+      await refreshPartners();
+    } catch (error) {
+      setPartnerFormError(getErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTypeSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setTypeFormError("");
+    if (!typeForm.name.trim()) return setTypeFormError("Nama jenis mitra wajib diisi.");
+    if (!editingType && !typeForm.code.trim()) return setTypeFormError("Code jenis mitra wajib diisi.");
+    if (!typeForm.commissionValue.trim()) return setTypeFormError("Nilai komisi dasar wajib diisi.");
+
+    setSavingType(true);
+    try {
+      if (editingType) {
+        await updatePartnerType(editingType.id, {
+          name: typeForm.name.trim(),
+          commission_mode: typeForm.commissionMode,
+          commission_value: typeForm.commissionValue.trim(),
+          description: typeForm.description.trim(),
+        });
+        await refreshTypes(editingType.id);
+      } else {
+        const created = await createPartnerType({
+          code: typeForm.code.trim().toUpperCase(),
+          name: typeForm.name.trim(),
+          commission_mode: typeForm.commissionMode,
+          commission_value: typeForm.commissionValue.trim(),
+          description: typeForm.description.trim() || undefined,
+        });
+        setEditingType(created);
+        await refreshTypes(created.id);
+      }
+    } catch (error) {
+      setTypeFormError(getErrorMessage(error));
+    } finally {
+      setSavingType(false);
+    }
+  };
+
+  const handleRuleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRuleFormError("");
+    const typeId = editingType?.id || selectedType?.id;
+    if (!typeId) return setRuleFormError("Simpan jenis mitra terlebih dahulu.");
+    if (!ruleForm.effectiveFrom) return setRuleFormError("Tanggal effective from wajib diisi.");
+    if (!ruleForm.value.trim()) return setRuleFormError("Nilai komisi rule wajib diisi.");
+
+    setSavingRule(true);
+    try {
+      await createPartnerTypeCommissionRule(typeId, {
+        package_id: ruleForm.packageId ? Number(ruleForm.packageId) : undefined,
+        mode: ruleForm.mode,
+        value: ruleForm.value.trim(),
+        effective_from: new Date(ruleForm.effectiveFrom).toISOString(),
+        effective_to: ruleForm.effectiveTo ? new Date(ruleForm.effectiveTo).toISOString() : undefined,
+      });
+      setRuleForm(EMPTY_RULE_FORM);
+      await loadTypeDetail(typeId);
+    } catch (error) {
+      setRuleFormError(getErrorMessage(error));
+    } finally {
+      setSavingRule(false);
+    }
+  };
+
+  const handleDeactivatePartner = async (partner: PartnerItem) => {
+    if (!window.confirm(`Nonaktifkan mitra ${partner.name}?`)) return;
+    setSaving(true);
+    try {
+      await deactivatePartner(partner.id);
+      await refreshPartners();
+    } catch (error) {
+      setPageError(getErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRestorePartner = async (partner: PartnerItem) => {
+    if (!window.confirm(`Pulihkan mitra ${partner.name}?`)) return;
+    setSaving(true);
+    try {
+      await updatePartner(partner.id, { status: "ACTIVE" });
+      await refreshPartners();
+    } catch (error) {
+      setPageError(getErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeactivateRule = async (rule: PartnerCommissionRuleItem) => {
+    const typeId = editingType?.id || selectedType?.id;
+    if (!typeId || !window.confirm(`Nonaktifkan rule #${rule.id}?`)) return;
+    setSavingRule(true);
+    try {
+      await deactivatePartnerTypeCommissionRule(typeId, rule.id);
+      await loadTypeDetail(typeId);
+    } catch (error) {
+      setRuleFormError(getErrorMessage(error));
+    } finally {
+      setSavingRule(false);
+    }
+  };
+
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPage(1);
+    setAppliedSearch(searchDraft.trim());
+  };
+
+  return (
+    <div className="w-full min-w-0 max-w-full space-y-6 font-sans text-[#1C1C1E]">
+      <section className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-sm">
+        <div className="relative p-6 md:p-8">
+          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[80px] bg-red-50" />
+          <div className="relative z-10 flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">Kelolaan Mitra</div>
+              <h1 className="mt-4 break-words text-2xl font-black tracking-tight text-gray-950 md:text-3xl">Operasional Mitra CRM Piposmart</h1>
+              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-gray-500">Halaman ini sudah memakai API backend untuk master jenis mitra, mitra aktif, dan mitra nonaktif dalam satu area kerja.</p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:shrink-0">
+              {canManageTypes ? <button type="button" onClick={openCreateTypeModal} className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-center text-xs font-black text-[#C92C1E] transition hover:bg-red-100">+ Tambah Jenis Mitra</button> : null}
+              {isAdmin ? <button type="button" onClick={openCreatePartnerModal} disabled={partnerTypes.length === 0} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:bg-red-300">+ Tambah Mitra</button> : null}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Jenis Mitra</p><p className="mt-3 text-3xl font-black text-gray-950">{partnerTypes.length}</p></div>
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Mitra Aktif</p><p className="mt-3 text-3xl font-black text-gray-950">{activePartners.length}</p></div>
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Mitra Nonaktif</p><p className="mt-3 text-3xl font-black text-gray-950">{inactivePartners.length}</p></div>
+        <div className="rounded-3xl border border-red-100 bg-red-50 p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">Rule Aktif</p><p className="mt-3 text-3xl font-black text-[#C92C1E]">{activeRuleCount}</p></div>
+      </section>
+
+      <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h2 className="text-sm font-black text-gray-900">Mode Tabel</h2>
+            <p className="mt-1 text-xs font-medium text-gray-400">Pilih tampilan yang ingin difokuskan dalam satu halaman ini.</p>
+          </div>
+          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 xl:w-[720px]">
+            {[
+              { key: "PARTNER_TYPES", label: "Jenis Mitra" },
+              { key: "ACTIVE_PARTNERS", label: "Mitra Aktif" },
+              { key: "INACTIVE_PARTNERS", label: "Mitra Non Aktif" },
+            ].map((item) => (
+              <button key={item.key} type="button" onClick={() => setTableMode(item.key as TableMode)} className={`rounded-2xl px-4 py-3 text-xs font-black transition ${tableMode === item.key ? "bg-[#C92C1E] text-white shadow-sm" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{item.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          {tableMode === "PARTNER_TYPES" ? (
+            <input value={typeSearch} onChange={(event) => setTypeSearch(event.target.value)} placeholder="Cari code / nama jenis mitra" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+          ) : (
+            <form onSubmit={handleSearch} className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Cari nama / code mitra" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="ALL">Semua Type</option>{partnerTypes.map((item) => <option key={item.id} value={item.code}>{item.code}</option>)}</select>
+              <button type="submit" className="rounded-2xl bg-gray-950 px-4 py-3 text-xs font-black text-white transition hover:bg-black">Terapkan Filter</button>
+            </form>
+          )}
+        </div>
+
+        {pageError ? <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{pageError}</div> : null}
+      </section>
+
+      {tableMode === "PARTNER_TYPES" ? <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm md:p-5"><div className="overflow-x-auto rounded-2xl border border-gray-200"><table className="w-full min-w-[860px] text-left text-xs"><thead className="bg-[#C92C1E] text-white"><tr><th className="p-3 font-black">Code</th><th className="p-3 font-black">Nama</th><th className="p-3 font-black">Komisi Dasar</th><th className="p-3 font-black">Deskripsi</th><th className="p-3 text-center font-black">Action</th></tr></thead><tbody>{filteredPartnerTypes.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">Jenis mitra tidak ditemukan.</td></tr> : filteredPartnerTypes.map((item) => <tr key={item.id} className="border-b border-gray-100 bg-white last:border-0 hover:bg-gray-50"><td className="p-3 font-black text-gray-900">{item.code}</td><td className="p-3 font-bold text-gray-700">{item.name}</td><td className="p-3 font-bold text-gray-700">{formatFlatCommission(item)}</td><td className="p-3 font-bold text-gray-500">{item.description || "-"}</td><td className="p-3 text-center">{canManageTypes ? <button type="button" onClick={() => void openEditTypeModal(item)} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600">Edit</button> : <span className="text-xs font-bold text-gray-300">-</span>}</td></tr>)}</tbody></table></div></section> : null}
+
+      {tableMode === "ACTIVE_PARTNERS" ? <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm md:p-5"><div className="overflow-x-auto rounded-2xl border border-gray-200"><table className="w-full min-w-[940px] text-left text-xs"><thead className="bg-[#C92C1E] text-white"><tr><th className="p-3 font-black">Mitra</th><th className="p-3 font-black">Type</th><th className="p-3 font-black">Kontak</th><th className="p-3 font-black">Komisi Dasar</th><th className="p-3 font-black">Updated</th><th className="p-3 text-center font-black">Action</th></tr></thead><tbody>{loading ? <tr><td colSpan={6} className="p-8 text-center text-sm font-bold text-gray-400">Memuat data mitra...</td></tr> : activePartners.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-sm font-bold text-gray-400">Tidak ada mitra aktif.</td></tr> : activePartners.map((partner) => <tr key={partner.id} className="border-b border-gray-100 bg-white last:border-0 hover:bg-gray-50"><td className="p-3"><p className="font-black text-gray-900">{partner.name}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{partner.code}</p></td><td className="p-3 font-bold text-gray-700">{partner.partner_type.name}<span className="mt-1 block text-[11px] text-gray-400">{partner.partner_type.code}</span></td><td className="p-3 font-bold text-gray-700">{partner.phone || "-"}<span className="mt-1 block text-[11px] text-gray-400">{partner.email || "-"}</span></td><td className="p-3 font-bold text-gray-700">{formatFlatCommission(partner.partner_type)}</td><td className="p-3 font-bold text-gray-700">{formatDateTime(partner.updated_at)}</td><td className="p-3"><div className="flex flex-wrap items-center justify-center gap-2"><Link href={isSales ? `/menu/kelolaan-mitra/detail?id=${partner.id}&tab=interaction` : `/menu/kelolaan-mitra/detail?id=${partner.id}`} className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black text-[#C92C1E]">{isSales ? "Interact" : "Detail"}</Link>{isAdmin ? <button type="button" onClick={() => openEditPartnerModal(partner)} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600">Edit</button> : null}{isAdmin ? <button type="button" onClick={() => void handleDeactivatePartner(partner)} disabled={saving} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">Delete</button> : null}</div></td></tr>)}</tbody></table></div></section> : null}
+
+      {tableMode === "INACTIVE_PARTNERS" ? <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm md:p-5"><div className="overflow-x-auto rounded-2xl border border-gray-200"><table className="w-full min-w-[860px] text-left text-xs"><thead className="bg-gray-950 text-white"><tr><th className="p-3 font-black">Mitra</th><th className="p-3 font-black">Type</th><th className="p-3 font-black">Kontak</th><th className="p-3 font-black">Updated</th><th className="p-3 text-center font-black">Action</th></tr></thead><tbody>{loading ? <tr><td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">Memuat data mitra nonaktif...</td></tr> : inactivePartners.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">Tidak ada mitra nonaktif.</td></tr> : inactivePartners.map((partner) => <tr key={partner.id} className="border-b border-gray-100 bg-white last:border-0 hover:bg-gray-50"><td className="p-3"><p className="font-black text-gray-900">{partner.name}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{partner.code}</p></td><td className="p-3 font-bold text-gray-700">{partner.partner_type.name}<span className="mt-1 block text-[11px] text-gray-400">{partner.partner_type.code}</span></td><td className="p-3 font-bold text-gray-700">{partner.phone || "-"}<span className="mt-1 block text-[11px] text-gray-400">{partner.email || "-"}</span></td><td className="p-3 font-bold text-gray-700">{formatDateTime(partner.updated_at)}</td><td className="p-3"><div className="flex flex-wrap items-center justify-center gap-2"><Link href={`/menu/kelolaan-mitra/detail?id=${partner.id}`} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600">Detail</Link>{isAdmin ? <button type="button" onClick={() => void handleRestorePartner(partner)} disabled={saving} className="rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-[10px] font-black text-green-700 disabled:cursor-not-allowed disabled:opacity-50">Pulihkan</button> : null}</div></td></tr>)}</tbody></table></div></section> : null}
+
+      <ModalShell open={showPartnerModal} title={editingPartner ? "Edit Mitra" : "Tambah Mitra"} onClose={() => setShowPartnerModal(false)}>
+        <form onSubmit={handlePartnerSubmit} className="space-y-5">
+          {partnerFormError ? <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{partnerFormError}</div> : null}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {!editingPartner ? <select value={partnerForm.partnerTypeId} onChange={(event) => setPartnerForm((current) => ({ ...current, partnerTypeId: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Pilih jenis mitra</option>{partnerTypes.map((item) => <option key={item.id} value={item.id}>{item.code} - {item.name}</option>)}</select> : <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-black text-gray-900">{editingPartner.partner_type.name}</div>}
+            {!editingPartner ? <input value={partnerForm.code} onChange={(event) => setPartnerForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder="Code mitra" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold uppercase outline-none focus:border-[#C92C1E]" /> : null}
+            <input value={partnerForm.name} onChange={(event) => setPartnerForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nama mitra" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />
+            <input value={partnerForm.phone} onChange={(event) => setPartnerForm((current) => ({ ...current, phone: event.target.value }))} placeholder="No. telepon" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />
+            <input value={partnerForm.email} onChange={(event) => setPartnerForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />
+            <select value={partnerForm.status} onChange={(event) => setPartnerForm((current) => ({ ...current, status: event.target.value as "ACTIVE" | "INACTIVE" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select>
+            <textarea value={partnerForm.address} onChange={(event) => setPartnerForm((current) => ({ ...current, address: event.target.value }))} rows={4} placeholder="Alamat" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E] md:col-span-2 xl:col-span-2" />
+            <input value={partnerForm.bankAccount} onChange={(event) => setPartnerForm((current) => ({ ...current, bankAccount: event.target.value }))} placeholder="Rekening" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />
+          </div>
+          <div className="flex justify-end"><button type="submit" disabled={saving} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{saving ? "Menyimpan..." : editingPartner ? "Simpan Perubahan" : "Tambah Mitra"}</button></div>
+        </form>
+      </ModalShell>
+
+      <ModalShell open={showTypeModal} title={editingType ? "Edit Jenis Mitra" : "Tambah Jenis Mitra"} onClose={() => setShowTypeModal(false)}>
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <form onSubmit={handleTypeSubmit} className="space-y-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+            {typeFormError ? <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{typeFormError}</div> : null}
+            <input value={typeForm.code} onChange={(event) => setTypeForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} disabled={Boolean(editingType)} placeholder="Code jenis mitra" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold uppercase outline-none focus:border-[#C92C1E] disabled:bg-gray-50" />
+            <input value={typeForm.name} onChange={(event) => setTypeForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nama jenis mitra" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><select value={typeForm.commissionMode} onChange={(event) => setTypeForm((current) => ({ ...current, commissionMode: event.target.value as "PERCENTAGE" | "FIXED" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option></select><input value={typeForm.commissionValue} onChange={(event) => setTypeForm((current) => ({ ...current, commissionValue: event.target.value }))} placeholder="Nilai komisi dasar" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /></div>
+            <textarea value={typeForm.description} onChange={(event) => setTypeForm((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Deskripsi" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />
+            <div className="flex justify-end"><button type="submit" disabled={savingType} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingType ? "Menyimpan..." : editingType ? "Simpan Perubahan" : "Simpan Jenis Mitra"}</button></div>
+          </form>
+          <div className="space-y-5">
+            <form onSubmit={handleRuleSubmit} className="space-y-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+              {ruleFormError ? <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{ruleFormError}</div> : null}
+              <select value={ruleForm.packageId} onChange={(event) => setRuleForm((current) => ({ ...current, packageId: event.target.value }))} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Semua Paket</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">{selectedPackagePlans.length === 0 ? "Belum ada plan aktif untuk paket ini atau rule berlaku untuk semua paket." : `Plan aktif terkait paket ini: ${selectedPackagePlans.map((plan) => `${plan.name} (${plan.tenure_months} bln)`).join(", ")}`}</div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><select value={ruleForm.mode} onChange={(event) => setRuleForm((current) => ({ ...current, mode: event.target.value as "PERCENTAGE" | "FIXED" | "TIER" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option><option value="TIER">TIER</option></select><input value={ruleForm.value} onChange={(event) => setRuleForm((current) => ({ ...current, value: event.target.value }))} placeholder="Nilai komisi rule" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /></div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><input type="datetime-local" value={ruleForm.effectiveFrom} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><input type="datetime-local" value={ruleForm.effectiveTo} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveTo: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /></div>
+              <div className="flex justify-end"><button type="submit" disabled={savingRule || !(editingType || selectedType)} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingRule ? "Menyimpan Rule..." : "Simpan Commission Rule"}</button></div>
+            </form>
+            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><div className="space-y-3">{commissionRules.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada rule komisi.</div> : commissionRules.map((rule) => <div key={rule.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-gray-900">{rule.package_name || "Semua Paket"}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{rule.mode}  {rule.active ? "ACTIVE" : "INACTIVE"}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{formatDateTime(rule.effective_from)} - {formatDateTime(rule.effective_to)}</p>{rule.value ? <p className="mt-2 text-sm font-bold text-gray-600">Nilai: {rule.value}</p> : null}</div>{rule.active ? <button type="button" onClick={() => void handleDeactivateRule(rule)} className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-100">Nonaktifkan</button> : null}</div></div>)}</div></section>
+          </div>
+        </div>
+      </ModalShell>
+    </div>
+  );
+}
+
