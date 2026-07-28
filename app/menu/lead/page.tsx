@@ -63,7 +63,6 @@ interface NasabahItem {
   skemaId?: string;
   nominal: number;
   noted: string;
-  outlets?: any[];
   callHistories?: {
     waktuCall: string;
     picSales: string;

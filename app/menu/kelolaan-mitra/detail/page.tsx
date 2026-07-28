@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   assignPartnerPic,
   createPartnerInteraction,
@@ -74,10 +74,18 @@ function humanizeRole(value?: string | null) {
 }
 
 function leadLabel(lead: BackendLead) {
-  return lead.nama || lead.email || lead.no_hp || `Lead #${lead.id}`;
+  return lead.owner?.name || lead.owner?.phone || `Lead #${lead.id}`;
 }
 
 export default function PartnerDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <PartnerDetailPageInner />
+    </Suspense>
+  );
+}
+
+function PartnerDetailPageInner() {
   const searchParams = useSearchParams();
   const partnerId = Number(searchParams.get("id"));
   const focusInteraction = searchParams.get("tab") === "interaction";
@@ -350,7 +358,7 @@ export default function PartnerDetailPage() {
       </section>
 
       <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Referral Lead</h2><div className="mt-4 space-y-3">{referrals.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada referral.</div> : referrals.map((item) => <div key={item.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><p className="font-black text-gray-900">{leadMap.get(item.lead_id) ? leadLabel(leadMap.get(item.lead_id) as BackendLead) : `Lead #${item.lead_id}`}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Referral {formatDateTime(item.referral_date)}</p><p className="mt-2 text-sm font-bold text-gray-600">{item.note || "Tanpa catatan"}</p></div>)}</div></div>
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Referral Lead</h2><div className="mt-4 space-y-3">{referrals.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada referral.</div> : referrals.map((item) => <div key={item.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><p className="font-black text-gray-900">{leadMap.get(item.lead_id) ? leadLabel(leadMap.get(item.lead_id) as BackendLead) : `Lead #${item.lead_id}`}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Referral {formatDateTime(item.referral_date)}</p><p className="mt-2 text-sm font-bold text-gray-600">{item.notes || "Tanpa catatan"}</p></div>)}</div></div>
         <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Komisi Partner</h2><div className="mt-4 space-y-3">{commissions.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada komisi partner.</div> : commissions.map((item) => <div key={item.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-gray-900">{item.code}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Closing {item.closing_code || `#${item.closing_id}`}  {item.status}</p></div><span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black text-[#C92C1E]">{formatMoney(item.commission_amount, item.currency || "IDR")}</span></div><p className="mt-2 text-xs font-bold text-gray-500">Mode {item.commission_mode}  value {item.commission_value}  base {formatMoney(item.base_amount, item.currency || "IDR")}</p></div>)}</div></div>
       </section>
     </div>

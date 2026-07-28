@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
   getGlobalOutlet,
   listOwnerWalletTransactions,
@@ -32,6 +32,14 @@ function formatDate(value?: string): string {
  * sempit.
  */
 export default function OutletDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <OutletDetailPageInner />
+    </Suspense>
+  );
+}
+
+function OutletDetailPageInner() {
   const searchParams = useSearchParams();
   const outletId = Number(searchParams.get("id"));
 
