@@ -219,8 +219,8 @@ export default function RootLayout({
       ),
     },
     {
-      text: "Laporan Penjualan",
-      href: "/menu/laporan-penjualan",
+      text: "Wallets",
+      href: "/menu/wallets",
       colorClass: "text-[#C92C1E]",
       icon: (className: string) => (
         <svg
@@ -233,7 +233,37 @@ export default function RootLayout({
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            d="M4.5 8.25A2.25 2.25 0 016.75 6h10.5a2.25 2.25 0 012.25 2.25v7.5A2.25 2.25 0 0117.25 18H6.75a2.25 2.25 0 01-2.25-2.25v-7.5z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M8.25 12h7.5M12 8.25v7.5"
+          />
+        </svg>
+      ),
+    },
+    {
+      text: "Subscribe",
+      href: "/menu/subscribe",
+      colorClass: "text-[#C92C1E]",
+      icon: (className: string) => (
+        <svg
+          className={className}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9 12.75L11.25 15 15 9.75"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M4.5 6.75A2.25 2.25 0 016.75 4.5h10.5a2.25 2.25 0 012.25 2.25v10.5a2.25 2.25 0 01-2.25 2.25H6.75a2.25 2.25 0 01-2.25-2.25V6.75z"
           />
         </svg>
       ),
@@ -347,42 +377,26 @@ export default function RootLayout({
             </div>
 
             <div className="space-y-3 border-t border-gray-100 pt-4">
-              <div
-                className={`flex items-center gap-2 rounded-xl border border-red-100 bg-red-50/60 text-[#C92C1E] ${
+              <Link
+                href="/menu/setting"
+                className={`flex items-center gap-2 rounded-xl border border-red-100 bg-red-50/60 text-[#C92C1E] transition-all duration-200 hover:bg-red-50 hover:border-red-200 ${
                   isSidebarOpen ? "px-3 py-2" : "justify-center px-0 py-2.5"
                 }`}
-                title={`${loggedInUser} • ${loggedInRole}`}
+                title={`${loggedInUser} • ${loggedInRole} • Setting`}
               >
                 <ProfileTagIcon className="h-4 w-4 shrink-0" />
                 {isSidebarOpen && (
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-black leading-tight text-gray-900">
-                      {loggedInUser}
-                    </p>
-                    <p className="truncate text-[9px] font-black uppercase tracking-wider text-[#C92C1E]">
-                      {loggedInRole}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <Link
-                href="/menu/setting"
-                className={`flex w-full items-center justify-between rounded-xl border border-red-100 bg-red-50/60 py-2.5 text-sm font-bold text-red-600 transition-all duration-200 hover:bg-red-50 ${
-                  isSidebarOpen ? "px-4" : "justify-center px-0"
-                }`}
-                title="Setting"
-              >
-                {isSidebarOpen ? (
                   <>
-                    <span className="flex items-center gap-2 text-sm font-semibold">
-                      <SettingIcon className="h-4 w-4 text-red-500" />
-                      Setting
-                    </span>
-                    <span className="text-xs opacity-60">›</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-black leading-tight text-gray-900">
+                        {loggedInUser}
+                      </p>
+                      <p className="truncate text-[9px] font-black uppercase tracking-wider text-[#C92C1E]">
+                        {loggedInRole}
+                      </p>
+                    </div>
+                    <span className="text-xs font-black text-red-400">›</span>
                   </>
-                ) : (
-                  <SettingIcon className="h-5 w-5 text-red-500" />
                 )}
               </Link>
 
