@@ -1228,7 +1228,7 @@ export interface ImportBatchResponse {
   profile: string;
   original_filename: string;
   file?: ImportBatchFileResponse;
-  status: string; // 'UPLOADED' | 'VALIDATING' | 'VALIDATED' | 'VALIDATION_FAILED'
+  status: string; // 'UPLOADED' | 'VALIDATING' | 'VALIDATED' | 'VALIDATION_FAILED' | 'COMMITTING' | 'COMMITTED' | 'COMMIT_FAILED'
   progress_percentage?: number;
   total_rows: number;
   valid_rows: number;
@@ -1242,6 +1242,15 @@ export interface ImportBatchResponse {
   committed_at?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface ImportBatchListResponse {
+  items: ImportBatchResponse[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+  };
 }
 
 export async function uploadImportFile(file: File, profile: string = "OWNER_OUTLET"): Promise<ImportBatchResponse> {
@@ -1271,12 +1280,30 @@ export async function getImportBatch(id: number): Promise<ImportBatchResponse> {
   return json.data;
 }
 
-export async function commitImportBatch(id: number): Promise<{ message: string }> {
+export async function getImportBatches(params?: { profile?: string, status?: string, page?: number, limit?: number }): Promise<ImportBatchListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.profile) queryParams.append('profile', params.profile);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', String(params.page));
+  if (params?.limit) queryParams.append('limit', String(params.limit));
+
+  const qs = queryParams.toString();
+  const url = `${API_BASE_URL}/api/v1/imports${qs ? `?${qs}` : ''}`;
+
+  const res = await fetch(url, {
+    headers: getAuthHeaders(),
+  });
+  const json = await handleResponse<{ data: ImportBatchListResponse }>(res);
+  return json.data;
+}
+
+export async function commitImportBatch(id: number): Promise<ImportBatchResponse> {
   const res = await fetch(`${API_BASE_URL}/api/v1/imports/${id}/commit`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
-  return handleResponse<{ message: string }>(res);
+  const json = await handleResponse<{ data: ImportBatchResponse }>(res);
+  return json.data;
 }
 
 export async function downloadImportErrors(batchId: number): Promise<void> {
