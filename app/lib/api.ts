@@ -645,6 +645,14 @@ function makeCatalogCrud<TItem, TCreate, TUpdate extends Record<string, unknown>
       const data = await handleResponse<{ data: { items: TItem[]; pagination: CatalogListMeta } }>(res);
       return data.data;
     },
+    get: async (id: number): Promise<TItem> => {
+      const res = await fetch(`${base}/${id}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      const data = await handleResponse<{ data: TItem }>(res);
+      return data.data;
+    },
     create: async (payload: TCreate): Promise<TItem> => {
       const res = await fetch(base, {
         method: "POST",
@@ -881,6 +889,15 @@ export async function setPromotionEligiblePlans(promotionId: number, planIds: nu
     body: JSON.stringify({ plan_ids: planIds }),
   });
   return handleResponse(res);
+}
+
+export async function getPromotionEligiblePlans(promotionId: number): Promise<CatalogPlanItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/catalog/promotions/${promotionId}/eligible-plans`, {
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+  const data = await handleResponse<{ data: { items: CatalogPlanItem[] } }>(res);
+  return data.data?.items || [];
 }
 
 export async function scheduleTraining(leadId: number, data: ScheduleTrainingRequest) {

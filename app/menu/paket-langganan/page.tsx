@@ -12,6 +12,10 @@ import {
   ArchiveRestore,
   X,
   Layers,
+  Eye,
+  Power,
+  PowerOff,
+  ArrowLeft,
 } from "lucide-react";
 import {
   packageApi,
@@ -21,10 +25,13 @@ import {
   createPromotionBenefit,
   deletePromotionBenefit,
   setPromotionEligiblePlans,
+  getPromotionEligiblePlans,
+  getEligiblePromotions,
   type CatalogPackageItem,
   type CatalogPlanItem,
   type CatalogPromotionItem,
   type CatalogBenefitItem,
+  type CatalogPromotion,
   type CreatePackagePayload,
   type CreatePlanPayload,
   type CreatePromotionPayload,
@@ -45,6 +52,11 @@ import {
  */
 
 type Entity = "package" | "plan" | "promotion";
+
+type ViewTarget =
+  | { kind: "package"; item: CatalogPackageItem }
+  | { kind: "plan"; item: CatalogPlanItem }
+  | { kind: "promotion"; item: CatalogPromotionItem };
 
 function formatRupiah(value: string | number): string {
   const n = typeof value === "string" ? parseFloat(value) : value;
@@ -374,6 +386,13 @@ export default function PaketLanggananPage() {
     | null
   >(null);
 
+  const [viewStack, setViewStack] = useState<ViewTarget[]>([]);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  const pushView = (target: ViewTarget) => setViewStack((prev) => [...prev, target]);
+  const popView = () => setViewStack((prev) => prev.slice(0, -1));
+  const closeView = () => setViewStack([]);
+
   const resetSelection = () => setSelectedIds(new Set());
 
   const changeEntity = (next: Entity) => {
@@ -478,6 +497,20 @@ export default function PaketLanggananPage() {
       void load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Aksi gagal.");
+    }
+  };
+
+  const handleToggleActive = async (id: number, nextActive: boolean) => {
+    setTogglingId(id);
+    try {
+      if (entity === "package") await packageApi.update(id, { active: nextActive });
+      else if (entity === "plan") await planApi.update(id, { active: nextActive });
+      else await promotionApi.update(id, { active: nextActive });
+      void load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal mengubah status.");
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -696,10 +729,14 @@ export default function PaketLanggananPage() {
                     <td className="px-4 py-3.5">
                       <RowActions
                         scope={scope}
+                        active={p.active}
+                        isToggling={togglingId === p.id}
+                        onView={() => pushView({ kind: "package", item: p })}
                         onEdit={() => setPackageForm({ mode: "edit", item: p })}
                         onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
                         onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
                         onForceDelete={() => setConfirmTarget({ kind: "forceDelete", ids: [p.id] })}
+                        onToggleActive={() => void handleToggleActive(p.id, !p.active)}
                       />
                     </td>
                   </tr>
@@ -723,10 +760,14 @@ export default function PaketLanggananPage() {
                     <td className="px-4 py-3.5">
                       <RowActions
                         scope={scope}
+                        active={p.active}
+                        isToggling={togglingId === p.id}
+                        onView={() => pushView({ kind: "plan", item: p })}
                         onEdit={() => setPlanForm({ mode: "edit", item: p })}
                         onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
                         onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
                         onForceDelete={() => setConfirmTarget({ kind: "forceDelete", ids: [p.id] })}
+                        onToggleActive={() => void handleToggleActive(p.id, !p.active)}
                       />
                     </td>
                   </tr>
@@ -752,10 +793,14 @@ export default function PaketLanggananPage() {
                     <td className="px-4 py-3.5">
                       <RowActions
                         scope={scope}
+                        active={p.active}
+                        isToggling={togglingId === p.id}
+                        onView={() => pushView({ kind: "promotion", item: p })}
                         onEdit={() => setPromotionForm({ mode: "edit", item: p })}
                         onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
                         onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
                         onForceDelete={() => setConfirmTarget({ kind: "forceDelete", ids: [p.id] })}
+                        onToggleActive={() => void handleToggleActive(p.id, !p.active)}
                       />
                     </td>
                   </tr>
@@ -831,6 +876,16 @@ export default function PaketLanggananPage() {
         />
       )}
 
+      {viewStack.length > 0 && (
+        <DetailModal
+          target={viewStack[viewStack.length - 1]}
+          canGoBack={viewStack.length > 1}
+          onBack={popView}
+          onClose={closeView}
+          onNavigate={pushView}
+        />
+      )}
+
       {confirmTarget && (
         <ConfirmDialog
           title={
@@ -861,20 +916,31 @@ export default function PaketLanggananPage() {
 
 function RowActions({
   scope,
+  active,
+  isToggling,
+  onView,
   onEdit,
   onDelete,
   onRestore,
   onForceDelete,
+  onToggleActive,
 }: {
   scope: CatalogScope;
+  active: boolean;
+  isToggling?: boolean;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onRestore: () => void;
   onForceDelete: () => void;
+  onToggleActive: () => void;
 }) {
   if (scope === "DELETED") {
     return (
       <div className="flex items-center gap-3">
+        <button onClick={onView} className="text-gray-400 transition hover:scale-110 hover:text-gray-700" title="Lihat Detail">
+          <Eye className="h-4 w-4" />
+        </button>
         <button onClick={onRestore} className="text-gray-400 transition hover:scale-110 hover:text-emerald-600" title="Pulihkan">
           <ArchiveRestore className="h-4 w-4" />
         </button>
@@ -886,6 +952,17 @@ function RowActions({
   }
   return (
     <div className="flex items-center gap-3">
+      <button onClick={onView} className="text-gray-400 transition hover:scale-110 hover:text-gray-700" title="Lihat Detail">
+        <Eye className="h-4 w-4" />
+      </button>
+      <button
+        onClick={onToggleActive}
+        disabled={isToggling}
+        className={`transition hover:scale-110 disabled:opacity-40 ${active ? "text-emerald-500 hover:text-gray-400" : "text-gray-300 hover:text-emerald-600"}`}
+        title={active ? "Nonaktifkan" : "Aktifkan"}
+      >
+        {active ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
+      </button>
       <button onClick={onEdit} className="text-gray-400 transition hover:scale-110 hover:text-[#C92C1E]" title="Edit">
         <Pencil className="h-4 w-4" />
       </button>
@@ -1531,6 +1608,298 @@ function PromotionBenefitsAndEligibility({
         >
           {isSavingEligibility ? "Menyimpan..." : "Simpan Eligibilitas & Selesai"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// DETAIL DIALOGS (view-only, dengan drill-down Package → Plan → Promotion)
+// ============================================================
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-gray-50 py-2 text-xs last:border-0">
+      <span className="font-black uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="text-right font-bold text-gray-800">{value}</span>
+    </div>
+  );
+}
+
+function DetailModal({
+  target,
+  canGoBack,
+  onBack,
+  onClose,
+  onNavigate,
+}: {
+  target: ViewTarget;
+  canGoBack: boolean;
+  onBack: () => void;
+  onClose: () => void;
+  onNavigate: (t: ViewTarget) => void;
+}) {
+  const title =
+    target.kind === "package" ? "Detail Package" : target.kind === "plan" ? "Detail Plan" : "Detail Promosi";
+  const icon =
+    target.kind === "package" ? <Package className="h-5 w-5" /> : target.kind === "plan" ? <Layers className="h-5 w-5" /> : <Tag className="h-5 w-5" />;
+
+  return (
+    <Modal title={title} subtitle={target.item.code} icon={icon} onClose={onClose} wide>
+      {canGoBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-4 flex items-center gap-1.5 text-xs font-black text-gray-500 transition hover:text-gray-900"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Kembali
+        </button>
+      )}
+      {target.kind === "package" && <PackageDetailBody item={target.item} onNavigate={onNavigate} />}
+      {target.kind === "plan" && <PlanDetailBody item={target.item} onNavigate={onNavigate} />}
+      {target.kind === "promotion" && <PromotionDetailBody item={target.item} onNavigate={onNavigate} />}
+    </Modal>
+  );
+}
+
+function PackageDetailBody({
+  item,
+  onNavigate,
+}: {
+  item: CatalogPackageItem;
+  onNavigate: (t: ViewTarget) => void;
+}) {
+  const [plans, setPlans] = useState<CatalogPlanItem[] | null>(null);
+
+  useEffect(() => {
+    setPlans(null);
+    void planApi
+      .list({ package_id: item.id, limit: 100 })
+      .then((res) => setPlans(res.items))
+      .catch(() => setPlans([]));
+  }, [item.id]);
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+        <InfoRow label="Nama" value={item.name} />
+        <InfoRow label="Level Order" value={item.level_order} />
+        <InfoRow label="Status" value={<StatusBadge active={item.active} />} />
+        {item.description && <InfoRow label="Deskripsi" value={item.description} />}
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+          Plan pada Package ini {plans && `(${plans.length})`}
+        </h3>
+        {plans === null ? (
+          <p className="text-xs text-gray-400">Memuat plan...</p>
+        ) : plans.length === 0 ? (
+          <p className="text-xs text-gray-400">Belum ada plan untuk package ini.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {plans.map((pl) => (
+              <button
+                key={pl.id}
+                type="button"
+                onClick={() => onNavigate({ kind: "plan", item: pl })}
+                className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30"
+              >
+                <div>
+                  <span className="font-black text-gray-800">{pl.name}</span>
+                  <span className="ml-2 text-gray-400">{pl.tenure_months} bln · {formatRupiah(pl.price)}</span>
+                </div>
+                <StatusBadge active={pl.active} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PlanDetailBody({
+  item,
+  onNavigate,
+}: {
+  item: CatalogPlanItem;
+  onNavigate: (t: ViewTarget) => void;
+}) {
+  const [promotions, setPromotions] = useState<CatalogPromotion[] | null>(null);
+  const [navigatingId, setNavigatingId] = useState<number | null>(null);
+  const [isOpeningPackage, setIsOpeningPackage] = useState(false);
+
+  useEffect(() => {
+    setPromotions(null);
+    void getEligiblePromotions(item.id)
+      .then(setPromotions)
+      .catch(() => setPromotions([]));
+  }, [item.id]);
+
+  const handleOpenPromotion = async (promoId: number) => {
+    setNavigatingId(promoId);
+    try {
+      const full = await promotionApi.get(promoId);
+      onNavigate({ kind: "promotion", item: full });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal membuka detail promosi.");
+    } finally {
+      setNavigatingId(null);
+    }
+  };
+
+  const handleOpenPackage = async () => {
+    setIsOpeningPackage(true);
+    try {
+      const full = await packageApi.get(item.package.id);
+      onNavigate({ kind: "package", item: full });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal membuka detail package.");
+    } finally {
+      setIsOpeningPackage(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+        <InfoRow label="Nama" value={item.name} />
+        <InfoRow
+          label="Package"
+          value={
+            <button
+              type="button"
+              disabled={isOpeningPackage}
+              onClick={() => void handleOpenPackage()}
+              className="font-black text-[#C92C1E] underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              {item.package.name}
+            </button>
+          }
+        />
+        <InfoRow label="Tenor" value={`${item.tenure_months} bulan (${item.duration_days} hari)`} />
+        <InfoRow label="Harga" value={formatRupiah(item.price)} />
+        <InfoRow label="Berlaku Dari" value={item.effective_from} />
+        {item.effective_to && <InfoRow label="Berlaku Sampai" value={item.effective_to} />}
+        <InfoRow label="Status" value={<StatusBadge active={item.active} />} />
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+          Promo Berlaku untuk Plan ini {promotions && `(${promotions.length})`}
+        </h3>
+        {promotions === null ? (
+          <p className="text-xs text-gray-400">Memuat promo...</p>
+        ) : promotions.length === 0 ? (
+          <p className="text-xs text-gray-400">Belum ada promo aktif untuk plan ini.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {promotions.map((promo) => (
+              <button
+                key={promo.id}
+                type="button"
+                disabled={navigatingId === promo.id}
+                onClick={() => void handleOpenPromotion(promo.id)}
+                className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30 disabled:opacity-50"
+              >
+                <div>
+                  <span className="font-black text-gray-800">{promo.name}</span>
+                  {promo.description && <span className="ml-2 text-gray-400">{promo.description}</span>}
+                </div>
+                <span className="font-mono text-[11px] text-gray-400">{promo.code}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PromotionDetailBody({
+  item,
+  onNavigate,
+}: {
+  item: CatalogPromotionItem;
+  onNavigate: (t: ViewTarget) => void;
+}) {
+  const [plans, setPlans] = useState<CatalogPlanItem[] | null>(null);
+  const [benefits, setBenefits] = useState<CatalogBenefitItem[]>(item.benefits || []);
+
+  useEffect(() => {
+    setPlans(null);
+    void getPromotionEligiblePlans(item.id)
+      .then(setPlans)
+      .catch(() => setPlans([]));
+    void listPromotionBenefits(item.id)
+      .then(setBenefits)
+      .catch(() => {});
+  }, [item.id]);
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+        <InfoRow label="Nama" value={item.name} />
+        <InfoRow label="Tipe" value={item.promotion_type} />
+        <InfoRow
+          label="Biaya"
+          value={item.charge_type === "FREE" ? "Gratis" : formatRupiah(item.additional_charge)}
+        />
+        <InfoRow label="Prioritas" value={item.priority} />
+        <InfoRow label="Berlaku Dari" value={item.effective_from} />
+        {item.effective_to && <InfoRow label="Berlaku Sampai" value={item.effective_to} />}
+        <InfoRow label="Status" value={<StatusBadge active={item.active} />} />
+        {item.description && <InfoRow label="Deskripsi" value={item.description} />}
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+          Benefit ({benefits.length})
+        </h3>
+        {benefits.length === 0 ? (
+          <p className="text-xs text-gray-400">Belum ada benefit.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {benefits.map((b) => (
+              <div key={b.id} className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-xs">
+                <span className="font-black text-gray-800">{b.benefit_type}</span>
+                {b.package && <span className="ml-2 text-gray-500">· {b.package.name}</span>}
+                {b.duration_days != null && <span className="ml-2 text-gray-500">· {b.duration_days} hari</span>}
+                {b.quantity != null && <span className="ml-2 text-gray-500">· qty {b.quantity}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+          Eligible untuk Plan {plans && `(${plans.length})`}
+        </h3>
+        {plans === null ? (
+          <p className="text-xs text-gray-400">Memuat plan...</p>
+        ) : plans.length === 0 ? (
+          <p className="text-xs text-gray-400">Belum ada plan yang eligible untuk promo ini.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {plans.map((pl) => (
+              <button
+                key={pl.id}
+                type="button"
+                onClick={() => onNavigate({ kind: "plan", item: pl })}
+                className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30"
+              >
+                <div>
+                  <span className="font-black text-gray-800">{pl.name}</span>
+                  <span className="ml-2 text-gray-400">({pl.package.name})</span>
+                </div>
+                <StatusBadge active={pl.active} />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
