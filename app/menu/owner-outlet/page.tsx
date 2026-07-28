@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   fetchOwners,
@@ -22,6 +22,7 @@ import {
 import { useLocation } from "@/app/lib/useLocation";
 import * as XLSX from "xlsx";
 import AnalyticsTab from "./AnalyticsTab";
+import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 
 export default function OwnerOutletPage() {
   const router = useRouter();
@@ -33,10 +34,41 @@ export default function OwnerOutletPage() {
   const [filters, setFilters] = useState({ code: "", name: "", brand_name: "", phone: "", city: "" });
   const [openFilter, setOpenFilter] = useState<string | null>(null);
   const [selectedOwnerIds, setSelectedOwnerIds] = useState<number[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
+
+  useEffect(() => {
+    const handleMouseUp = () => setIsDragging(false);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
+    setIsDragging(true);
+    const mode = currentlySelected ? "deselect" : "select";
+    setDragMode(mode);
+    
+    setSelectedOwnerIds(prev => {
+      if (mode === "select" && !prev.includes(id)) return [...prev, id];
+      if (mode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
+      return prev;
+    });
+  };
+
+  const handleRowMouseEnter = (id: number) => {
+    if (isDragging) {
+      setSelectedOwnerIds(prev => {
+        if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
+        if (dragMode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
+        return prev;
+      });
+    }
+  };
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
 
   // Import Excel Modal State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importBatch, setImportBatch] = useState<ImportBatchResponse | null>(null);
   const [isImportLoading, setIsImportLoading] = useState(false);
@@ -46,6 +78,15 @@ export default function OwnerOutletPage() {
   const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
   const [correctionProgress, setCorrectionProgress] = useState(0);
   const [correctionStatusText, setCorrectionStatusText] = useState("");
+  // Ref untuk menyimpan timer polling — agar bisa dibatalkan kapanpun
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Batalkan polling otomatis saat komponen unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, []);
 
   // Add Owner Modal State
   const [isAddOwnerModalOpen, setIsAddOwnerModalOpen] = useState(false);
@@ -289,12 +330,22 @@ export default function OwnerOutletPage() {
   };
 
   const pollImportStatus = async (batchId: number) => {
+    // Batalkan timer sebelumnya (jika ada) sebelum mulai polling baru
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
     try {
       const resp = await getImportBatch(batchId);
       setImportBatch(resp);
-      if (resp.status === "VALIDATING" || resp.status === "UPLOADED") {
-        setTimeout(() => pollImportStatus(batchId), 2000);
+
+      const isInProgress = ["UPLOADED", "VALIDATING", "COMMITTING"].includes(resp.status);
+      if (isInProgress) {
+        // Jadwalkan polling berikutnya dan simpan timer ID-nya
+        pollTimerRef.current = setTimeout(() => pollImportStatus(batchId), 2500);
       } else {
+        // Status sudah final — hentikan polling
+        pollTimerRef.current = null;
         setIsImportLoading(false);
         setCorrectionProgress(100);
         setCorrectionStatusText("Selesai!");
@@ -302,8 +353,8 @@ export default function OwnerOutletPage() {
           setCorrectionProgress(0);
           setCorrectionStatusText("");
         }, 2000);
-        
-        if (resp.invalid_rows > 0) {
+
+        if (resp.status === "VALIDATED" && resp.invalid_rows > 0) {
           try {
             const errorResp = await getImportErrorRows(batchId);
             setImportErrorRows(errorResp.items);
@@ -311,11 +362,16 @@ export default function OwnerOutletPage() {
           } catch (e) {
             console.error("Gagal memuat detail error:", e);
           }
-        } else if (resp.status === "VALID") {
+        } else if (resp.status === "VALIDATED") {
           setImportError(null);
+        } else if (resp.status === "VALIDATION_FAILED") {
+          setImportError(resp.error_message || "Validasi file gagal. Periksa format dan header file Excel Anda.");
+        } else if (resp.status === "COMMIT_FAILED") {
+          setImportError(resp.error_message || "Proses simpan data gagal. Silakan coba lagi.");
         }
       }
     } catch (err: any) {
+      pollTimerRef.current = null;
       setImportError(err.message || "Gagal mengecek status import");
       setIsImportLoading(false);
     }
@@ -325,19 +381,21 @@ export default function OwnerOutletPage() {
     if (!importBatch) return;
     setIsImportLoading(true);
     try {
-      await commitImportBatch(importBatch.id);
-      alert("Data berhasil disimpan!");
-      setIsImportModalOpen(false);
-      resetImportState();
-      loadOwners();
+      const resp = await commitImportBatch(importBatch.id);
+      setImportBatch(resp);
+      pollImportStatus(resp.id);
     } catch (err: any) {
       setImportError(err.message || "Gagal menyimpan data import");
-    } finally {
       setIsImportLoading(false);
     }
   };
 
   const resetImportState = () => {
+    // Batalkan polling yang sedang berjalan sebelum reset state
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
     setImportFile(null);
     setImportBatch(null);
     setImportError(null);
@@ -597,7 +655,17 @@ export default function OwnerOutletPage() {
               </svg>
               Export Excel
             </button>
-            <button 
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setIsImportHistoryModalOpen(true)}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] flex items-center gap-2"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Riwayat Import
+              </button>
+              <button 
                 onClick={() => setIsImportModalOpen(true)}
                 className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
               >
@@ -624,6 +692,7 @@ export default function OwnerOutletPage() {
               </svg>
               Lihat Sampah
             </button>
+            </div>
           </div>
         </div>
 
@@ -672,20 +741,24 @@ export default function OwnerOutletPage() {
                   </td>
                 </tr>
               ) : (
-                owners.map((owner) => (
+                owners.map((owner) => {
+                  const isSelected = selectedOwnerIds.includes(owner.id);
+                  return (
                   <tr 
                     key={owner.id} 
-                    className="transition-colors hover:bg-gray-50"
+                    className={`transition-colors select-none ${isSelected ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-gray-50"}`}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return;
+                      handleRowMouseDown(owner.id, isSelected);
+                    }}
+                    onMouseEnter={() => handleRowMouseEnter(owner.id)}
                   >
-                    <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-4 text-center">
                         <input 
                           type="checkbox" 
-                          checked={selectedOwnerIds.includes(owner.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedOwnerIds([...selectedOwnerIds, owner.id]);
-                            else setSelectedOwnerIds(selectedOwnerIds.filter(id => id !== owner.id));
-                          }}
-                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                          checked={isSelected}
+                          readOnly
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
                         />
                     </td>
                     <td className="px-4 py-4 font-medium text-gray-900">{owner.code}</td>
@@ -707,7 +780,7 @@ export default function OwnerOutletPage() {
                         {owner.outlet_count || 0}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-4 py-4 text-center" onMouseDown={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={(e) => {
@@ -755,7 +828,8 @@ export default function OwnerOutletPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -802,7 +876,19 @@ export default function OwnerOutletPage() {
         </div>
       </div>
       
-      {/* Modal Tambah Owner */}
+      {/* Modals */}
+      <ImportHistoryModal 
+        isOpen={isImportHistoryModalOpen} 
+        onClose={() => setIsImportHistoryModalOpen(false)}
+        profile="OWNER_OUTLET"
+        onResume={(batch) => {
+          setImportBatch(batch);
+          setIsImportHistoryModalOpen(false);
+          setIsImportModalOpen(true);
+          pollImportStatus(batch.id);
+        }}
+      />
+
       {isAddOwnerModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
           <div 
@@ -1274,66 +1360,105 @@ export default function OwnerOutletPage() {
                 </div>
               )}
 
-              {!importBatch || importBatch.status === "UPLOADED" ? (
+              {/* === STEP 1: Form upload (belum ada batch) === */}
+              {!importBatch ? (
                 <>
-                  <div className="mb-6">
-                    <p className="text-sm text-gray-600 mb-4">
-                      Silakan unggah file Excel (.xlsx) dengan mengikuti format yang ditentukan. Jika belum memiliki formatnya, Anda dapat mengunduh template berikut:
-                    </p>
-                    <a 
-                      href="/api/v1/imports/template/owner" 
-                      target="_blank"
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#C92C1E] bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        alert("Pastikan file Excel Anda memiliki kolom header berikut pada baris pertama:\n\nKODE | NAMA | TELEPON | EMAIL | NAMA_BRAND | PROVINSI | KOTA | ALAMAT");
-                      }}
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Lihat Format Template
-                    </a>
-                  </div>
-
-                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-[#C92C1E] transition-colors relative">
-                    <input 
-                      type="file" 
-                      accept=".xlsx, .xls"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      disabled={isImportLoading}
-                    />
-                    <svg className="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-sm font-bold text-gray-700">
-                      {importFile ? importFile.name : "Klik atau seret file Excel ke sini"}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">Hanya menerima file .xlsx</p>
-                  </div>
-
-                  <div className="mt-6 flex justify-end">
-                    <button
-                      onClick={handleUploadClick}
-                      disabled={!importFile || isImportLoading}
-                      className="rounded-xl bg-[#C92C1E] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {isImportLoading ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  {/* Loading saat upload ke server */}
+                  {isImportLoading ? (
+                    <div className="text-center py-14">
+                      <div className="relative inline-flex items-center justify-center w-20 h-20 mb-5">
+                        {/* Ring animasi */}
+                        <svg className="absolute inset-0 w-20 h-20 animate-spin text-[#C92C1E]/20" fill="none" viewBox="0 0 80 80">
+                          <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="6" strokeDasharray="226" strokeDashoffset="56" strokeLinecap="round"/>
+                        </svg>
+                        <svg className="absolute inset-0 w-20 h-20 animate-spin text-[#C92C1E]" style={{ animationDuration: '1s' }} fill="none" viewBox="0 0 80 80">
+                          <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="6" strokeDasharray="226" strokeDashoffset="170" strokeLinecap="round"/>
+                        </svg>
+                        {/* Icon di tengah */}
+                        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+                          <svg className="w-6 h-6 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                           </svg>
-                          Mengunggah...
-                        </>
-                      ) : (
-                        "Unggah & Validasi"
-                      )}
-                    </button>
-                  </div>
+                        </div>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">Mengunggah File...</h3>
+                      <p className="text-sm text-gray-500">Mohon tunggu, file sedang dikirim ke server.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-5">
+                        <p className="text-sm text-gray-600 mb-3">
+                          Unggah file Excel (.xlsx) dengan format yang ditentukan. Kolom wajib:
+                          <span className="ml-1 font-bold text-gray-800">KODE OWNER, NAMA OWNER, No Hp Owner, NAMA OUTLET</span>
+                        </p>
+                      </div>
+
+                      <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-[#C92C1E] transition-colors relative cursor-pointer group">
+                        <input
+                          type="file"
+                          accept=".xlsx"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-14 h-14 rounded-full bg-gray-50 border-2 border-gray-200 group-hover:border-[#C92C1E] group-hover:bg-red-50 flex items-center justify-center transition-colors">
+                            <svg className="w-7 h-7 text-gray-400 group-hover:text-[#C92C1E] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          {importFile ? (
+                            <div>
+                              <p className="text-sm font-bold text-[#C92C1E]">{importFile.name}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{(importFile.size / 1024).toFixed(1)} KB — klik untuk ganti file</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-sm font-bold text-gray-700">Klik atau seret file Excel ke sini</p>
+                              <p className="text-xs text-gray-400 mt-0.5">Hanya menerima file .xlsx</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          onClick={handleUploadClick}
+                          disabled={!importFile}
+                          className="rounded-xl bg-[#C92C1E] px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          Unggah &amp; Validasi
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </>
+
+              ) : importBatch.status === "UPLOADED" ? (
+                /* === STEP 2: File diterima server, menunggu worker mulai validasi === */
+                <div className="text-center py-14">
+                  <div className="relative inline-flex items-center justify-center w-20 h-20 mb-5">
+                    <svg className="absolute inset-0 w-20 h-20 animate-spin text-amber-200" fill="none" viewBox="0 0 80 80">
+                      <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="6" strokeDasharray="226" strokeDashoffset="56" strokeLinecap="round"/>
+                    </svg>
+                    <svg className="absolute inset-0 w-20 h-20 animate-spin text-amber-500" style={{ animationDuration: '1.2s' }} fill="none" viewBox="0 0 80 80">
+                      <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="6" strokeDasharray="226" strokeDashoffset="170" strokeLinecap="round"/>
+                    </svg>
+                    <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">File Diterima</h3>
+                  <p className="text-sm text-gray-500 mb-1">Menunggu sistem memulai proses validasi...</p>
+                  <p className="text-xs text-gray-400">Halaman ini akan otomatis diperbarui</p>
+                </div>
+
               ) : importBatch.status === "VALIDATING" ? (
+
                 <div className="text-center py-12">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4">
                     <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -1348,6 +1473,32 @@ export default function OwnerOutletPage() {
                     <div className="w-full max-w-md mx-auto">
                       <div className="flex justify-between text-sm font-bold mb-2">
                         <span className="text-gray-700">Progress Validasi</span>
+                        <span className="text-[#C92C1E]">{importBatch.progress_percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+                        <div 
+                          className="bg-[#C92C1E] h-3 rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${importBatch.progress_percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : importBatch.status === "COMMITTING" ? (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4">
+                    <svg className="w-8 h-8 text-indigo-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Menyimpan Data...</h3>
+                  <p className="text-gray-500 text-sm mb-8">Mohon tunggu, sistem sedang menyimpan data ke database.</p>
+                  
+                  {importBatch.progress_percentage !== undefined && (
+                    <div className="w-full max-w-md mx-auto">
+                      <div className="flex justify-between text-sm font-bold mb-2">
+                        <span className="text-gray-700">Progress Penyimpanan</span>
                         <span className="text-[#C92C1E]">{importBatch.progress_percentage}%</span>
                       </div>
                       <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
@@ -1376,6 +1527,31 @@ export default function OwnerOutletPage() {
                       className="rounded-xl bg-gray-100 px-6 py-2.5 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200"
                     >
                       Kembali
+                    </button>
+                  </div>
+                ) : importBatch.status === "COMMITTED" ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 mb-4">
+                      <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">
+                      File Sudah Disimpan
+                    </h4>
+                    <p className="text-sm text-gray-600 mb-6 px-4">
+                      Data dari file Excel ini telah berhasil disimpan ke database.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetImportState();
+                        setIsImportModalOpen(false);
+                        loadOwners();
+                      }}
+                      className="rounded-xl bg-gray-100 px-6 py-2.5 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200"
+                    >
+                      Tutup
                     </button>
                   </div>
                 ) : (
