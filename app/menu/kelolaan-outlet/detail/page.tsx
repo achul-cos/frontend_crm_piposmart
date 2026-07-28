@@ -211,14 +211,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export default function OutletDetailPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <OutletDetailPageInner />
-    </Suspense>
-  );
-}
-
 function InfoRow({ label, value }: { label: string; value?: string }) {
   return (
     <div className="flex items-center justify-between text-xs">
@@ -227,3 +219,5 @@ function InfoRow({ label, value }: { label: string; value?: string }) {
     </div>
   );
 }
+
+
