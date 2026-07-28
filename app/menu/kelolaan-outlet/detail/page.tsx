@@ -269,20 +269,24 @@ function OutletDetailPageInner() {
             ) : (
               <div className="divide-y divide-gray-100">
                 {subscriptions.map((sub) => (
-                  <div key={sub.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-gray-900 text-sm">
-                        {sub.package?.name || "-"}
-                        {sub.plan?.name ? ` / ${sub.plan.name}` : ""}
+                    <Link
+                      key={sub.id}
+                      href={`/menu/subscribe/${sub.id}`}
+                      className="block px-5 py-3 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-gray-900 text-sm">
+                          {sub.package?.name || "-"}
+                          {sub.plan?.name ? ` / ${sub.plan.name}` : ""}
                       </p>
                       <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight bg-red-50 text-[#C92C1E] border border-red-200">
                         {sub.status}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      {formatDate(sub.active_from)} &ndash; {formatDate(sub.active_until)}
-                    </p>
-                  </div>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        {formatDate(sub.active_from)} &ndash; {formatDate(sub.active_until)}
+                      </p>
+                    </Link>
                 ))}
               </div>
             )}

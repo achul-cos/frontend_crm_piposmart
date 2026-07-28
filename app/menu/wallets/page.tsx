@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
@@ -819,7 +820,7 @@ export default function WalletsPage() {
           )}
 
           <p className="text-[11px] font-bold text-gray-400">
-            Klik baris payment atau wallet untuk membuka detail. Tombol mutasi tetap khusus Admin.
+            Klik tombol detail atau baris data untuk membuka detail. Tombol mutasi tetap khusus Admin.
           </p>
         </div>
 
@@ -834,12 +835,13 @@ export default function WalletsPage() {
                   <th className="px-4 py-4 font-black">Status</th>
                   <th className="px-4 py-4 font-black">Paid At</th>
                   <th className="px-4 py-4 text-right font-black">Amount</th>
+                  <th className="px-4 py-4 text-center font-black">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {payments.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
                       Data top up tidak ditemukan.
                     </td>
                   </tr>
@@ -852,7 +854,13 @@ export default function WalletsPage() {
                       title="Klik baris untuk melihat detail payment"
                     >
                       <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">{payment.code || `PAY-${payment.id}`}</p>
+                        <Link
+                          href={`/menu/wallets/payments/${payment.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          className="font-black text-gray-900 transition-colors hover:text-[#C92C1E]"
+                        >
+                          {payment.code || `PAY-${payment.id}`}
+                        </Link>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">
                           {payment.external_reference || "-"}
                         </p>
@@ -874,6 +882,32 @@ export default function WalletsPage() {
                       </td>
                       <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
                         {formatRupiah(payment.amount)}
+                      </td>
+                      <td
+                        className="px-4 py-4 text-center align-top"
+                        onMouseDown={(event) => event.stopPropagation()}
+                      >
+                        <Link
+                          href={`/menu/wallets/payments/${payment.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                          title="Lihat Detail Top Up"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                            />
+                          </svg>
+                        </Link>
                       </td>
                     </tr>
                   ))

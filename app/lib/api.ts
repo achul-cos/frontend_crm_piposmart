@@ -334,6 +334,7 @@ export interface BackendLead {
   id: number;
   code: string;
   owner: {
+    available?: boolean;
     id?: number;
     code: string;
     name: string;
@@ -341,6 +342,7 @@ export interface BackendLead {
     brand_name: string;
     province: string;
     city: string;
+    message?: string;
   };
   outlet_id?: number;
   current_owner?: {
@@ -503,7 +505,16 @@ export interface InteractionItem {
   note?: string;
   contact_name?: string;
   contact_phone?: string;
+  duration_seconds?: number | null;
+  customer_response?: string;
   follow_up_at?: string | null;
+  follow_up_note?: string;
+  stage_before?: string;
+  stage_after?: string;
+  status_before?: string;
+  status_after?: string;
+  score_before?: number | null;
+  score_after?: number | null;
   sales?: { id: number; name: string; role?: string } | null;
   supervisor?: { id: number; name: string; role?: string } | null;
   created_by?: { id: number; name: string; role?: string } | null;
@@ -516,10 +527,21 @@ export interface TrainingItem {
   status: string;
   scheduled_at: string;
   completed_at?: string | null;
+  canceled_at?: string | null;
+  rescheduled_at?: string | null;
   location?: string;
+  meeting_url?: string;
+  trainer_name?: string;
+  participant_name?: string;
   note?: string;
+  result_note?: string;
+  cancel_reason?: string;
   sales?: { id: number; name: string; role?: string } | null;
+  supervisor?: { id: number; name: string; role?: string } | null;
+  created_by?: { id: number; name: string; role?: string } | null;
+  updated_by?: { id: number; name: string; role?: string } | null;
   created_at: string;
+  updated_at: string;
 }
 
 export async function getLeadInteractions(leadId: number): Promise<InteractionItem[]> {
@@ -537,6 +559,32 @@ export async function getLeadTrainings(leadId: number): Promise<TrainingItem[]> 
     { headers: getAuthHeaders() }
   );
   const data = await handleResponse<{ data: { items: TrainingItem[] } }>(res);
+  return data.data?.items || [];
+}
+
+export interface StageHistoryItem {
+  id: number;
+  lead_id?: number;
+  owner_id?: number;
+  from_stage?: string;
+  to_stage: string;
+  from_status?: string;
+  to_status: string;
+  from_score?: number | null;
+  to_score?: number | null;
+  changed_by?: { id: number; name: string; role?: string } | null;
+  source_type: string;
+  source_id?: number | null;
+  reason?: string;
+  created_at: string;
+}
+
+export async function getLeadStageHistory(leadId: number): Promise<StageHistoryItem[]> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/leads/${leadId}/stage-history`,
+    { headers: getAuthHeaders() }
+  );
+  const data = await handleResponse<{ data: { items: StageHistoryItem[] } }>(res);
   return data.data?.items || [];
 }
 
@@ -601,6 +649,13 @@ export interface CatalogPromotion {
   description?: string;
   discount_type?: string;
   discount_value?: string;
+  promotion_type?: string;
+  charge_type?: "FREE" | "PAID";
+  additional_charge?: string;
+  priority?: number;
+  active?: boolean;
+  effective_from?: string;
+  effective_to?: string;
 }
 
 export async function getCatalogPackages(): Promise<CatalogPackage[]> {
@@ -625,8 +680,15 @@ export async function getEligiblePromotions(planId: number): Promise<CatalogProm
     `${API_BASE_URL}/api/v1/catalog/plans/${planId}/eligible-promotions`,
     { headers: getAuthHeaders() }
   );
-  const data = await handleResponse<{ data: CatalogPromotion[] }>(res);
-  return Array.isArray(data.data) ? data.data : [];
+  const data = await handleResponse<
+    { data: CatalogPromotion[] } | { data: { items?: CatalogPromotion[]; recommended?: CatalogPromotion | null } }
+  >(res);
+  const inner = (data as { data: unknown }).data;
+  if (Array.isArray(inner)) return inner as CatalogPromotion[];
+  if (inner && typeof inner === "object" && Array.isArray((inner as { items?: CatalogPromotion[] }).items)) {
+    return (inner as { items: CatalogPromotion[] }).items;
+  }
+  return [];
 }
 
 // ──────────────── Katalog: manajemen penuh Package/Plan/Promotion ─────────
@@ -2306,6 +2368,66 @@ export interface WalletTransactionListData {
   pagination: ApiPagination;
 }
 
+export interface WalletOwnerBrief {
+  id?: number;
+  code?: string;
+  name?: string;
+  kode_owner?: string;
+  nama_owner?: string;
+}
+
+export interface WalletAccountItem {
+  id: number;
+  owner_id?: number;
+  owner?: WalletOwnerBrief;
+  account_code?: string;
+  code?: string;
+  currency?: string;
+  balance?: string;
+  ledger_balance?: string;
+  status?: string;
+}
+
+export interface WalletPaymentItem {
+  id: number;
+  owner_id?: number;
+  owner?: WalletOwnerBrief;
+  code?: string;
+  payment_type?: string;
+  payment_channel?: string;
+  channel?: string;
+  external_reference?: string;
+  amount?: string;
+  currency?: string;
+  status?: string;
+  paid_at?: string;
+  created_at?: string;
+  note?: string;
+}
+
+export interface WalletLedgerItem {
+  id: number;
+  owner_id?: number;
+  owner?: WalletOwnerBrief;
+  code?: string;
+  transaction_type?: string;
+  direction?: string;
+  source_type?: string;
+  source_reference?: string;
+  external_reference?: string;
+  amount?: string;
+  balance_after?: string;
+  occurred_at?: string;
+  created_at?: string;
+  note?: string;
+}
+
+export interface WalletPaymentDetailData {
+  payment?: WalletPaymentItem;
+  transaction?: WalletLedgerItem;
+  wallet?: WalletAccountItem;
+}
+
 export async function listOwnerWalletTransactions(
   ownerId: number,
   params: { page?: number; limit?: number } = {},
@@ -2319,6 +2441,27 @@ export async function listOwnerWalletTransactions(
 
   const data = await handleResponse<ApiEnvelope<WalletTransactionListData>>(res);
   return data.data;
+}
+
+export async function getWalletPaymentDetail(
+  paymentId: number,
+): Promise<WalletPaymentDetailData> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/wallet-payments/${paymentId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<WalletPaymentDetailData | WalletPaymentItem>>(res);
+  const payload = data.data;
+
+  if (payload && typeof payload === "object" && "payment" in payload) {
+    return payload as WalletPaymentDetailData;
+  }
+
+  return {
+    payment: payload as WalletPaymentItem,
+  };
 }
 
 export interface SubscriptionItem {
@@ -2336,6 +2479,31 @@ export interface SubscriptionItem {
   source_type?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SubscriptionOrderDetailItem {
+  id: number;
+  code?: string;
+  owner?: { id?: number; code?: string; name?: string };
+  closing?: { id?: number; code?: string };
+  plan?: { id?: number; code?: string; name?: string };
+  promotion?: { id?: number; code?: string; name?: string };
+  wallet_transaction_id?: number;
+  tenure_months?: number;
+  duration_days?: number;
+  base_price?: string;
+  additional_charge?: string;
+  final_amount?: string;
+  status?: string;
+  purchased_at?: string;
+  subscription_start_date?: string;
+  external_reference?: string;
+  note?: string;
+}
+
+export interface SubscriptionDetailData {
+  subscription?: SubscriptionItem;
+  order?: SubscriptionOrderDetailItem;
 }
 
 export interface SubscriptionListData {
@@ -2356,6 +2524,27 @@ export async function listSubscriptionsByOutlet(
 
   const data = await handleResponse<ApiEnvelope<SubscriptionListData>>(res);
   return data.data;
+}
+
+export async function getSubscriptionDetail(
+  subscriptionId: number,
+): Promise<SubscriptionDetailData> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/subscriptions/${subscriptionId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<SubscriptionDetailData | SubscriptionItem>>(res);
+  const payload = data.data;
+
+  if (payload && typeof payload === "object" && "subscription" in payload) {
+    return payload as SubscriptionDetailData;
+  }
+
+  return {
+    subscription: payload as SubscriptionItem,
+  };
 }
 
 

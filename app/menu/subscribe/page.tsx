@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
@@ -947,12 +948,13 @@ export default function SubscriptionPage() {
                   <th className="p-3 font-black">Status</th>
                   <th className="p-3 font-black">Periode</th>
                   <th className="p-3 text-right font-black">Durasi</th>
+                  <th className="p-3 text-center font-black">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {subscriptions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center font-bold text-gray-400">
+                    <td colSpan={7} className="p-8 text-center font-bold text-gray-400">
                       Data subscription tidak ditemukan.
                     </td>
                   </tr>
@@ -965,7 +967,13 @@ export default function SubscriptionPage() {
                       title="Klik baris untuk melihat detail subscription"
                     >
                       <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">{subscription.code || `SUB-${subscription.id}`}</p>
+                        <Link
+                          href={`/menu/subscribe/${subscription.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          className="font-black text-gray-900 hover:text-[#C92C1E] transition-colors"
+                        >
+                          {subscription.code || `SUB-${subscription.id}`}
+                        </Link>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">
                           Order: {subscription.order?.code || subscription.order?.id || "-"}
                         </p>
@@ -987,6 +995,23 @@ export default function SubscriptionPage() {
                       </td>
                       <td className="p-3 text-right align-top font-black text-[#C92C1E]">
                         {subscription.total_duration_days || 0} hari
+                      </td>
+                      <td
+                        className="p-3 align-top text-center"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/menu/subscribe/${subscription.id}`}
+                            className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            title="Lihat Detail Subscribe"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))

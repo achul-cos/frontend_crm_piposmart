@@ -1704,7 +1704,7 @@ export default function DataKelolaanPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 font-sans text-[#1C1C1E]">
       {/* Menu Header */}
       <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
         <div className="p-5 border-b-2 border-[#C92C1E] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1717,6 +1717,9 @@ export default function DataKelolaanPage() {
               <span className="text-[#C92C1E]">Lead & Kepemilikan</span>
             </div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Manajemen Lead & Kepemilikan</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Kelola data lead, perpindahan kepemilikan PIC, aktivitas follow up, dan proses import data customer.
+            </p>
           </div>
         </div>
       </div>
@@ -1761,20 +1764,20 @@ export default function DataKelolaanPage() {
       <div className="flex bg-gray-100 p-1.5 rounded-xl w-max shadow-sm border border-gray-200/50">
         <button
           onClick={() => setActiveTab('list')}
-          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
+          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all ${
             activeTab === 'list'
-              ? 'bg-[#C92C1E] text-white shadow-sm ring-1 ring-red-300'
-              : 'text-gray-500 hover:text-[#C92C1E] hover:bg-red-50/50'
+              ? 'bg-white text-[#C92C1E] shadow-sm'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
           }`}
         >
           Daftar Lead
         </button>
         <button
           onClick={() => setActiveTab('analytics')}
-          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${
+          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
             activeTab === 'analytics'
-              ? 'bg-[#C92C1E] text-white shadow-sm ring-1 ring-red-300'
-              : 'text-gray-500 hover:text-[#C92C1E] hover:bg-red-50/50'
+              ? 'bg-white text-[#C92C1E] shadow-sm'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
           }`}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1912,6 +1915,9 @@ export default function DataKelolaanPage() {
           <h2 className="text-base font-black text-gray-800 uppercase tracking-tight">
             Tabel Data Lead & Kepemilikan
           </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Menampilkan daftar lead sesuai filter aktif, PIC terakhir, dan skor remark terbaru.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -2026,8 +2032,8 @@ export default function DataKelolaanPage() {
         </div>
 
       {/* TABLE WORKSPACE */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1400px] text-left text-sm text-gray-600">
+        <div className="max-w-full overflow-x-auto">
+          <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
             <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
               <tr>
                 {selectionMode && (
@@ -2169,18 +2175,13 @@ export default function DataKelolaanPage() {
                 paginatedData.map((row, idx) => (
                   <tr
                     key={row.no || idx}
-<<<<<<< Updated upstream
                     onClick={() => {
                       if (selectionMode) {
                         handleToggleSelectRow(row.no);
                       }
                     }}
-                    className={`border-b border-gray-100 last:border-0 transition-colors ${
-                      selectionMode ? "cursor-pointer" : ""
-=======
                     className={`transition-colors ${
-                      selectionMode ? "cursor-pointer select-none" : ""
->>>>>>> Stashed changes
+                      selectionMode ? "cursor-pointer" : ""
                     } ${
                       selectedIds.includes(row.no)
                         ? "bg-red-100/70 hover:bg-red-100"
@@ -2189,12 +2190,8 @@ export default function DataKelolaanPage() {
                   >
                     {selectionMode && (
                       <td
-<<<<<<< Updated upstream
                         className="px-4 py-4 text-center"
                         onClick={(e) => e.stopPropagation()}
-=======
-                        className="px-4 py-4 align-top text-center"
->>>>>>> Stashed changes
                       >
                         <input
                           type="checkbox"
@@ -2205,23 +2202,23 @@ export default function DataKelolaanPage() {
                       </td>
                     )}
 
-                        <td className="px-4 py-4 text-center align-top font-medium text-gray-500">
+                        <td className="px-4 py-4 text-center align-top font-medium text-gray-500 whitespace-nowrap">
                           {startDataIndex + idx + 1}
                         </td>
 
-                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[150px]">
                           {row.kodeOwner || "-"}
                         </td>
 
-                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[220px]">
                           {row.namaOwner || "-"}
                         </td>
 
-                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[200px]">
                           {row.projectBrand || "-"}
                         </td>
 
-                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[160px]">
                           {row.noHpOwner || "-"}
                         </td>
 
@@ -2237,14 +2234,26 @@ export default function DataKelolaanPage() {
                           className="px-4 py-4 align-top text-center"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <ActionButtons
-                            item={row}
-                            onCall={handleOpenCallAction}
-                            onEdit={openEditModal}
-                            onDelete={handleHapusSatuData}
-                            canEdit={isAdminState}
-                            canDelete={isAdminState}
-                          />
+                          <div className="flex items-center justify-center gap-2">
+                            <Link
+                              href={`/menu/lead/${row.no}`}
+                              className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                              title="Lihat Detail Lead"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </Link>
+                            <ActionButtons
+                              item={row}
+                              onCall={handleOpenCallAction}
+                              onEdit={openEditModal}
+                              onDelete={handleHapusSatuData}
+                              canEdit={isAdminState}
+                              canDelete={isAdminState}
+                            />
+                          </div>
                         </td>
                   </tr>
                 ))

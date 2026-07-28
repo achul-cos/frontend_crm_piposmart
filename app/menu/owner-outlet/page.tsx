@@ -682,7 +682,6 @@ export default function OwnerOutletPage() {
                     key={owner.id} 
                     className="transition-colors hover:bg-gray-50"
                   >
-<<<<<<< Updated upstream
                     <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <input 
                           type="checkbox" 
@@ -692,14 +691,6 @@ export default function OwnerOutletPage() {
                             else setSelectedOwnerIds(selectedOwnerIds.filter(id => id !== owner.id));
                           }}
                           className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
-=======
-                    <td className="px-4 py-4 align-top text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          readOnly
-                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
->>>>>>> Stashed changes
                         />
                     </td>
                     <td className="px-4 py-4 align-top font-medium text-gray-900">{owner.code}</td>
@@ -721,11 +712,7 @@ export default function OwnerOutletPage() {
                         {owner.outlet_count || 0}
                       </span>
                     </td>
-<<<<<<< Updated upstream
                     <td className="px-4 py-4 text-center">
-=======
-                    <td className="px-4 py-4 align-top text-center" onMouseDown={(e) => e.stopPropagation()}>
->>>>>>> Stashed changes
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={(e) => {

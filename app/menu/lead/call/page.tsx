@@ -359,6 +359,7 @@ export default function CallPage({
     canShowConclusion &&
     conclusion.trim() !== "" &&
     (!trainingPayload.hasTraining || trainingPayload.sessionType !== "");
+  const formattedCustomerPhone = formatCustomerPhoneDisplay(customerPhone);
 
   if (!customer) return null;
 
@@ -464,209 +465,290 @@ export default function CallPage({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/25 p-3">
-      <div className="flex h-[88vh] w-full max-w-4xl flex-col rounded-[22px] bg-white p-3 shadow-sm">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-            Call & Chat Customer
-          </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+      <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={handleClose} />
+
+      <div className="relative z-10 flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-100 bg-gray-50 px-6 py-5">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
+              Call & Chat Customer
+            </p>
+            <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">
+              Form Laporan Aktivitas Lead
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Catat hasil call, chat, follow-up, training, hingga closing customer.
+            </p>
+          </div>
 
           <button
             type="button"
             onClick={handleClose}
-            className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-white px-4 py-2 text-xs font-black text-[#C92C1E] shadow-sm transition hover:bg-red-50"
+            className="rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            title="Tutup"
           >
-            <ArrowRightIcon className="h-4 w-4" />
-            Kembali
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18 18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="min-h-0 flex-1 overscroll-contain overflow-y-auto rounded-[22px] border border-red-100 bg-gray-50 p-4"
-        >
-          <div className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
-            <div className="grid gap-4 lg:grid-cols-[72px_1fr_170px]">
-              <div className="flex h-[92px] w-[72px] items-center justify-center rounded-2xl border border-red-100 bg-white shadow-sm">
-                <UserIcon className="h-8 w-8 text-[#C92C1E]" />
-              </div>
+        <form onSubmit={handleSubmit} className="min-h-0 flex flex-1 flex-col bg-gray-50/60">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+            <div className="rounded-3xl bg-gradient-to-br from-[#C92C1E] via-[#B62619] to-[#8F1D14] p-5 text-white shadow-lg">
+              <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="flex gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
+                    <UserIcon className="h-8 w-8 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-red-100/90">
+                      Profil Customer
+                    </p>
+                    <h3 className="mt-1 truncate text-2xl font-black tracking-tight">
+                      {customer.namaOwner || "Nama Customer"}
+                    </h3>
+                    <p className="mt-1 truncate text-sm font-bold text-red-100">
+                      {customer.outlet || "Nama Outlet"}
+                    </p>
 
-              <div className="min-w-0">
-                <h2 className="text-xl font-black uppercase tracking-wide text-gray-950">
-                  {customer.namaOwner || "Nama Customer"}
-                </h2>
-                <p className="mt-1 text-sm font-black text-gray-500">
-                  {customer.outlet || "Nama Outlet"}
-                </p>
-
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <SmallInfo label="Kode Owner" value={customer.kodeOwner || "-"} />
-                  <SmallInfo label="PIC Sales" value={customer.pic || "-"} />
-                  <SmallInfo label="Mitra" value={customer.statusAkun || "-"} />
-                  <SmallInfo
-                    label="Skor Customer"
-                    value={getScoreLabel(customer.scor ?? customer.remarks)}
-                  />
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      <SmallInfo label="Kode Owner" value={customer.kodeOwner || "-"} inverted />
+                      <SmallInfo label="PIC Sales" value={customer.pic || "-"} inverted />
+                      <SmallInfo label="Status Akun" value={customer.statusAkun || "-"} inverted />
+                      <SmallInfo
+                        label="Skor Customer"
+                        value={getScoreLabel(customer.scor ?? customer.remarks)}
+                        inverted
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <MiniStat label="Terakhir Call" value={getLastCallDate(customer)} />
-                <MiniStat label="Total Call" value={`${Number(customer.totalFu || 0)}`} large />
+                <div className="grid grid-cols-2 gap-3">
+                  <MiniStat label="Terakhir Call" value={getLastCallDate(customer)} inverted />
+                  <MiniStat label="Total Call" value={`${Number(customer.totalFu || 0)}`} large inverted />
+                  <MiniStat label="No. Owner" value={formattedCustomerPhone} inverted />
+                  <MiniStat label="WA Ready" value={whatsappUrl ? "Tersedia" : "Tidak Ada"} inverted />
+                </div>
               </div>
             </div>
 
-            <div className="my-4 h-px bg-gray-200" />
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className={`rounded-2xl border p-4 shadow-sm transition-colors ${isStatusComplete ? "border-emerald-200 bg-emerald-50" : "border-red-100 bg-white"}`}>
+                <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${isStatusComplete ? "text-emerald-600" : "text-[#C92C1E]"}`}>
+                  Tahap 1
+                </p>
+                <h4 className="mt-1 text-sm font-black text-gray-900">Lengkapi status call dan chat</h4>
+                <p className="mt-1 text-xs text-gray-500">
+                  Status ini menjadi pintu pembuka untuk memilih remark customer.
+                </p>
+              </div>
+              <div className={`rounded-2xl border p-4 shadow-sm transition-colors ${canShowRemarks ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"}`}>
+                <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${canShowRemarks ? "text-amber-700" : "text-gray-400"}`}>
+                  Tahap 2
+                </p>
+                <h4 className="mt-1 text-sm font-black text-gray-900">Pilih remark customer</h4>
+                <p className="mt-1 text-xs text-gray-500">
+                  Tentukan customer invalid, kemungkinan, potensial, atau closing.
+                </p>
+              </div>
+              <div className={`rounded-2xl border p-4 shadow-sm transition-colors ${canSave ? "border-emerald-200 bg-emerald-50" : "border-gray-200 bg-white"}`}>
+                <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${canSave ? "text-emerald-600" : "text-gray-400"}`}>
+                  Tahap 3
+                </p>
+                <h4 className="mt-1 text-sm font-black text-gray-900">Isi kesimpulan dan simpan</h4>
+                <p className="mt-1 text-xs text-gray-500">
+                  Pastikan tindak lanjut sudah jelas sebelum laporan disimpan.
+                </p>
+              </div>
+            </div>
 
-            <h3 className="text-center text-xl font-black text-gray-950">
-              Laporan Call Customer
-            </h3>
+            <div className="rounded-2xl border border-gray-200/70 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-gray-100 bg-gray-50/80 px-5 py-4">
+                <h3 className="text-base font-black text-gray-900">Informasi Aktivitas</h3>
+                <p className="mt-1 text-[11px] font-medium text-gray-500">
+                  Lengkapi waktu, kontak, dan status komunikasi customer.
+                </p>
+              </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              <FieldWrapper label="Waktu" icon={<ClockIcon className="h-4 w-4" />}>
-                <input
-                  type="datetime-local"
-                  value={callTime}
-                  onChange={(event) => setCallTime(event.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-700 outline-none transition focus:border-[#C92C1E]"
-                />
-              </FieldWrapper>
+              <div className="grid gap-4 p-5 lg:grid-cols-2">
+                <FieldWrapper label="Waktu Aktivitas" icon={<ClockIcon className="h-4 w-4" />}>
+                  <input
+                    type="datetime-local"
+                    value={callTime}
+                    onChange={(event) => setCallTime(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                  />
+                </FieldWrapper>
 
-              <FieldWrapper label="Nomor Owner" icon={<ContactIcon className="h-4 w-4" />}>
-                <div className="flex gap-2">
+                <FieldWrapper label="Tanggal Follow Up" icon={<CalendarIcon className="h-4 w-4" />}>
+                  <input
+                    type="date"
+                    value={followUpDate}
+                    onChange={(event) => setFollowUpDate(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                  />
+                </FieldWrapper>
+
+                <FieldWrapper label="Nomor Owner" icon={<ContactIcon className="h-4 w-4" />}>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={formattedCustomerPhone}
+                      className="h-11 min-w-0 flex-1 cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-700 outline-none"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppCustomer(customerPhone)}
+                      className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-emerald-50 px-4 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                    >
+                      <WhatsAppIcon className="h-4 w-4" />
+                      Hubungi
+                    </button>
+                  </div>
+                </FieldWrapper>
+
+                <FieldWrapper label="Link WhatsApp" icon={<WhatsAppIcon className="h-4 w-4" />}>
                   <input
                     readOnly
-                    value={formatCustomerPhoneDisplay(customerPhone)}
-                    className="h-10 min-w-0 flex-1 cursor-not-allowed rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-700 outline-none"
+                    value={whatsappUrl || "Nomor WhatsApp belum tersedia"}
+                    className="h-11 w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-medium text-gray-500 outline-none"
                   />
+                </FieldWrapper>
 
-                  <button
-                    type="button"
-                    onClick={() => openWhatsAppCustomer(customerPhone)}
-                    className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-100 px-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-200"
+                <FieldWrapper label="Status Call" icon={<PhoneIcon className="h-4 w-4" />}>
+                  <select
+                    value={callStatus}
+                    onChange={(event) => handleChangeCallStatus(event.target.value)}
+                    className={`h-11 w-full cursor-pointer rounded-xl border px-4 text-sm font-black outline-none transition focus:ring-2 focus:ring-red-100 ${getCallStatusClass(
+                      callStatus,
+                    )}`}
                   >
-                    Hubungi
-                  </button>
-                </div>
-              </FieldWrapper>
+                    {CALL_STATUS_OPTIONS.map((item) => (
+                      <option key={item || "empty"} value={item}>
+                        {item || "none"}
+                      </option>
+                    ))}
+                  </select>
+                </FieldWrapper>
 
-              <FieldWrapper label="Status Call" icon={<PhoneIcon className="h-4 w-4" />}>
-                <select
-                  value={callStatus}
-                  onChange={(event) => handleChangeCallStatus(event.target.value)}
-                  className={`h-10 w-full cursor-pointer rounded-xl border px-3 text-center text-xs font-black outline-none transition ${getCallStatusClass(
-                    callStatus,
-                  )}`}
-                >
-                  {CALL_STATUS_OPTIONS.map((item) => (
-                    <option key={item || "empty"} value={item}>
-                      {item || "none"}
-                    </option>
-                  ))}
-                </select>
-              </FieldWrapper>
-
-              <FieldWrapper label="Status Chat" icon={<ChatIcon className="h-4 w-4" />}>
-                <select
-                  value={chatStatus}
-                  onChange={(event) => handleChangeChatStatus(event.target.value)}
-                  className={`h-10 w-full cursor-pointer rounded-xl border px-3 text-center text-xs font-black outline-none transition ${getChatStatusClass(
-                    chatStatus,
-                  )}`}
-                >
-                  {CHAT_STATUS_OPTIONS.map((item) => (
-                    <option key={item || "empty"} value={item}>
-                      {item || "none"}
-                    </option>
-                  ))}
-                </select>
-              </FieldWrapper>
-
-              <FieldWrapper label="Tanggal Follow Up" icon={<CalendarIcon className="h-4 w-4" />}>
-                <input
-                  type="date"
-                  value={followUpDate}
-                  onChange={(event) => setFollowUpDate(event.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-700 outline-none transition focus:border-[#C92C1E]"
-                />
-              </FieldWrapper>
-
-              <FieldWrapper label="Link WhatsApp" icon={<WhatsAppIcon className="h-4 w-4" />}>
-                <input
-                  readOnly
-                  value={whatsappUrl || "Nomor WhatsApp belum tersedia"}
-                  className="h-10 w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-bold text-gray-500 outline-none"
-                />
-              </FieldWrapper>
+                <FieldWrapper label="Status Chat" icon={<ChatIcon className="h-4 w-4" />}>
+                  <select
+                    value={chatStatus}
+                    onChange={(event) => handleChangeChatStatus(event.target.value)}
+                    className={`h-11 w-full cursor-pointer rounded-xl border px-4 text-sm font-black outline-none transition focus:ring-2 focus:ring-red-100 ${getChatStatusClass(
+                      chatStatus,
+                    )}`}
+                  >
+                    {CHAT_STATUS_OPTIONS.map((item) => (
+                      <option key={item || "empty"} value={item}>
+                        {item || "none"}
+                      </option>
+                    ))}
+                  </select>
+                </FieldWrapper>
+              </div>
             </div>
 
             {!isStatusComplete && (
-              <div className="mt-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-3 text-center text-xs font-black text-gray-400">
-                Pilih Status Call dan Status Chat terlebih dahulu untuk membuka Remarks.
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-4 text-center text-sm font-bold text-gray-400 shadow-sm">
+                Pilih <span className="text-[#C92C1E]">Status Call</span> dan <span className="text-[#C92C1E]">Status Chat</span> terlebih dahulu untuk membuka bagian remarks.
               </div>
             )}
 
             {canShowRemarks && (
-              <div className="mt-3">
+              <div className="rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm">
+                <div className="mb-4">
+                  <h3 className="text-base font-black text-gray-900">Remarks Customer</h3>
+                  <p className="mt-1 text-[11px] font-medium text-gray-500">
+                    Pilih hasil follow-up berdasarkan kondisi customer saat ini.
+                  </p>
+                </div>
                 <RemarkOptionsSection value={selectedRemark} onChange={handleSelectRemark} />
+              </div>
+            )}
+
+            {selectedRemarkScore === "2" && selectedRemark && (
+              <div className="rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm">
+                <div className="mb-4">
+                  <h3 className="text-base font-black text-gray-900">Rencana Training / Demo</h3>
+                  <p className="mt-1 text-[11px] font-medium text-gray-500">
+                    Customer potensial biasanya membutuhkan demo atau training sebelum lanjut.
+                  </p>
+                </div>
+                <Remark2TrainingSection
+                  customer={customer}
+                  value={trainingPayload}
+                  onChange={setTrainingPayload}
+                />
+              </div>
+            )}
+
+            {selectedRemarkScore === "3" && selectedRemark && (
+              <div className="rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm">
+                <div className="mb-4">
+                  <h3 className="text-base font-black text-gray-900">Data Closing Penjualan</h3>
+                  <p className="mt-1 text-[11px] font-medium text-gray-500">
+                    Lengkapi paket, plan, dan promo untuk menyiapkan closing customer.
+                  </p>
+                </div>
+                <Remark3SalesSection
+                  value={salesPayload}
+                  onChange={setSalesPayload}
+                  backendPackages={catalogPackages}
+                  backendPlans={catalogPlans}
+                  backendPromotions={eligiblePromotions}
+                />
+              </div>
+            )}
+
+            {canShowConclusion && (
+              <div className="rounded-2xl border border-gray-200/70 bg-white p-5 shadow-sm">
+                <label className="block text-sm font-black text-gray-900">
+                  Kesimpulan Aktivitas
+                </label>
+                <p className="mt-1 text-[11px] font-medium text-gray-500">
+                  Ringkas hasil percakapan dan langkah selanjutnya agar mudah ditinjau kembali.
+                </p>
+
+                <textarea
+                  value={conclusion}
+                  onChange={(event) => setConclusion(event.target.value)}
+                  rows={5}
+                  placeholder="Contoh: Customer tertarik paket Business 12 bulan, meminta follow-up lagi 3 hari ke depan."
+                  className="mt-3 w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                />
               </div>
             )}
           </div>
 
-          {selectedRemarkScore === "2" && selectedRemark && (
-            <div className="mt-4">
-              <Remark2TrainingSection
-                customer={customer}
-                value={trainingPayload}
-                onChange={setTrainingPayload}
-              />
+          <div className="shrink-0 border-t border-gray-100 bg-white px-5 py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-gray-500">
+                {!canSave ? "Form belum lengkap. Lengkapi status, remark, dan kesimpulan untuk menyimpan." : "Form siap disimpan ke laporan aktivitas lead."}
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={!canSave}
+                  className="rounded-xl bg-[#C92C1E] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Simpan Laporan Call
+                </button>
+              </div>
             </div>
-          )}
-
-          {selectedRemarkScore === "3" && selectedRemark && (
-            <div className="mt-4">
-              <Remark3SalesSection
-                value={salesPayload}
-                onChange={setSalesPayload}
-                backendPackages={catalogPackages}
-                backendPlans={catalogPlans}
-                backendPromotions={eligiblePromotions}
-              />
-            </div>
-          )}
-
-          {canShowConclusion && (
-            <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <label className="text-sm font-black text-gray-800">
-                Kesimpulan
-              </label>
-
-              <textarea
-                value={conclusion}
-                onChange={(event) => setConclusion(event.target.value)}
-                rows={4}
-                placeholder="Isi kesimpulan call dengan owner"
-                className="mt-2 w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E]"
-              />
-            </div>
-          )}
-
-          <div className="mt-4 flex justify-end gap-2 border-t border-gray-100 bg-gray-50/95 py-3 ">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50"
-            >
-              Batal
-            </button>
-
-            <button
-              type="submit"
-              disabled={!canSave}
-              className="rounded-xl bg-[#C92C1E] px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Simpan Laporan Call
-            </button>
           </div>
         </form>
       </div>
@@ -747,11 +829,11 @@ function UserIcon({ className }: { className?: string }) {
   );
 }
 
-function SmallInfo({ label, value }: { label: string; value: string }) {
+function SmallInfo({ label, value, inverted }: { label: string; value: string; inverted?: boolean }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs shadow-sm">
-      <span className="font-black text-gray-700">{label} : </span>
-      <span className="font-black text-[#C92C1E]">{value}</span>
+    <div className={`rounded-xl border px-3 py-2 text-xs shadow-sm ${inverted ? "border-white/15 bg-white/10 backdrop-blur-sm" : "border-gray-200 bg-white"}`}>
+      <span className={`font-black ${inverted ? "text-red-100" : "text-gray-700"}`}>{label} : </span>
+      <span className={`font-black ${inverted ? "text-white" : "text-[#C92C1E]"}`}>{value}</span>
     </div>
   );
 }
@@ -760,15 +842,17 @@ function MiniStat({
   label,
   value,
   large,
+  inverted,
 }: {
   label: string;
   value: string;
   large?: boolean;
+  inverted?: boolean;
 }) {
   return (
-    <div className="flex min-h-[92px] flex-col items-center justify-center rounded-2xl border border-red-100 bg-white p-2 text-center shadow-sm">
-      <p className="text-[10px] font-black uppercase text-gray-400">{label}</p>
-      <p className={`mt-2 font-black text-[#C92C1E] ${large ? "text-2xl" : "text-xs"}`}>
+    <div className={`flex min-h-[96px] flex-col items-center justify-center rounded-2xl border p-3 text-center shadow-sm ${inverted ? "border-white/15 bg-white/10 backdrop-blur-sm" : "border-red-100 bg-white"}`}>
+      <p className={`text-[10px] font-black uppercase tracking-wide ${inverted ? "text-red-100" : "text-gray-400"}`}>{label}</p>
+      <p className={`mt-2 font-black ${large ? "text-2xl" : "text-xs"} ${inverted ? "text-white" : "text-[#C92C1E]"}`}>
         {value}
       </p>
     </div>
@@ -786,7 +870,7 @@ function FieldWrapper({
 }) {
   return (
     <div>
-      <label className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase text-gray-500">
+      <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">
         {icon && <span className="text-[#C92C1E]">{icon}</span>}
         {label}
       </label>

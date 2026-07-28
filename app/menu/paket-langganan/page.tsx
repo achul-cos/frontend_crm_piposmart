@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
@@ -359,6 +361,7 @@ function BulkActionBar({
 
 export default function PaketLanggananPage() {
   usePageTitle("Katalog");
+  const router = useRouter();
   const [entity, setEntity] = useState<Entity>("package");
   const [scope, setScope] = useState<CatalogScope>("ACTIVE");
   const [search, setSearch] = useState("");
@@ -774,7 +777,14 @@ export default function PaketLanggananPage() {
                       <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
                     </td>
                     <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
-                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{p.name}</td>
+                    <td className="px-4 py-3.5 align-top">
+                      <Link
+                        href={`/menu/paket-langganan/packages/${p.id}`}
+                        className="font-black text-gray-800 transition-colors hover:text-[#C92C1E]"
+                      >
+                        {p.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3.5 align-top">{p.level_order}</td>
                     <td className="px-4 py-3.5 align-top"><StatusBadge active={p.active} /></td>
                     <td className="px-4 py-3.5 align-top">
@@ -782,7 +792,7 @@ export default function PaketLanggananPage() {
                         scope={scope}
                         active={p.active}
                         isToggling={togglingId === p.id}
-                        onView={() => pushView({ kind: "package", item: p })}
+                        onView={() => router.push(`/menu/paket-langganan/packages/${p.id}`)}
                         onEdit={() => setPackageForm({ mode: "edit", item: p })}
                         onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
                         onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
@@ -799,7 +809,14 @@ export default function PaketLanggananPage() {
                       <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
                     </td>
                     <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
-                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{p.name}</td>
+                    <td className="px-4 py-3.5 align-top">
+                      <Link
+                        href={`/menu/paket-langganan/plans/${p.id}`}
+                        className="font-black text-gray-800 transition-colors hover:text-[#C92C1E]"
+                      >
+                        {p.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3.5 align-top">
                       <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-black text-orange-600">
                         {p.package.name}
@@ -813,7 +830,7 @@ export default function PaketLanggananPage() {
                         scope={scope}
                         active={p.active}
                         isToggling={togglingId === p.id}
-                        onView={() => pushView({ kind: "plan", item: p })}
+                        onView={() => router.push(`/menu/paket-langganan/plans/${p.id}`)}
                         onEdit={() => setPlanForm({ mode: "edit", item: p })}
                         onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
                         onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
@@ -830,7 +847,14 @@ export default function PaketLanggananPage() {
                       <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
                     </td>
                     <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
-                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{p.name}</td>
+                    <td className="px-4 py-3.5 align-top">
+                      <Link
+                        href={`/menu/paket-langganan/promotions/${p.id}`}
+                        className="font-black text-gray-800 transition-colors hover:text-[#C92C1E]"
+                      >
+                        {p.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3.5 align-top">{p.promotion_type}</td>
                     <td className="px-4 py-3.5 align-top">
                       {p.charge_type === "FREE" ? (
@@ -846,7 +870,7 @@ export default function PaketLanggananPage() {
                         scope={scope}
                         active={p.active}
                         isToggling={togglingId === p.id}
-                        onView={() => pushView({ kind: "promotion", item: p })}
+                        onView={() => router.push(`/menu/paket-langganan/promotions/${p.id}`)}
                         onEdit={() => setPromotionForm({ mode: "edit", item: p })}
                         onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
                         onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
