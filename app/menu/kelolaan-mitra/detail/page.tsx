@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   assignPartnerPic,
   createPartnerInteraction,
@@ -51,6 +51,19 @@ function formatDateTime(value?: string | null) {
   }).format(date);
 }
 
+function formatDateOnly(value?: string | null) {
+  if (!value) return "Tanpa batas";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Intl.DateTimeFormat("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(year, month - 1, day));
+  }
+  return formatDateTime(value);
+}
+
 function formatMoney(value?: string | number | null, currency = "IDR") {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -65,6 +78,12 @@ function formatFlatCommission(partnerType?: PartnerItem["partner_type"] | null) 
   return partnerType.commission_mode === "PERCENTAGE" ? `${value}%` : formatMoney(value);
 }
 
+function formatRuleValue(mode: string, value?: string | null) {
+  if (mode === "TIER") return "Bertingkat";
+  if (!value) return "-";
+  return mode === "PERCENTAGE" ? `${Number(value)}%` : formatMoney(value);
+}
+
 function humanizeRole(value?: string | null) {
   return String(value || "-")
     .toLowerCase()
@@ -75,6 +94,77 @@ function humanizeRole(value?: string | null) {
 
 function leadLabel(lead: BackendLead) {
   return lead.owner?.name || lead.owner?.phone || `Lead #${lead.id}`;
+}
+
+function partnerStatusTone(status: string) {
+  return status === "ACTIVE"
+    ? "border border-green-100 bg-green-50 text-green-700"
+    : "border border-slate-200 bg-slate-100 text-slate-600";
+}
+
+function commissionStatusTone(status: string) {
+  if (status === "PAID") return "border border-green-100 bg-green-50 text-green-700";
+  if (status === "APPROVED") return "border border-blue-100 bg-blue-50 text-blue-700";
+  if (status === "CANCELLED") return "border border-slate-200 bg-slate-100 text-slate-500";
+  return "border border-amber-100 bg-amber-50 text-amber-700";
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`rounded-[30px] border border-slate-200 bg-white shadow-sm ${className}`}>
+      <div className="border-b border-slate-100 px-5 py-4 md:px-6">
+        <h2 className="text-sm font-black text-slate-950">{title}</h2>
+        <p className="mt-1 text-xs font-medium text-slate-500">{subtitle}</p>
+      </div>
+      <div className="p-5 md:p-6">{children}</div>
+    </section>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  hint,
+  accent = false,
+}: {
+  label: string;
+  value: ReactNode;
+  hint: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[26px] border p-5 shadow-sm ${
+        accent
+          ? "border-red-100 bg-[linear-gradient(135deg,#fff7f5_0%,#fff_58%,#fee2e2_100%)]"
+          : "border-slate-200 bg-white"
+      }`}
+    >
+      <p className={`text-[10px] font-black uppercase tracking-[0.24em] ${accent ? "text-[#C92C1E]" : "text-slate-400"}`}>
+        {label}
+      </p>
+      <div className={`mt-4 text-lg font-black ${accent ? "text-[#C92C1E]" : "text-slate-950"}`}>{value}</div>
+      <p className={`mt-2 text-xs font-bold ${accent ? "text-[#C92C1E]/70" : "text-slate-400"}`}>{hint}</p>
+    </div>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-xs font-bold text-slate-400">
+      {message}
+    </div>
+  );
 }
 
 export default function PartnerDetailPage() {
@@ -141,12 +231,16 @@ function PartnerDetailPageInner() {
         listPartnerCommissions(partnerId, { page: 1, limit: 20 }),
       ]);
 
-      if (partnerResult.status !== "fulfilled") {
-        throw partnerResult.reason;
-      }
+      if (partnerResult.status !== "fulfilled") throw partnerResult.reason;
 
       setPartner(partnerResult.value);
-      setCurrentRole(profileResult.status === "fulfilled" ? profileResult.value.role || "" : typeof window !== "undefined" ? localStorage.getItem("piposmart_user_role") || "" : "");
+      setCurrentRole(
+        profileResult.status === "fulfilled"
+          ? profileResult.value.role || ""
+          : typeof window !== "undefined"
+            ? localStorage.getItem("piposmart_user_role") || ""
+            : "",
+      );
       setLeads(leadsResult.status === "fulfilled" ? leadsResult.value : []);
       setSalesUsers(salesResult.status === "fulfilled" ? salesResult.value : []);
       setActiveAssignment(activeAssignmentResult.status === "fulfilled" ? activeAssignmentResult.value : null);
@@ -291,7 +385,7 @@ function PartnerDetailPageInner() {
   };
 
   if (loading && !partner) {
-    return <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm font-bold text-gray-400">Memuat detail mitra...</div>;
+    return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-400">Memuat detail mitra...</div>;
   }
 
   if (!partner) {
@@ -299,18 +393,21 @@ function PartnerDetailPageInner() {
   }
 
   return (
-    <div className="w-full space-y-6 font-sans text-[#1C1C1E]">
-      <section className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-sm">
+    <div className="w-full space-y-6 font-sans text-slate-900">
+      <section className="relative overflow-hidden rounded-[34px] border border-red-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] shadow-sm">
         <div className="relative p-6 md:p-8">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[80px] bg-red-50" />
-          <div className="relative z-10 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <div className="inline-flex rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">Detail Mitra</div>
-              <h1 className="mt-4 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">{partner.name}</h1>
-              <p className="mt-2 text-sm font-medium text-gray-500">{partner.code}  {partner.partner_type.name}  status {partner.status}</p>
+          <div className="absolute right-0 top-0 h-44 w-44 rounded-bl-[88px] bg-red-50/80" />
+          <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex rounded-full border border-red-100 bg-white/90 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">Detail Mitra</div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-black tracking-tight text-slate-950 md:text-[32px]">{partner.name}</h1>
+                <span className={`rounded-full px-3 py-1 text-[10px] font-black ${partnerStatusTone(partner.status)}`}>{partner.status}</span>
+              </div>
+              <p className="mt-2 text-sm font-medium text-slate-500">{partner.code} • {partner.partner_type.name} • Halaman ini disusun vertikal per kelompok kerja agar lebih nyaman dibaca saat scroll panjang.</p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-              <Link href="/menu/kelolaan-mitra" className="rounded-2xl border border-gray-200 px-5 py-3 text-center text-xs font-black text-gray-600 transition hover:bg-gray-50">Kembali ke List</Link>
+              <Link href="/menu/kelolaan-mitra" className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-center text-xs font-black text-slate-600 transition hover:bg-slate-50">Kembali ke List</Link>
               {partner.status === "INACTIVE" && isAdmin ? <button type="button" onClick={() => void handleRestore()} disabled={saving} className="rounded-2xl border border-green-100 bg-green-50 px-5 py-3 text-xs font-black text-green-700 disabled:cursor-not-allowed disabled:opacity-50">Pulihkan Mitra</button> : null}
               {canManage ? <button type="button" onClick={() => void handleSyncCommissions()} disabled={saving} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">Sync Komisi</button> : null}
             </div>
@@ -322,48 +419,171 @@ function PartnerDetailPageInner() {
       {actionError ? <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{actionError}</div> : null}
       {actionSuccess ? <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{actionSuccess}</div> : null}
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Partner Type</p><p className="mt-3 text-lg font-black text-gray-950">{partner.partner_type.name}</p><p className="mt-1 text-xs font-bold text-gray-400">{partner.partner_type.code}</p></div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Komisi Dasar</p><p className="mt-3 text-lg font-black text-gray-950">{formatFlatCommission(partner.partner_type)}</p><p className="mt-1 text-xs font-bold text-gray-400">Fallback flat dari partner type</p></div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-gray-400">PIC Aktif</p><p className="mt-3 text-lg font-black text-gray-950">{activeAssignment?.user_name || "Belum ada PIC"}</p><p className="mt-1 text-xs font-bold text-gray-400">{humanizeRole(activeAssignment?.user_role)}</p></div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Rekening</p><p className="mt-3 text-lg font-black text-gray-950">{partner.bank_account_masked || "Belum ada rekening"}</p><p className="mt-1 text-xs font-bold text-gray-400">Backend hanya mengirim masked account</p></div>
-      </section>
+      <SectionCard title="Ringkasan Mitra" subtitle="Ringkasan cepat di bagian atas agar konteks dasar langsung terbaca sebelum masuk ke detail yang lebih panjang.">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Partner Type" value={<><div>{partner.partner_type.name}</div><div className="mt-1 text-xs text-slate-400">{partner.partner_type.code}</div></>} hint="Jenis mitra yang menjadi basis fallback komisi." />
+          <MetricCard label="Komisi Dasar" value={formatFlatCommission(partner.partner_type)} hint="Dipakai bila tidak ada rule aktif yang lebih spesifik." accent />
+          <MetricCard label="PIC Aktif" value={activeAssignment?.user_name || "Belum ada PIC"} hint={activeAssignment ? humanizeRole(activeAssignment.user_role) : "Belum ada sales yang ditugaskan."} />
+          <MetricCard label="Rekening" value={partner.bank_account_masked || "Belum ada rekening"} hint="Backend hanya mengirim masked account." />
+        </div>
+      </SectionCard>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-2">
-          <h2 className="text-sm font-black text-gray-900">Informasi Mitra</h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-bold text-gray-600"><span className="block text-[10px] uppercase tracking-wider text-gray-400">Kode</span>{partner.code}</div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-bold text-gray-600"><span className="block text-[10px] uppercase tracking-wider text-gray-400">Status</span>{partner.status}</div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-bold text-gray-600"><span className="block text-[10px] uppercase tracking-wider text-gray-400">Telepon</span>{partner.phone || "-"}</div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-bold text-gray-600"><span className="block text-[10px] uppercase tracking-wider text-gray-400">Email</span>{partner.email || "-"}</div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-bold text-gray-600 md:col-span-2"><span className="block text-[10px] uppercase tracking-wider text-gray-400">Alamat</span>{partner.address || "Alamat belum diisi"}</div>
+      <SectionCard title="Identitas Mitra" subtitle="Seluruh informasi profil utama ditempatkan dalam satu blok vertikal supaya tidak perlu melompat antar kolom saat membaca.">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kode</p><p className="mt-2 text-sm font-black text-slate-900">{partner.code}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status</p><p className="mt-2 text-sm font-black text-slate-900">{partner.status}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Telepon</p><p className="mt-2 text-sm font-black text-slate-900">{partner.phone || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Email</p><p className="mt-2 text-sm font-black text-slate-900">{partner.email || "-"}</p></div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Alamat</p><p className="mt-2 text-sm font-black leading-6 text-slate-900">{partner.address || "Alamat belum diisi"}</p></div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Skema Komisi" subtitle="Komisi dasar dan rule aktif ditaruh dalam satu urutan supaya logika perhitungan partner mudah dipahami dari atas ke bawah.">
+        <div className="space-y-5">
+          <div className="rounded-[26px] border border-red-100 bg-[linear-gradient(135deg,#fff7f5_0%,#fff_58%,#fee2e2_100%)] p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">Fallback Default</p>
+            <p className="mt-3 text-xl font-black text-[#C92C1E]">{formatFlatCommission(partner.partner_type)}</p>
+            <p className="mt-2 text-xs font-bold text-[#C92C1E]/70">Dipakai ketika backend tidak menemukan rule aktif yang lebih spesifik pada paket terkait.</p>
+          </div>
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Rule Komisi Aktif</h3>
+            <div className="mt-3 space-y-3">
+              {commissionRules.length === 0 ? (
+                <EmptyState message="Belum ada rule aktif. Backend akan memakai fallback flat dari partner type." />
+              ) : (
+                commissionRules.map((rule) => (
+                  <div key={rule.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-black text-slate-900">{rule.package_name || "Semua Paket"}</p>
+                      <span className="rounded-full border border-red-100 bg-white px-3 py-1 text-[10px] font-black text-[#C92C1E]">{rule.mode}</span>
+                    </div>
+                    <p className="mt-2 text-[11px] font-bold text-slate-400">Berlaku {formatDateOnly(rule.effective_from)} sampai {formatDateOnly(rule.effective_to)}</p>
+                    {rule.value ? <p className="mt-2 text-sm font-bold text-slate-700">Nilai: {formatRuleValue(rule.mode, rule.value)}</p> : null}
+                    {rule.mode === "TIER" && rule.tiers && rule.tiers.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {rule.tiers.map((tier) => (
+                          <div key={tier.id} className="rounded-2xl border border-white bg-white px-4 py-3">
+                            <p className="text-xs font-black text-slate-900">Tier {tier.tier_order}</p>
+                            <p className="mt-1 text-[11px] font-bold text-slate-400">{tier.max_closings ? `${tier.min_closings} - ${tier.max_closings} closing` : `>= ${tier.min_closings} closing`}</p>
+                            <p className="mt-2 text-sm font-bold text-slate-700">{formatRuleValue(tier.mode, tier.value)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-black text-gray-900">Rule Komisi Aktif</h2>
-          <div className="mt-4 space-y-3">{commissionRules.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada rule aktif. Backend akan memakai fallback flat.</div> : commissionRules.map((rule) => <div key={rule.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><p className="text-sm font-black text-gray-900">{rule.package_name || "Semua Paket"}  {rule.mode}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Berlaku dari {formatDateTime(rule.effective_from)} sampai {formatDateTime(rule.effective_to)}</p>{rule.value ? <p className="mt-2 text-sm font-bold text-gray-600">Nilai: {rule.value}</p> : null}</div>)}</div>
+      </SectionCard>
+
+      <SectionCard title="Operasional Harian" subtitle="Semua fitur aksi dikelompokkan vertikal agar alur kerja terasa berurutan saat melakukan follow up partner.">
+        <div className="space-y-5">
+          {canManage ? (
+            <form onSubmit={handleAssignPic} className="rounded-[26px] border border-slate-200 bg-slate-50/70 p-5">
+              <p className="text-xs font-black text-slate-950">Assign PIC</p>
+              <p className="mt-1 text-[11px] font-medium text-slate-500">Tentukan sales yang bertanggung jawab atas hubungan mitra ini.</p>
+              <div className="mt-4 space-y-3">
+                <select value={assignUserId} onChange={(event) => setAssignUserId(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                  <option value="">Pilih sales</option>
+                  {salesUsers.map((user) => <option key={user.id} value={user.id}>{user.name} ({humanizeRole(user.role)})</option>)}
+                </select>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button type="submit" disabled={saving} className="flex-1 rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">Simpan PIC</button>
+                  {activeAssignment ? <button type="button" onClick={() => void handleReleasePic()} disabled={saving} className="flex-1 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black text-slate-600 disabled:cursor-not-allowed disabled:opacity-50">Lepas PIC Aktif</button> : null}
+                </div>
+              </div>
+            </form>
+          ) : null}
+
+          <form onSubmit={handleInteractionSubmit} className={`rounded-[26px] border bg-white p-5 ${focusInteraction ? "border-red-200 shadow-[0_0_0_4px_rgba(201,44,30,0.06)]" : "border-slate-200"}`}>
+            <p className="text-xs font-black text-slate-950">Form Interaksi</p>
+            <p className="mt-1 text-[11px] font-medium text-slate-500">Catat call atau chat terakhir agar histori komunikasi mitra tetap rapi.</p>
+            <div className="mt-4 space-y-3">
+              <select value={interactionType} onChange={(event) => setInteractionType(event.target.value as "CALL" | "CHAT")} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                <option value="CALL">CALL</option>
+                <option value="CHAT">CHAT</option>
+              </select>
+              <input type="datetime-local" value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={4} placeholder="Catatan interaksi dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Simpan Interaksi</button>
+            </div>
+          </form>
+
+          <form onSubmit={handleReferralSubmit} className="rounded-[26px] border border-slate-200 bg-white p-5">
+            <p className="text-xs font-black text-slate-950">Form Referral</p>
+            <p className="mt-1 text-[11px] font-medium text-slate-500">Catat lead dari jaringan partner ini agar jejak closing dan komisinya saling nyambung.</p>
+            <div className="mt-4 space-y-3">
+              <select value={referralLeadId} onChange={(event) => setReferralLeadId(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                <option value="">Pilih lead</option>
+                {leads.map((lead) => <option key={lead.id} value={lead.id}>{leadLabel(lead)}</option>)}
+              </select>
+              <input type="datetime-local" value={referralDate} onChange={(event) => setReferralDate(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} rows={4} placeholder="Catatan referral" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Simpan Referral</button>
+            </div>
+          </form>
         </div>
-      </section>
+      </SectionCard>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        {canManage ? <form onSubmit={handleAssignPic} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Assign PIC</h2><div className="mt-4 space-y-3"><select value={assignUserId} onChange={(event) => setAssignUserId(event.target.value)} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="">Pilih sales</option>{salesUsers.map((user) => <option key={user.id} value={user.id}>{user.name} ({humanizeRole(user.role)})</option>)}</select><button type="submit" disabled={saving} className="w-full rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">Simpan PIC</button>{activeAssignment ? <button type="button" onClick={() => void handleReleasePic()} disabled={saving} className="w-full rounded-2xl border border-gray-200 px-5 py-3 text-xs font-black text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">Lepas PIC Aktif</button> : null}</div></form> : null}
-        <form onSubmit={handleInteractionSubmit} className={`rounded-3xl border bg-white p-5 shadow-sm ${focusInteraction ? "border-red-200" : "border-gray-200"}`}><h2 className="text-sm font-black text-gray-900">Form Interaksi</h2><div className="mt-4 space-y-3"><select value={interactionType} onChange={(event) => setInteractionType(event.target.value as "CALL" | "CHAT")} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="CALL">CALL</option><option value="CHAT">CHAT</option></select><input type="datetime-local" value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={4} placeholder="Catatan interaksi dengan mitra" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-gray-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">Simpan Interaksi</button></div></form>
-        <form onSubmit={handleReferralSubmit} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Form Referral</h2><div className="mt-4 space-y-3"><select value={referralLeadId} onChange={(event) => setReferralLeadId(event.target.value)} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="">Pilih lead</option>{leads.map((lead) => <option key={lead.id} value={lead.id}>{leadLabel(lead)}</option>)}</select><input type="datetime-local" value={referralDate} onChange={(event) => setReferralDate(event.target.value)} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} rows={4} placeholder="Catatan referral" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-gray-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">Simpan Referral</button></div></form>
-      </section>
+      <SectionCard title="Jejak Relasi" subtitle="Riwayat hubungan partner dikelompokkan bertahap: assignment PIC terlebih dulu, lalu histori interaksinya.">
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Riwayat Assignment PIC</h3>
+            <div className="mt-3 space-y-3">
+              {assignmentHistory.length === 0 ? <EmptyState message="Belum ada riwayat assignment." /> : assignmentHistory.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-900">{item.user_name || `User #${item.user_id}`}</p><p className="mt-1 text-[11px] font-bold text-slate-400">{humanizeRole(item.user_role)} • assign {formatDateTime(item.assigned_at)}</p><p className="mt-1 text-[11px] font-bold text-slate-400">Release {formatDateTime(item.unassigned_at)}</p></div>)}
+            </div>
+          </div>
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Riwayat Interaksi</h3>
+            <div className="mt-3 space-y-3">
+              {interactions.length === 0 ? <EmptyState message="Belum ada interaksi." /> : interactions.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><p className="font-black text-slate-900">{item.interaction_type}</p><p className="text-[11px] font-bold text-slate-400">{formatDateTime(item.interaction_at)}</p></div><p className="mt-3 text-sm font-bold leading-6 text-slate-700">{item.note || "Tanpa catatan"}</p></div>)}
+            </div>
+          </div>
+        </div>
+      </SectionCard>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Riwayat Assignment PIC</h2><div className="mt-4 space-y-3">{assignmentHistory.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada riwayat assignment.</div> : assignmentHistory.map((item) => <div key={item.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><p className="font-black text-gray-900">{item.user_name || `User #${item.user_id}`}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{humanizeRole(item.user_role)}  assign {formatDateTime(item.assigned_at)}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Release {formatDateTime(item.unassigned_at)}</p></div>)}</div></div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Riwayat Interaksi</h2><div className="mt-4 space-y-3">{interactions.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada interaksi.</div> : interactions.map((item) => <div key={item.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><p className="font-black text-gray-900">{item.interaction_type}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{formatDateTime(item.interaction_at)}</p><p className="mt-2 text-sm font-bold text-gray-600">{item.note || "Tanpa catatan"}</p></div>)}</div></div>
-      </section>
-
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Referral Lead</h2><div className="mt-4 space-y-3">{referrals.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada referral.</div> : referrals.map((item) => <div key={item.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><p className="font-black text-gray-900">{leadMap.get(item.lead_id) ? leadLabel(leadMap.get(item.lead_id) as BackendLead) : `Lead #${item.lead_id}`}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Referral {formatDateTime(item.referral_date)}</p><p className="mt-2 text-sm font-bold text-gray-600">{item.notes || "Tanpa catatan"}</p></div>)}</div></div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-gray-900">Komisi Partner</h2><div className="mt-4 space-y-3">{commissions.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center text-xs font-bold text-gray-400">Belum ada komisi partner.</div> : commissions.map((item) => <div key={item.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-gray-900">{item.code}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Closing {item.closing_code || `#${item.closing_id}`}  {item.status}</p></div><span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black text-[#C92C1E]">{formatMoney(item.commission_amount, item.currency || "IDR")}</span></div><p className="mt-2 text-xs font-bold text-gray-500">Mode {item.commission_mode}  value {item.commission_value}  base {formatMoney(item.base_amount, item.currency || "IDR")}</p></div>)}</div></div>
-      </section>
+      <SectionCard title="Pipeline Partner" subtitle="Bagian paling bawah menyatukan kontribusi partner ke pipeline: referral lead lalu hasil komisinya.">
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Referral Lead</h3>
+            <div className="mt-3 space-y-3">
+              {referrals.length === 0 ? <EmptyState message="Belum ada referral." /> : referrals.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-900">{leadMap.get(item.lead_id) ? leadLabel(leadMap.get(item.lead_id) as BackendLead) : `Lead #${item.lead_id}`}</p><p className="mt-1 text-[11px] font-bold text-slate-400">Referral {formatDateTime(item.referral_date)}</p><p className="mt-3 text-sm font-bold leading-6 text-slate-700">{item.notes || "Tanpa catatan"}</p></div>)}
+            </div>
+          </div>
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Komisi Partner</h3>
+            <div className="mt-3 space-y-3">
+              {commissions.length === 0 ? (
+                <EmptyState message="Belum ada komisi partner." />
+              ) : (
+                commissions.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-black text-slate-900">{item.code}</p>
+                          <span className={`rounded-full px-3 py-1 text-[10px] font-black ${commissionStatusTone(item.status)}`}>{item.status}</span>
+                        </div>
+                        <p className="mt-1 text-[11px] font-bold text-slate-400">Closing {item.closing_code || `#${item.closing_id}`}</p>
+                      </div>
+                      <span className="rounded-full border border-red-100 bg-white px-3 py-1 text-[10px] font-black text-[#C92C1E]">{formatMoney(item.commission_amount, item.currency || "IDR")}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl border border-white bg-white px-3 py-3"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Mode</p><p className="mt-2 text-sm font-black text-slate-900">{item.commission_mode}</p></div>
+                      <div className="rounded-2xl border border-white bg-white px-3 py-3"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Value</p><p className="mt-2 text-sm font-black text-slate-900">{item.commission_value}</p></div>
+                      <div className="rounded-2xl border border-white bg-white px-3 py-3"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Base Amount</p><p className="mt-2 text-sm font-black text-slate-900">{formatMoney(item.base_amount, item.currency || "IDR")}</p></div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </SectionCard>
     </div>
   );
 }
-
-
-
