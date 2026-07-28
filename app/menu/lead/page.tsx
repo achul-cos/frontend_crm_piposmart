@@ -36,6 +36,7 @@ import * as XLSX from "xlsx";
 import CallPage, { CallFormResult } from "./call/page";
 import ActionButtons, { EditProfileModal } from "./action/page";
 import AnalyticsTab from "./AnalyticsTab";
+import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 
 interface NasabahItem {
   totalFu: number;
@@ -429,6 +430,7 @@ export default function DataKelolaanPage() {
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importBatch, setImportBatch] = useState<ImportBatchResponse | null>(null);
   const [isImportLoading, setIsImportLoading] = useState(false);
@@ -438,6 +440,15 @@ export default function DataKelolaanPage() {
   const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
   const [correctionProgress, setCorrectionProgress] = useState(0);
   const [correctionStatusText, setCorrectionStatusText] = useState("");
+  // Ref untuk menyimpan timer polling — agar bisa dibatalkan kapanpun
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Batalkan polling otomatis saat komponen unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, []);
 
   const combinedPicList = useMemo(() => {
     return [...supervisorList, ...salesList];
@@ -463,6 +474,36 @@ export default function DataKelolaanPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectionAction, setSelectionAction] = useState<"edit" | "delete" | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
+
+  useEffect(() => {
+    const handleMouseUp = () => setIsDragging(false);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
+    setIsDragging(true);
+    const mode = currentlySelected ? "deselect" : "select";
+    setDragMode(mode);
+    
+    setSelectedIds(prev => {
+      if (mode === "select" && !prev.includes(id)) return [...prev, id];
+      if (mode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
+      return prev;
+    });
+  };
+
+  const handleRowMouseEnter = (id: number) => {
+    if (isDragging) {
+      setSelectedIds(prev => {
+        if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
+        if (dragMode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
+        return prev;
+      });
+    }
+  };
   const [deleteTargetMode, setDeleteTargetMode] = useState<DeleteTargetMode>("selected");
   const [deleteCustomLimit, setDeleteCustomLimit] = useState("25");
   const [trashCount, setTrashCount] = useState(0);
@@ -671,12 +712,22 @@ export default function DataKelolaanPage() {
   };
 
   const pollImportStatus = async (batchId: number) => {
+    // Batalkan timer sebelumnya (jika ada) sebelum mulai polling baru
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
     try {
       const resp = await getImportBatch(batchId);
       setImportBatch(resp);
-      if (resp.status === "VALIDATING" || resp.status === "UPLOADED") {
-        setTimeout(() => pollImportStatus(batchId), 2000);
+
+      const isInProgress = ["UPLOADED", "VALIDATING", "COMMITTING"].includes(resp.status);
+      if (isInProgress) {
+        // Jadwalkan polling berikutnya dan simpan timer ID-nya
+        pollTimerRef.current = setTimeout(() => pollImportStatus(batchId), 2500);
       } else {
+        // Status sudah final — hentikan polling
+        pollTimerRef.current = null;
         setIsImportLoading(false);
         setCorrectionProgress(100);
         setCorrectionStatusText("Selesai!");
@@ -684,8 +735,8 @@ export default function DataKelolaanPage() {
           setCorrectionProgress(0);
           setCorrectionStatusText("");
         }, 2000);
-        
-        if (resp.invalid_rows > 0) {
+
+        if (resp.status === "VALIDATED" && resp.invalid_rows > 0) {
           try {
             const errorResp = await getImportErrorRows(batchId);
             setImportErrorRows(errorResp.items);
@@ -693,11 +744,16 @@ export default function DataKelolaanPage() {
           } catch (e) {
             console.error("Gagal memuat detail error:", e);
           }
-        } else if (resp.status === "VALID") {
+        } else if (resp.status === "VALIDATED") {
           setImportError(null);
+        } else if (resp.status === "VALIDATION_FAILED") {
+          setImportError(resp.error_message || "Validasi file gagal. Periksa format dan header file Excel Anda.");
+        } else if (resp.status === "COMMIT_FAILED") {
+          setImportError(resp.error_message || "Proses simpan data gagal. Silakan coba lagi.");
         }
       }
     } catch (err: any) {
+      pollTimerRef.current = null;
       setImportError(err.message || "Gagal mengecek status import");
       setIsImportLoading(false);
     }
@@ -707,19 +763,21 @@ export default function DataKelolaanPage() {
     if (!importBatch) return;
     setIsImportLoading(true);
     try {
-      await commitImportBatch(importBatch.id);
-      alert("Data berhasil disimpan!");
-      setIsImportModalOpen(false);
-      resetImportState();
-      loadOwnersFromBackend();
+      const resp = await commitImportBatch(importBatch.id);
+      setImportBatch(resp);
+      pollImportStatus(resp.id);
     } catch (err: any) {
       setImportError(err.message || "Gagal menyimpan data import");
-    } finally {
       setIsImportLoading(false);
     }
   };
 
   const resetImportState = () => {
+    // Batalkan polling yang sedang berjalan sebelum reset state
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
     setImportFile(null);
     setImportBatch(null);
     setImportError(null);
@@ -1883,6 +1941,16 @@ export default function DataKelolaanPage() {
           </button>
 
           <button
+            onClick={() => setIsImportHistoryModalOpen(true)}
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] flex items-center gap-2"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Riwayat Import
+          </button>
+
+          <button
             onClick={() => setIsImportModalOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
           >
@@ -2169,29 +2237,30 @@ export default function DataKelolaanPage() {
                 paginatedData.map((row, idx) => (
                   <tr
                     key={row.no || idx}
-                    onClick={() => {
-                      if (selectionMode) {
-                        handleToggleSelectRow(row.no);
-                      }
-                    }}
                     className={`border-b border-gray-100 last:border-0 transition-colors ${
-                      selectionMode ? "cursor-pointer" : ""
+                      selectionMode ? "cursor-pointer select-none" : ""
                     } ${
                       selectedIds.includes(row.no)
                         ? "bg-red-100/70 hover:bg-red-100"
                         : "hover:bg-gray-50/80"
                     }`}
+                    onMouseDown={(e) => {
+                      if (!selectionMode || e.button !== 0) return;
+                      handleRowMouseDown(row.no, selectedIds.includes(row.no));
+                    }}
+                    onMouseEnter={() => {
+                      if (selectionMode) handleRowMouseEnter(row.no);
+                    }}
                   >
                     {selectionMode && (
                       <td
                         className="px-4 py-4 text-center"
-                        onClick={(e) => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(row.no)}
-                          onChange={() => handleToggleSelectRow(row.no)}
-                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                          readOnly
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
                         />
                       </td>
                     )}
@@ -2299,7 +2368,20 @@ export default function DataKelolaanPage() {
         customer={callModalItem}
         onClose={() => setCallModalItem(null)}
         onSave={handleSaveCallResult}
-      />      {/* MODAL EDIT PIC DATA TERPILIH */}
+      />
+      <ImportHistoryModal 
+        isOpen={isImportHistoryModalOpen} 
+        onClose={() => setIsImportHistoryModalOpen(false)}
+        profile="NON_REGISTER"
+        onResume={(batch) => {
+          setImportBatch(batch);
+          setIsImportHistoryModalOpen(false);
+          setIsImportModalOpen(true);
+          pollImportStatus(batch.id);
+        }}
+      />
+      
+      {/* MODAL EDIT PIC DATA TERPILIH */}
       {bulkPicModalOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 p-3 sm:p-6">
           <div className="mx-auto my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
@@ -2525,6 +2607,32 @@ export default function DataKelolaanPage() {
                     </div>
                   )}
                 </div>
+                ) : importBatch.status === "COMMITTING" ? (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4">
+                    <svg className="w-8 h-8 text-indigo-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Menyimpan Data...</h3>
+                  <p className="text-gray-500 text-sm mb-8">Mohon tunggu, sistem sedang menyimpan data ke database.</p>
+                  
+                  {importBatch.progress_percentage !== undefined && (
+                    <div className="w-full max-w-md mx-auto">
+                      <div className="flex justify-between text-sm font-bold mb-2">
+                        <span className="text-gray-700">Progress Penyimpanan</span>
+                        <span className="text-[#C92C1E]">{importBatch.progress_percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+                        <div 
+                          className="bg-[#C92C1E] h-3 rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${importBatch.progress_percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 ) : importBatch.status === "VALIDATION_FAILED" ? (
                   <div className="text-center py-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
@@ -2542,6 +2650,31 @@ export default function DataKelolaanPage() {
                       className="rounded-xl bg-gray-100 px-6 py-2.5 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200"
                     >
                       Kembali
+                    </button>
+                  </div>
+                ) : importBatch.status === "COMMITTED" ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 mb-4">
+                      <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">
+                      File Sudah Disimpan
+                    </h4>
+                    <p className="text-sm text-gray-600 mb-6 px-4">
+                      Data dari file Excel ini telah berhasil disimpan ke database.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetImportState();
+                        setIsImportModalOpen(false);
+                        loadOwnersFromBackend();
+                      }}
+                      className="rounded-xl bg-gray-100 px-6 py-2.5 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200"
+                    >
+                      Tutup
                     </button>
                   </div>
                 ) : (
