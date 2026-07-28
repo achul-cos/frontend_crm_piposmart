@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import {
   type OwnerListParams,
-  getLeads,
+  getLeadsWithTotal,
   type BackendLead,
   getSalesList,
   getSupervisorList,
@@ -18,12 +18,21 @@ import {
   getLeadInteractions,
   getLeadTrainings,
   softDeleteOwner,
+  fetchOwners,
   bulkSoftDeleteOwners,
   updateOwner,
   scheduleTraining,
   type UserResponse,
   bulkReleaseLeads,
+  uploadImportFile,
+  getImportBatch,
+  commitImportBatch,
+  getImportErrorRows,
+  getImportValidRows,
+  type ImportBatchResponse,
+  type ImportRowError,
 } from "@/app/lib/api";
+import * as XLSX from "xlsx";
 import CallPage, { CallFormResult } from "./call/page";
 import ActionButtons, { EditProfileModal } from "./action/page";
 import AnalyticsTab from "./AnalyticsTab";
@@ -63,7 +72,6 @@ interface NasabahItem {
   skemaId?: string;
   nominal: number;
   noted: string;
-  outlets?: any[];
   callHistories?: {
     waktuCall: string;
     picSales: string;
@@ -411,13 +419,25 @@ function SummaryMetricCard({
 
 export default function DataKelolaanPage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
+  const [backendTotal, setBackendTotal] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importBatch, setImportBatch] = useState<ImportBatchResponse | null>(null);
+  const [isImportLoading, setIsImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importErrorRows, setImportErrorRows] = useState<ImportRowError[]>([]);
+  const [editedErrorRows, setEditedErrorRows] = useState<Record<number, any>>({});
+  const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
+  const [correctionProgress, setCorrectionProgress] = useState(0);
+  const [correctionStatusText, setCorrectionStatusText] = useState("");
 
   const combinedPicList = useMemo(() => {
     return [...supervisorList, ...salesList];
@@ -501,11 +521,16 @@ export default function DataKelolaanPage() {
 
   const loadOwnersFromBackend = useCallback(() => {
     setIsLoading(true);
-    getLeads()
-      .then((leads) => {
-        const mappedData = leads.map(mapBackendLeadToNasabahItem);
+    getLeadsWithTotal()
+      .then(({ items, total }) => {
+        const mappedData = items.map(mapBackendLeadToNasabahItem);
         setDataNasabah(mappedData);
-        localStorage.setItem("piposmart_nasabah_data", JSON.stringify(mappedData));
+        setBackendTotal(total);
+        try {
+          localStorage.setItem("piposmart_nasabah_data", JSON.stringify(mappedData));
+        } catch (e) {
+          console.warn("localStorage quota exceeded for piposmart_nasabah_data");
+        }
       })
       .catch((err) => {
         console.error("Gagal memuat lead dari backend:", err);
@@ -547,15 +572,9 @@ export default function DataKelolaanPage() {
 
     loadOwnersFromBackend();
 
-    const deletedCached = localStorage.getItem("piposmart_deleted_nasabah_data");
-    if (deletedCached) {
-      try {
-        const parsedDeleted = JSON.parse(deletedCached);
-        setTrashCount(Array.isArray(parsedDeleted) ? parsedDeleted.length : 0);
-      } catch {
-        setTrashCount(0);
-      }
-    }
+    fetchOwners({ scope: "trash", limit: 1 })
+      .then((res) => setTrashCount(res.data.pagination.total))
+      .catch(() => setTrashCount(0));
   }, [loadOwnersFromBackend]);
 
   useEffect(() => {
@@ -598,49 +617,176 @@ export default function DataKelolaanPage() {
 
   const saveDataNasabah = (nextData: NasabahItem[]) => {
     setDataNasabah(nextData);
-    localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
+    try {
+      localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
+    } catch (e) {
+      console.warn("localStorage quota exceeded for piposmart_nasabah_data");
+    }
   };
 
-  const handleExportData = () => {
+  const handleExportExcel = () => {
     if (dataNasabah.length === 0) {
       alert("Tidak ada data kelolaan untuk diexport.");
       return;
     }
 
-    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-      JSON.stringify(dataNasabah, null, 2),
-    )}`;
-
-    const downloadElement = document.createElement("a");
-    downloadElement.setAttribute("href", jsonString);
-    downloadElement.setAttribute("download", "piposmart_backup_nasabah.json");
-    document.body.appendChild(downloadElement);
-    downloadElement.click();
-    downloadElement.remove();
+    const dataToExport = dataNasabah.map(o => ({
+      "Kode Baris": o.kodeBaris,
+      "Kode Owner": o.kodeOwner,
+      "Nama Owner": o.namaOwner,
+      "Brand/Usaha": o.projectBrand,
+      "Status Akun": o.statusAkun,
+      "PIC": o.pic,
+      "Tanggal Dibagikan": o.tanggalDibagikan,
+      "Total FU": o.totalFu,
+      "Tanggal FU": o.tanggalFu,
+      "Nilai Skor": o.scor,
+    }));
+    
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Lead");
+    XLSX.writeFile(workbook, `Data_Lead_${new Date().getTime()}.xlsx`);
   };
 
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setImportFile(e.target.files[0]);
+      setImportError(null);
+    }
+  };
 
-    if (e.target.files && e.target.files[0]) {
-      fileReader.readAsText(e.target.files[0], "UTF-8");
+  const handleUploadClick = async () => {
+    if (!importFile) return;
+    setIsImportLoading(true);
+    setImportError(null);
+    try {
+      const resp = await uploadImportFile(importFile, "OWNER_OUTLET");
+      setImportBatch(resp);
+      pollImportStatus(resp.id);
+    } catch (err: any) {
+      setImportError(err.message || "Gagal mengunggah file");
+      setIsImportLoading(false);
+    }
+  };
 
-      fileReader.onload = (event) => {
-        try {
-          const parsedData = JSON.parse(event.target?.result as string);
-
-          if (Array.isArray(parsedData)) {
-            saveDataNasabah(parsedData);
-            setTrashCount(0);
-            localStorage.removeItem("piposmart_deleted_nasabah_data");
-            alert("Sakti! File database nasabah berhasil diimport masuk sistem.");
-          } else {
-            alert("Gagal: Struktur format dalam file bukan array data nasabah.");
+  const pollImportStatus = async (batchId: number) => {
+    try {
+      const resp = await getImportBatch(batchId);
+      setImportBatch(resp);
+      if (resp.status === "VALIDATING" || resp.status === "UPLOADED") {
+        setTimeout(() => pollImportStatus(batchId), 2000);
+      } else {
+        setIsImportLoading(false);
+        setCorrectionProgress(100);
+        setCorrectionStatusText("Selesai!");
+        setTimeout(() => {
+          setCorrectionProgress(0);
+          setCorrectionStatusText("");
+        }, 2000);
+        
+        if (resp.invalid_rows > 0) {
+          try {
+            const errorResp = await getImportErrorRows(batchId);
+            setImportErrorRows(errorResp.items);
+            setImportError(`Masih terdapat ${resp.invalid_rows} baris dengan format yang tidak valid.`);
+          } catch (e) {
+            console.error("Gagal memuat detail error:", e);
           }
-        } catch {
-          alert("Gagal membaca berkas. Pastikan file berupa JSON cadangan resmi.");
+        } else if (resp.status === "VALID") {
+          setImportError(null);
         }
+      }
+    } catch (err: any) {
+      setImportError(err.message || "Gagal mengecek status import");
+      setIsImportLoading(false);
+    }
+  };
+
+  const handleCommitImport = async () => {
+    if (!importBatch) return;
+    setIsImportLoading(true);
+    try {
+      await commitImportBatch(importBatch.id);
+      alert("Data berhasil disimpan!");
+      setIsImportModalOpen(false);
+      resetImportState();
+      loadOwnersFromBackend();
+    } catch (err: any) {
+      setImportError(err.message || "Gagal menyimpan data import");
+    } finally {
+      setIsImportLoading(false);
+    }
+  };
+
+  const resetImportState = () => {
+    setImportFile(null);
+    setImportBatch(null);
+    setImportError(null);
+    setIsImportLoading(false);
+    setImportErrorRows([]);
+    setEditedErrorRows({});
+    setCorrectionProgress(0);
+    setCorrectionStatusText("");
+  };
+
+  const handleEditErrorRow = (rowId: number, field: string, value: string) => {
+    setEditedErrorRows((prev) => {
+      const originalRow = importErrorRows.find((r) => r.id === rowId);
+      const currentPayload = prev[rowId] || (originalRow ? originalRow.raw_payload : {});
+      return {
+        ...prev,
+        [rowId]: {
+          ...currentPayload,
+          [field]: value,
+        },
       };
+    });
+  };
+
+  const handleApplyCorrections = async () => {
+    if (!importBatch) return;
+    setIsApplyingCorrections(true);
+    setImportError(null);
+    setCorrectionProgress(10);
+    setCorrectionStatusText("Menyiapkan data perbaikan...");
+    
+    try {
+      const correctedPayloads = importErrorRows.map(row => {
+        return editedErrorRows[row.id] || row.raw_payload;
+      });
+
+      setCorrectionProgress(30);
+      setCorrectionStatusText("Mengambil data valid dari server...");
+      const validResp = await getImportValidRows(importBatch.id);
+      const validPayloads = validResp.items.map(item => item.raw_payload);
+      
+      setCorrectionProgress(50);
+      setCorrectionStatusText("Menyusun ulang file Excel...");
+      const allPayloads = [...validPayloads, ...correctedPayloads];
+
+      const worksheet = XLSX.utils.json_to_sheet(allPayloads);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Lead");
+      
+      const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+      const file = new File([wbout], "import_corrected.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+      setCorrectionProgress(70);
+      setCorrectionStatusText("Mengunggah ulang file perbaikan...");
+      setIsImportLoading(true);
+      const resp = await uploadImportFile(file, "LEAD");
+      setImportBatch(resp);
+      
+      setCorrectionProgress(90);
+      setCorrectionStatusText("Memvalidasi ulang data...");
+      pollImportStatus(resp.id);
+    } catch (e: any) {
+      console.error(e);
+      setImportError(e.message || "Gagal menerapkan perbaikan.");
+      setIsApplyingCorrections(false);
+      setCorrectionProgress(0);
+      setCorrectionStatusText("");
     }
   };
 
@@ -673,43 +819,28 @@ export default function DataKelolaanPage() {
       alert("Belum ada data yang dipilih untuk dihapus.");
       return;
     }
-    const oldTrashRaw = localStorage.getItem("piposmart_deleted_nasabah_data");
-    let oldTrash: NasabahItem[] = [];
-
-    if (oldTrashRaw) {
-      try {
-        const parsed = JSON.parse(oldTrashRaw);
-        oldTrash = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        oldTrash = [];
-      }
-    }
-
     const deleteSet = new Set(itemsToDelete.map((i) => i.no));
     const nextData = dataNasabah.filter((row) => !deleteSet.has(row.no));
-    const nextTrash = [
-      ...itemsToDelete,
-      ...oldTrash.filter((row) => !deleteSet.has(row.no)),
-    ];
 
     saveDataNasabah(nextData);
-    setTrashCount(nextTrash.length);
-    localStorage.setItem("piposmart_deleted_nasabah_data", JSON.stringify(nextTrash));
-
-    setSelectedIds([]);
-    setSelectionMode(false);
-    setSelectionAction(null);
-
+    
     // Call API to soft delete
     const ownerIds = itemsToDelete.map(item => item.ownerId).filter((id): id is number => id !== undefined);
     if (ownerIds.length > 0) {
       try {
         await bulkSoftDeleteOwners(ownerIds);
         console.log("Successfully soft deleted owners via API");
+        fetchOwners({ scope: "trash", limit: 1 })
+          .then((res) => setTrashCount(res.data.pagination.total))
+          .catch(() => {});
       } catch (err) {
         console.error("Failed to soft delete owners via API", err);
       }
     }
+
+    setSelectedIds([]);
+    setSelectionMode(false);
+    setSelectionAction(null);
 
     alert(`${itemsToDelete.length} data dipindahkan ke Riwayat Hapus.`);
   };
@@ -771,28 +902,15 @@ export default function DataKelolaanPage() {
 
     if (!yakin) return;
 
-    const oldTrashRaw = localStorage.getItem("piposmart_deleted_nasabah_data");
-    let oldTrash: NasabahItem[] = [];
-
-    if (oldTrashRaw) {
-      try {
-        const parsed = JSON.parse(oldTrashRaw);
-        oldTrash = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        oldTrash = [];
-      }
-    }
-
     const nextData = dataNasabah.filter((row) => row.no !== item.no);
-    const nextTrash = [item, ...oldTrash.filter((row) => row.no !== item.no)];
-
     saveDataNasabah(nextData);
-    setTrashCount(nextTrash.length);
-    localStorage.setItem("piposmart_deleted_nasabah_data", JSON.stringify(nextTrash));
 
     if (item.ownerId) {
       try {
         await softDeleteOwner(item.ownerId);
+        fetchOwners({ scope: "trash", limit: 1 })
+          .then((res) => setTrashCount(res.data.pagination.total))
+          .catch(() => {});
       } catch (err) {
         console.error("Failed to soft delete owner via API", err);
       }
@@ -1057,7 +1175,7 @@ export default function DataKelolaanPage() {
   }, [dataNasabah]);
 
   const summaryData = useMemo(() => {
-    const totalCustomer = dataNasabah.length;
+    const totalCustomer = backendTotal > 0 ? backendTotal : dataNasabah.length;
 
     const totalCustomerPotensi = dataNasabah.filter((item) => {
       const latestScore = getLatestRemarkScore(item);
@@ -1087,7 +1205,7 @@ export default function DataKelolaanPage() {
       totalCustomerBerlangganan,
       perbandinganBerlangganan,
     };
-  }, [dataNasabah]);
+  }, [dataNasabah, backendTotal]);
 
   const filteredData = useMemo(() => {
     let result = dataNasabah.filter((item) => {
@@ -1601,13 +1719,7 @@ export default function DataKelolaanPage() {
         </div>
       </div>
 
-      <input
-        type="file"
-        ref={fileInputRef}
-        accept=".json"
-        onChange={handleImportData}
-        className="hidden"
-      />
+
 
       {/* SUMMARY CUSTOMER */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -1649,8 +1761,8 @@ export default function DataKelolaanPage() {
           onClick={() => setActiveTab('list')}
           className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
             activeTab === 'list'
-              ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+              ? 'bg-[#C92C1E] text-white shadow-sm ring-1 ring-red-300'
+              : 'text-gray-500 hover:text-[#C92C1E] hover:bg-red-50/50'
           }`}
         >
           Daftar Lead
@@ -1659,8 +1771,8 @@ export default function DataKelolaanPage() {
           onClick={() => setActiveTab('analytics')}
           className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${
             activeTab === 'analytics'
-              ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+              ? 'bg-[#C92C1E] text-white shadow-sm ring-1 ring-red-300'
+              : 'text-gray-500 hover:text-[#C92C1E] hover:bg-red-50/50'
           }`}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1761,27 +1873,27 @@ export default function DataKelolaanPage() {
 
         <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
           <button
-            onClick={handleExportData}
+            onClick={handleExportExcel}
             className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
           >
             <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            Export Data
+            Export Excel
           </button>
 
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setIsImportModalOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
           >
             <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Import Data
+            Import Excel
           </button>
 
           <Link
-            href="/menu/data-kelolaan/form"
+            href="/menu/lead/form"
             className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700 shadow-sm shadow-red-200"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1801,7 +1913,7 @@ export default function DataKelolaanPage() {
 
         <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/menu/data-kelolaan/trash"
+              href="/menu/lead/trash"
               className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-black hover:bg-gray-50 transition cursor-pointer flex items-center gap-1.5"
             >
               <TrashIcon className="w-3.5 h-3.5 text-gray-500" />
@@ -2132,69 +2244,50 @@ export default function DataKelolaanPage() {
           </table>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-gray-100 bg-white px-4 py-3 md:flex-row md:items-center md:justify-between">
-          <div className="text-xs font-bold text-gray-500">
-            Menampilkan{" "}
-            <span className="font-black text-gray-900">
-              {filteredData.length === 0 ? 0 : startDataIndex + 1}
-            </span>{" "}
-            -{" "}
-            <span className="font-black text-gray-900">{endDataIndex}</span>{" "}
-            dari{" "}
-            <span className="font-black text-[#C92C1E]">{filteredData.length}</span>{" "}
-            data
+
+        <div className="flex flex-col gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-bold text-gray-500 hidden sm:inline-block">
+              Total {backendTotal > 0 ? backendTotal : dataNasabah.length} Owner
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+              <select
+                value={rowsPerPage}
+                onChange={(event) => {
+                  setRowsPerPage(Number(event.target.value));
+                  setCurrentPage(1);
+                }}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#C92C1E]"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-xs font-medium text-gray-500">baris</span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={rowsPerPage}
-              onChange={(event) => setRowsPerPage(Number(event.target.value))}
-              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-700 outline-none"
-            >
-              <option value={10}>10 / halaman</option>
-              <option value={25}>25 / halaman</option>
-              <option value={50}>50 / halaman</option>
-              <option value={100}>100 / halaman</option>
-            </select>
-
-            <button
-              type="button"
-              onClick={() => setCurrentPage(1)}
-              disabled={safeCurrentPage === 1}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Awal
-            </button>
-
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={safeCurrentPage === 1}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
             >
-              Prev
+              Sebelumnya
             </button>
-
-            <span className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E]">
-              {safeCurrentPage} / {totalPages}
+            <span className="text-xs font-bold text-[#C92C1E]">
+              Halaman {safeCurrentPage}
             </span>
-
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={safeCurrentPage === totalPages}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={safeCurrentPage >= totalPages || totalPages === 0}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
             >
-              Next
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={safeCurrentPage === totalPages}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Akhir
+              Selanjutnya
             </button>
           </div>
         </div>
@@ -2311,6 +2404,238 @@ export default function DataKelolaanPage() {
         onSubmit={handleSaveEditModal}
         onChangeField={updateEditingField}
       />
+
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+          <div 
+            className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" 
+            onClick={() => !isImportLoading && setIsImportModalOpen(false)} 
+          />
+          
+          <div className="relative z-10 w-full max-w-4xl transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all">
+            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-black text-gray-900">
+                  Import Excel
+                </h3>
+                <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500 mt-1">
+                  Unggah data Lead massal
+                </p>
+              </div>
+              <button
+                onClick={() => !isImportLoading && setIsImportModalOpen(false)}
+                className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                disabled={isImportLoading}
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {importError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
+                  {importError}
+                </div>
+              )}
+
+              {!importBatch || importBatch.status === "UPLOADED" ? (
+                <>
+                  <div className="mb-6">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Silakan unggah file Excel (.xlsx) dengan mengikuti format yang ditentukan.
+                    </p>
+                    <a 
+                      href="/api/v1/imports/template/owner" 
+                      target="_blank"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#C92C1E] bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        alert("Pastikan file Excel Anda memiliki kolom header berikut pada baris pertama:\n\nKODE | NAMA | TELEPON | EMAIL | NAMA_BRAND | PROVINSI | KOTA | ALAMAT");
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Lihat Format Template
+                    </a>
+                  </div>
+
+                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-[#C92C1E] transition-colors relative">
+                    <input 
+                      type="file" 
+                      accept=".xlsx, .xls"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={isImportLoading}
+                    />
+                    <svg className="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-sm font-bold text-gray-700">
+                      {importFile ? importFile.name : "Klik atau seret file Excel ke sini"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Hanya menerima file .xlsx</p>
+                  </div>
+
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      onClick={handleUploadClick}
+                      disabled={!importFile || isImportLoading}
+                      className="rounded-xl bg-[#C92C1E] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isImportLoading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Mengunggah...
+                        </>
+                      ) : (
+                        "Unggah & Validasi"
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : importBatch.status === "VALIDATING" ? (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4">
+                    <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Memvalidasi Data...</h3>
+                  <p className="text-gray-500 text-sm mb-8">Mohon tunggu, sistem sedang memeriksa format dan duplikasi data.</p>
+                  
+                  {importBatch.progress_percentage !== undefined && (
+                    <div className="w-full max-w-md mx-auto">
+                      <div className="flex justify-between text-sm font-bold mb-2">
+                        <span className="text-gray-700">Progress Validasi</span>
+                        <span className="text-[#C92C1E]">{importBatch.progress_percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+                        <div 
+                          className="bg-[#C92C1E] h-3 rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${importBatch.progress_percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                ) : importBatch.status === "VALIDATION_FAILED" ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+                      <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">Validasi Gagal</h4>
+                    <p className="text-sm text-gray-600 mb-6">
+                      {importBatch.error_message || "Terjadi kesalahan saat memvalidasi file Excel. Pastikan format file sudah benar."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => resetImportState()}
+                      className="rounded-xl bg-gray-100 px-6 py-2.5 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200"
+                    >
+                      Kembali
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-center mb-6">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 mb-4">
+                        <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <h4 className="text-lg font-bold text-gray-900">Validasi Selesai</h4>
+                      <p className="text-sm text-gray-500 mt-1">Berikut adalah hasil pengecekan data Anda.</p>
+                    </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="p-4 bg-emerald-50 rounded-xl text-center border border-emerald-100">
+                      <p className="text-xs font-bold text-emerald-600 uppercase">Valid</p>
+                      <p className="text-xl font-black text-emerald-700 mt-1">{importBatch.valid_rows}</p>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-xl text-center border border-red-100">
+                      <p className="text-xs font-bold text-red-600 uppercase">Error</p>
+                      <p className="text-xl font-black text-red-700 mt-1">{importBatch.invalid_rows}</p>
+                    </div>
+                  </div>
+
+                  {importBatch.invalid_rows > 0 && (
+                    <div className="mb-6">
+                      <div className="p-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-t-xl text-sm font-medium">
+                        Terdapat {importBatch.invalid_rows} baris dengan format yang salah atau data duplikat. Anda tetap bisa menyimpan {importBatch.valid_rows} data yang valid.
+                      </div>
+                      {importErrorRows.length > 0 && (
+                        <div className="border border-t-0 border-orange-200 rounded-b-xl overflow-hidden max-h-96 overflow-y-auto">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-orange-100 text-orange-800 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 w-16">Baris</th>
+                                <th className="px-3 py-2">Keterangan Error</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {importErrorRows.map((row) => (
+                                <tr key={row.id} className="border-t border-orange-100 bg-orange-50/50">
+                                  <td className="px-3 py-2 font-bold text-orange-900 align-top">
+                                    {row.row_index}
+                                  </td>
+                                  <td className="px-3 py-2 text-orange-800 break-words align-top">
+                                    {row.validation_errors ? (
+                                      Array.isArray(row.validation_errors) ? (
+                                        <ul className="list-disc list-inside">
+                                          {row.validation_errors.map((err, i) => <li key={i}>{err}</li>)}
+                                        </ul>
+                                      ) : (
+                                        <ul className="list-disc list-inside">
+                                          {Object.entries(row.validation_errors).map(([field, msg], i) => (
+                                            <li key={i}><span className="font-semibold">{field}</span>: {String(msg)}</li>
+                                          ))}
+                                        </ul>
+                                      )
+                                    ) : (
+                                      "Format tidak valid"
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => resetImportState()}
+                      disabled={isImportLoading}
+                      className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={handleCommitImport}
+                      disabled={isImportLoading || importBatch.valid_rows === 0}
+                      className="rounded-xl bg-[#C92C1E] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {isImportLoading ? "Menyimpan..." : "Simpan Data Valid"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

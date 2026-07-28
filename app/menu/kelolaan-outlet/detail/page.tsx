@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import {
   getGlobalOutlet,
   listOwnerWalletTransactions,
@@ -31,7 +31,7 @@ function formatDate(value?: string): string {
  * karenanya riwayat wallet OWNER, bukan hanya transaksi outlet ini secara
  * sempit.
  */
-export default function OutletDetailPage() {
+function OutletDetailPageInner() {
   const searchParams = useSearchParams();
   const outletId = Number(searchParams.get("id"));
 
@@ -200,6 +200,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <p className="mb-3 text-[10px] font-black uppercase tracking-wide text-[#C92C1E]">{title}</p>
       <div className="space-y-1 rounded-xl border border-gray-100 p-3">{children}</div>
     </div>
+  );
+}
+
+export default function OutletDetailPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <OutletDetailPageInner />
+    </Suspense>
   );
 }
 

@@ -89,9 +89,10 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
       // Reload outlets
       const outletsData = await fetchOwnerOutlets(ownerId);
       setOutlets(outletsData);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Gagal menambah outlet:", err);
-      alert("Gagal menambahkan outlet. Periksa kembali data (Kode Outlet mungkin sudah terpakai).");
+      const errorMessage = err?.message || "Periksa kembali data (Kode Outlet mungkin sudah terpakai).";
+      alert(`Gagal menambahkan outlet. ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -126,9 +127,10 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
       // Reload outlets
       const outletsData = await fetchOwnerOutlets(ownerId);
       setOutlets(outletsData);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Gagal memperbarui outlet:", err);
-      alert("Gagal memperbarui outlet. Silakan coba lagi.");
+      const errorMessage = err?.message || "Silakan coba lagi.";
+      alert(`Gagal memperbarui outlet. ${errorMessage}`);
     } finally {
       setIsEditSubmitting(false);
     }
@@ -159,7 +161,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
             </svg>
             <button onClick={() => router.push("/menu/owner-outlet")} className="hover:text-[#C92C1E] transition-colors">
-              Owner & Outlet
+              Owner
             </button>
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />

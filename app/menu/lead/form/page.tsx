@@ -770,7 +770,7 @@ export default function FormInputDummyPage() {
         alert("Data profil, prospek (Lead), dan outlet berhasil ditambahkan ke backend.");
       }
 
-      router.push("/menu/data-kelolaan");
+      router.push("/menu/lead");
     } catch (err) {
       console.error("Gagal menyimpan ke backend", err);
       alert(`Gagal menyimpan ke backend: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -806,7 +806,7 @@ export default function FormInputDummyPage() {
         </div>
 
         <Link
-          href="/menu/data-kelolaan"
+          href="/menu/lead"
           className="inline-flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-700 shadow-sm transition hover:border-[#C92C1E]/30 hover:bg-red-50 hover:text-[#C92C1E]"
         >
           <svg

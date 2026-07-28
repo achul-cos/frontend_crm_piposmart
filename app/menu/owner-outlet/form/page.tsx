@@ -431,7 +431,9 @@ export default function FormInputDummyPage() {
     noted: "",
   });
   const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
-  const [outletRows, setOutletRows] = useState<OwnerOutletItem[]>([]);
+  const [outletRows, setOutletRows] = useState<OwnerOutletItem[]>([
+    { namaOutlet: "", noHpOutlet: "" }
+  ]);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
@@ -770,8 +772,8 @@ export default function FormInputDummyPage() {
         alert("Data profil, prospek (Lead), dan outlet berhasil ditambahkan ke backend.");
       }
 
-      router.push("/menu/data-kelolaan");
-    } catch (err) {
+      router.push("/menu/owner-outlet");
+    } catch (err: any) {
       console.error("Gagal menyimpan ke backend", err);
       alert(`Gagal menyimpan ke backend: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
@@ -806,7 +808,7 @@ export default function FormInputDummyPage() {
         </div>
 
         <Link
-          href="/menu/data-kelolaan"
+          href="/menu/owner-outlet"
           className="inline-flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-700 shadow-sm transition hover:border-[#C92C1E]/30 hover:bg-red-50 hover:text-[#C92C1E]"
         >
           <svg
@@ -984,17 +986,7 @@ function OutletRowsInput({
         </button>
       </div>
 
-      {!hasKodeOwner && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs font-bold text-gray-400">
-          Isi Kode Owner terlebih dahulu, lalu klik tombol tambah outlet.
-        </div>
-      )}
 
-      {hasKodeOwner && rows.length === 0 && (
-        <div className="rounded-xl border border-dashed border-red-100 bg-red-50/40 p-3 text-xs font-bold text-gray-400">
-          Belum ada outlet. Tekan tombol <span className="text-[#C92C1E]">+ Tambah Outlet</span> untuk menambahkan outlet owner.
-        </div>
-      )}
 
       {rows.length > 0 && (
         <div className="space-y-3">

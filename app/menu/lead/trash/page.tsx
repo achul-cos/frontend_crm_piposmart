@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { restoreOwner, hardDeleteOwner } from "@/app/lib/api";
+import { restoreOwner, hardDeleteOwner, fetchOwners, bulkForceDeleteOwners } from "@/app/lib/api";
 
 interface NasabahItem {
   ownerId?: number;
@@ -42,21 +42,48 @@ export default function DataKelolaanTrashPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    const deletedRaw = localStorage.getItem("piposmart_deleted_nasabah_data");
-
-    if (deletedRaw) {
-      try {
-        const parsed = JSON.parse(deletedRaw);
-        setTrashData(Array.isArray(parsed) ? parsed : []);
-      } catch {
-        setTrashData([]);
-      }
-    }
+    fetchTrashData();
   }, []);
 
-  const saveTrash = (nextTrash: NasabahItem[]) => {
-    setTrashData(nextTrash);
-    localStorage.setItem("piposmart_deleted_nasabah_data", JSON.stringify(nextTrash));
+  const fetchTrashData = () => {
+    fetchOwners({ scope: "trash", limit: 1000 })
+      .then((res) => {
+        const mapped = res.data.items.map((owner) => ({
+          no: owner.id,
+          ownerId: owner.id,
+          pic: "-",
+          kodeOwner: owner.code,
+          namaOwner: owner.name,
+          projectBrand: owner.brand_name || "-",
+          outlet: owner.outlet_count ? `${owner.outlet_count} Outlet` : "-",
+          noHpOwner: owner.phone,
+          totalFu: 0,
+          tanggalFu: owner.updated_at || "",
+          tahun: owner.updated_at ? owner.updated_at.substring(0, 4) : "-",
+          bulan: owner.updated_at ? owner.updated_at.substring(5, 7) : "-",
+          tanggalDibagikan: "",
+          statusAkun: owner.status,
+          kodeBaris: "",
+          noHpOutlet: "",
+          createDateProject: owner.created_at || "",
+          expiredDate: "",
+          totalTransaksi: 0,
+          scor: 0,
+          callStatus: "",
+          chatStatus: "",
+          validitas: "",
+          remarks: "",
+          sumberNasabah: "",
+          finalisasiClosing: "",
+          nominal: 0,
+          noted: ""
+        }));
+        setTrashData(mapped);
+      })
+      .catch((err) => {
+        console.error("Gagal memuat data trash:", err);
+        setTrashData([]);
+      });
   };
 
   const filteredTrash = useMemo(() => {
@@ -115,37 +142,20 @@ export default function DataKelolaanTrashPage() {
       return;
     }
 
-    const activeRaw = localStorage.getItem("piposmart_nasabah_data");
-    let activeData: NasabahItem[] = [];
-
-    if (activeRaw) {
-      try {
-        const parsed = JSON.parse(activeRaw);
-        activeData = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        activeData = [];
-      }
-    }
-
-    const activeIds = new Set(activeData.map((item) => item.no));
-    const nextActiveData = [
-      ...activeData,
-      ...restoreItems.filter((item) => !activeIds.has(item.no)),
-    ].sort((a, b) => a.no - b.no);
-
-    const nextTrash = trashData.filter((item) => !selectedSet.has(item.no));
-
-    localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextActiveData));
-    saveTrash(nextTrash);
-    setSelectedIds([]);
-
     // Call API to restore
     const restoreOwnerIds = restoreItems.map(item => item.ownerId).filter((id): id is number => id !== undefined);
     if (restoreOwnerIds.length > 0) {
-      Promise.all(restoreOwnerIds.map(id => restoreOwner(id).catch(e => console.error(e))));
+      Promise.all(restoreOwnerIds.map(id => restoreOwner(id)))
+        .then(() => {
+          alert(`${restoreItems.length} data berhasil dipulihkan.`);
+          fetchTrashData();
+          setSelectedIds([]);
+        })
+        .catch((err) => {
+          console.error(err);
+          alert("Gagal memulihkan data.");
+        });
     }
-
-    alert(`${restoreItems.length} data berhasil dipulihkan ke tabel utama.`);
   };
 
   const handleDeletePermanentSelected = () => {
@@ -162,18 +172,21 @@ export default function DataKelolaanTrashPage() {
 
     const selectedSet = new Set(selectedIds);
     const deletedItems = trashData.filter((item) => selectedSet.has(item.no));
-    const nextTrash = trashData.filter((item) => !selectedSet.has(item.no));
-
-    saveTrash(nextTrash);
-    setSelectedIds([]);
 
     // Call API to hard delete
     const hardDeleteOwnerIds = deletedItems.map(item => item.ownerId).filter((id): id is number => id !== undefined);
     if (hardDeleteOwnerIds.length > 0) {
-      Promise.all(hardDeleteOwnerIds.map(id => hardDeleteOwner(id).catch(e => console.error(e))));
+      bulkForceDeleteOwners(hardDeleteOwnerIds)
+        .then(() => {
+          alert(`${selectedSet.size} data berhasil dihapus permanen.`);
+          fetchTrashData();
+          setSelectedIds([]);
+        })
+        .catch((err) => {
+          console.error(err);
+          alert("Gagal menghapus permanen data.");
+        });
     }
-
-    alert(`${selectedSet.size} data berhasil dihapus permanen dari riwayat.`);
   };
 
   const handleEmptyTrash = () => {
@@ -186,17 +199,21 @@ export default function DataKelolaanTrashPage() {
     if (!yakin) return;
 
     const deletedItems = [...trashData];
-    setTrashData([]);
-    setSelectedIds([]);
-    localStorage.removeItem("piposmart_deleted_nasabah_data");
 
     // Call API to hard delete all
     const hardDeleteOwnerIds = deletedItems.map(item => item.ownerId).filter((id): id is number => id !== undefined);
     if (hardDeleteOwnerIds.length > 0) {
-      Promise.all(hardDeleteOwnerIds.map(id => hardDeleteOwner(id).catch(e => console.error(e))));
+      bulkForceDeleteOwners(hardDeleteOwnerIds)
+        .then(() => {
+          alert("Riwayat hapus berhasil dikosongkan.");
+          fetchTrashData();
+          setSelectedIds([]);
+        })
+        .catch((err) => {
+          console.error(err);
+          alert("Gagal mengosongkan riwayat hapus.");
+        });
     }
-
-    alert("Riwayat hapus berhasil dikosongkan.");
   };
 
   const formatTgl = (str: string) => {
@@ -235,7 +252,7 @@ export default function DataKelolaanTrashPage() {
 
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href="/menu/data-kelolaan"
+            href="/menu/lead"
             className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
           >
             ← Kembali Ke Tabel

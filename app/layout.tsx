@@ -114,7 +114,7 @@ export default function RootLayout({
       ),
     },
     {
-      text: "Owner & Outlet",
+      text: "Owner",
       href: "/menu/owner-outlet",
       colorClass: "text-[#C92C1E]",
       icon: (className: string) => (

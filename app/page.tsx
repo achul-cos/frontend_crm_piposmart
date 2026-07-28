@@ -502,7 +502,7 @@ export default function DashboardOverviewPage() {
 
             <div className="flex flex-wrap gap-2">
               <Link
-                href="/menu/data-kelolaan"
+                href="/menu/lead"
                 className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm hover:bg-[#A82216]"
               >
                 Buka Data Kelolaan
@@ -630,7 +630,7 @@ export default function DashboardOverviewPage() {
             </p>
           </div>
           <Link
-            href="/menu/data-kelolaan"
+            href="/menu/lead"
             className="text-xs font-black text-[#C92C1E] hover:underline"
           >
             Kelola customer →
