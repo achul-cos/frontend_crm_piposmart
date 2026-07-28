@@ -1144,7 +1144,20 @@ export interface ImportRowError {
 
 export interface ImportRowListResponse {
   items: ImportRowError[];
-  pagination: ApiPagination;
+  pagination?: ApiPagination;
+  meta?: ApiPagination;
+}
+
+export interface ImportBatchFileResponse {
+  original_filename: string;
+  sha256: string;
+  view_path: string;
+  download_path: string;
+}
+
+export interface ImportBatchActorResponse {
+  id: number;
+  name: string;
 }
 
 export interface ImportBatchResponse {
@@ -1152,11 +1165,21 @@ export interface ImportBatchResponse {
   code: string;
   profile: string;
   original_filename: string;
+  file?: ImportBatchFileResponse;
   status: string; // 'UPLOADED' | 'VALIDATING' | 'VALIDATED' | 'VALIDATION_FAILED'
   progress_percentage?: number;
   total_rows: number;
   valid_rows: number;
   invalid_rows: number;
+  committed_rows?: number;
+  error_message?: string | null;
+  uploaded_by?: ImportBatchActorResponse;
+  committed_by?: ImportBatchActorResponse | null;
+  uploaded_at?: string;
+  validated_at?: string | null;
+  committed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export async function uploadImportFile(file: File, profile: string = "OWNER_OUTLET"): Promise<ImportBatchResponse> {
@@ -1224,7 +1247,11 @@ export async function getImportErrorRows(batchId: number, page = 1, limit = 50):
     headers: getAuthHeaders(),
   });
   const json = await handleResponse<{ data: ImportRowListResponse }>(res);
-  return json.data;
+  return {
+    ...json.data,
+    pagination: json.data.pagination ?? json.data.meta,
+    meta: json.data.meta ?? json.data.pagination,
+  };
 }
 
 export async function getImportValidRows(batchId: number, page = 1, limit = 100000): Promise<ImportRowListResponse> {
@@ -1233,7 +1260,11 @@ export async function getImportValidRows(batchId: number, page = 1, limit = 1000
     headers: getAuthHeaders(),
   });
   const json = await handleResponse<{ data: ImportRowListResponse }>(res);
-  return json.data;
+  return {
+    ...json.data,
+    pagination: json.data.pagination ?? json.data.meta,
+    meta: json.data.meta ?? json.data.pagination,
+  };
 }
 
 export async function bulkReleaseLeads(leadIds: number[], reason: string) {

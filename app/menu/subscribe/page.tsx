@@ -125,7 +125,7 @@ type SubscriptionOrderDetailResponse = {
   issue?: ReconciliationIssueItem;
 };
 
-type SubscriptionDetailResponse = SubscriptionItem | {
+type SubscriptionDetailResponse = {
   subscription?: SubscriptionItem;
   order?: SubscriptionOrderItem;
 };
