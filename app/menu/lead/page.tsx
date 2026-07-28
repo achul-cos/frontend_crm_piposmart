@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 import {
   type OwnerListParams,
@@ -418,6 +419,7 @@ function SummaryMetricCard({
 }
 
 export default function DataKelolaanPage() {
+  usePageTitle("Lead");
   const router = useRouter();
 
 
@@ -1702,9 +1704,9 @@ export default function DataKelolaanPage() {
   };
 
   return (
-    <div className="min-h-screen space-y-6 bg-gray-50/50 p-4 sm:p-6 pb-24 font-sans text-gray-900 max-w-full overflow-x-hidden overflow-y-visible">
+    <div className="space-y-6">
       {/* Menu Header */}
-      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden mb-6">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
         <div className="p-5 border-b-2 border-[#C92C1E] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-1">
@@ -1787,7 +1789,8 @@ export default function DataKelolaanPage() {
       ) : (
         <>
       {/* PANEL FILTER & SEARCHING */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
+      <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start">
           <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner">
             <button
@@ -1904,7 +1907,7 @@ export default function DataKelolaanPage() {
         </div>
       </div>
       {/* TABLE HEADER ACTIONS */}
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-2">
+      <div className="px-4 py-3 border-b border-gray-100 flex flex-col md:flex-row md:items-end md:justify-between gap-4 bg-white">
         <div>
           <h2 className="text-base font-black text-gray-800 uppercase tracking-tight">
             Tabel Data Lead & Kepemilikan
@@ -2023,13 +2026,10 @@ export default function DataKelolaanPage() {
         </div>
 
       {/* TABLE WORKSPACE */}
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden w-full">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm md:text-base font-semibold text-gray-600 border-collapse table-auto">
-            <thead>
-              <tr
-                className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200"
-              >
+          <table className="w-full min-w-[1400px] text-left text-sm text-gray-600">
+            <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+              <tr>
                 {selectionMode && (
                   <th className="px-4 py-4 text-center w-12">
                     <input
@@ -2155,7 +2155,7 @@ export default function DataKelolaanPage() {
               </tr>
             </thead>
 
-            <tbody>
+            <tbody className="divide-y divide-gray-100 bg-white">
               {displayData.length === 0 ? (
                 <tr>
                   <td
@@ -2169,6 +2169,7 @@ export default function DataKelolaanPage() {
                 paginatedData.map((row, idx) => (
                   <tr
                     key={row.no || idx}
+<<<<<<< Updated upstream
                     onClick={() => {
                       if (selectionMode) {
                         handleToggleSelectRow(row.no);
@@ -2176,16 +2177,24 @@ export default function DataKelolaanPage() {
                     }}
                     className={`border-b border-gray-100 last:border-0 transition-colors ${
                       selectionMode ? "cursor-pointer" : ""
+=======
+                    className={`transition-colors ${
+                      selectionMode ? "cursor-pointer select-none" : ""
+>>>>>>> Stashed changes
                     } ${
                       selectedIds.includes(row.no)
                         ? "bg-red-100/70 hover:bg-red-100"
-                        : "hover:bg-gray-50/80"
+                        : "hover:bg-gray-50"
                     }`}
                   >
                     {selectionMode && (
                       <td
+<<<<<<< Updated upstream
                         className="px-4 py-4 text-center"
                         onClick={(e) => e.stopPropagation()}
+=======
+                        className="px-4 py-4 align-top text-center"
+>>>>>>> Stashed changes
                       >
                         <input
                           type="checkbox"
@@ -2196,36 +2205,36 @@ export default function DataKelolaanPage() {
                       </td>
                     )}
 
-                        <td className="px-4 py-4 text-center text-gray-500 font-medium">
+                        <td className="px-4 py-4 text-center align-top font-medium text-gray-500">
                           {startDataIndex + idx + 1}
                         </td>
 
-                        <td className="px-4 py-4 font-medium text-gray-900 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words">
                           {row.kodeOwner || "-"}
                         </td>
 
-                        <td className="px-4 py-4 font-medium text-gray-900 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words">
                           {row.namaOwner || "-"}
                         </td>
 
-                        <td className="px-4 py-4 text-gray-700 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words">
                           {row.projectBrand || "-"}
                         </td>
 
-                        <td className="px-4 py-4 text-gray-700 whitespace-normal break-words">
+                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words">
                           {row.noHpOwner || "-"}
                         </td>
 
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-4 py-4 align-top text-center">
                           <PicBadge value={row.pic || ""} color="red" />
                         </td>
 
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-4 py-4 align-top text-center">
                           <SkorBadge item={row} />
                         </td>
 
                         <td
-                          className="px-4 py-4 text-center"
+                          className="px-4 py-4 align-top text-center"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <ActionButtons

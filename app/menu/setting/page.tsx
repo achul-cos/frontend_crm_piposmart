@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 const SettingIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
   <svg
@@ -36,6 +37,7 @@ const UserIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
 );
 
 export default function SettingPage() {
+  usePageTitle("Setting");
   const [userName, setUserName] = useState("User");
   const [userRole, setUserRole] = useState("Sales");
   const [username, setUsername] = useState("-");

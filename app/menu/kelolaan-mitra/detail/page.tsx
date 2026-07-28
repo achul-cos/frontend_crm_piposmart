@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
   assignPartnerPic,
   createPartnerInteraction,
@@ -176,6 +177,7 @@ export default function PartnerDetailPage() {
 }
 
 function PartnerDetailPageInner() {
+  usePageTitle("Detail Mitra");
   const searchParams = useSearchParams();
   const partnerId = Number(searchParams.get("id"));
   const focusInteraction = searchParams.get("tab") === "interaction";

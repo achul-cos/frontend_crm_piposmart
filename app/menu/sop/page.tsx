@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 interface SopItem {
   id: number;
@@ -11,6 +12,7 @@ interface SopItem {
 }
 
 export default function SopKelolaanPage() {
+  usePageTitle("SOP");
   const [activeTab, setActiveTab] = useState<"klasifikasi" | "modul">("klasifikasi");
   // 🛠️ VERSI DUMMY FE: data dummy langsung tersedia di render pertama,
   // jadi loading selalu false (tidak ada delay jaringan yang perlu ditunggu).
@@ -26,12 +28,9 @@ export default function SopKelolaanPage() {
   const [modulChat, setModulChat] = useState<SopItem[]>([]);
   const [reasons, setReasons] = useState<SopItem[]>([]);
 
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-
   // 🛠️ VERSI DUMMY FE: tidak ada fetch ke backend sama sekali.
-  // Semua data langsung diisi dari array default di bawah ini, dan
-  // seluruh perubahan (tambah/edit/hapus) cuma mengubah state React
-  // di browser — tidak tersimpan permanen, akan reset kalau di-refresh.
+  // Semua data langsung diisi dari array default di bawah ini. Halaman ini
+  // bersifat statis/read-only — tidak ada kemampuan tambah/edit/hapus.
   const initSopDataDummy = () => {
     setIndikatorPotensi([
           { id: 1, tipe: "potensi", label: "✓", keterangan: "Nasabah responsif dan interaktif selama masa trial.", urutan: 1 },
@@ -109,113 +108,35 @@ export default function SopKelolaanPage() {
     initSopDataDummy();
   }, []);
 
-  // 🛠️ Counter id lokal untuk item baru, mulai dari 1000 supaya tidak
-  // bentrok dengan id data dummy awal (1–44).
-  const nextIdRef = useRef(1000);
-  const generateLocalId = () => {
-    nextIdRef.current += 1;
-    return nextIdRef.current;
-  };
-
-  // 🛠️ VERSI DUMMY FE: tambah item cuma push ke state lokal, tidak ada POST ke backend.
-  const handleAddItem = (kategoriTipe: string) => {
-    let label = "✓";
-    if (kategoriTipe === "wajib-bisnis") label = "•";
-    if (kategoriTipe === "tidak-potensi") label = "✕";
-    if (kategoriTipe === "todo-sales") label = `${todoSales.length + 1}.`;
-    if (kategoriTipe === "todo-cs") label = `${todoCs.length + 1}.`;
-    if (kategoriTipe === "call") label = `${modulCall.length + 1}. Custom Call`;
-    if (kategoriTipe === "chat") label = `${modulChat.length + 1}. Custom Chat`;
-    if (kategoriTipe === "reason") label = String(reasons.length + 1).padStart(2, "0");
-
-    const newItem: SopItem = {
-      id: generateLocalId(),
-      tipe: kategoriTipe.replace("-", "_"),
-      label,
-      keterangan: "Klik teks ini untuk mengedit poin panduan baru...",
-      urutan: 0,
-    };
-
-    switch (kategoriTipe) {
-      case "potensi": setIndikatorPotensi((prev) => [...prev, newItem]); break;
-      case "wajib-bisnis": setKewajibanBisnis((prev) => [...prev, newItem]); break;
-      case "tidak-potensi": setIndikatorTidakPotensi((prev) => [...prev, newItem]); break;
-      case "todo-sales": setTodoSales((prev) => [...prev, newItem]); break;
-      case "todo-cs": setTodoCs((prev) => [...prev, newItem]); break;
-      case "call": setModulCall((prev) => [...prev, newItem]); break;
-      case "chat": setModulChat((prev) => [...prev, newItem]); break;
-      case "reason": setReasons((prev) => [...prev, newItem]); break;
-    }
-  };
-
-  // 🛠️ VERSI DUMMY FE: hapus cuma filter dari state lokal, tidak ada DELETE ke backend.
-  // Aman dipanggil dengan hanya id karena filter dijalankan ke semua array
-  // (array yang tidak punya id tsb otomatis tidak berubah).
-  const handleDeleteItem = (id: number) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus poin SOP ini?")) return;
-
-    setIndikatorPotensi((prev) => prev.filter((i) => i.id !== id));
-    setKewajibanBisnis((prev) => prev.filter((i) => i.id !== id));
-    setIndikatorTidakPotensi((prev) => prev.filter((i) => i.id !== id));
-    setTodoSales((prev) => prev.filter((i) => i.id !== id));
-    setTodoCs((prev) => prev.filter((i) => i.id !== id));
-    setModulCall((prev) => prev.filter((i) => i.id !== id));
-    setModulChat((prev) => prev.filter((i) => i.id !== id));
-    setReasons((prev) => prev.filter((i) => i.id !== id));
-  };
-
-  const handleKeyDownEnter = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      e.currentTarget.blur();
-    }
-  };
-
-  const SvgPlusIcon = () => (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-    </svg>
-  );
-
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6 py-4 px-4 bg-[#FAF9F6] min-h-screen text-[#2C2C2E] font-sans">
+    <div className="space-y-6">
       {/* Header Halaman */}
-      <div className="border-b border-gray-200 pb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+        <div className="p-5 border-b-2 border-[#C92C1E] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-800">Standard Operating Procedure (SOP)</h1>
-          <p className="text-sm text-gray-500 mt-1 font-medium">Panduan master manajemen terpadu proses operasional internal PT PIPOSMART DIGITAL INDONESIA.</p>
+          <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+            <span>Menu</span>
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-[#C92C1E]">SOP</span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen SOP</h1>
+          <p className="mt-1 text-sm text-gray-500">Panduan master manajemen terpadu proses operasional internal PT PIPOSMART DIGITAL INDONESIA.</p>
         </div>
-
-        {/* Panel Tombol Penambah Konten Dinamis Berdasarkan Tab */}
-        <div className="flex flex-wrap gap-2">
-          {activeTab === "klasifikasi" ? (
-            <>
-              <button onClick={() => handleAddItem("potensi")} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-bold text-xs hover:bg-emerald-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Potensi</button>
-              <button onClick={() => handleAddItem("wajib-bisnis")} className="px-3 py-1.5 bg-red-50 text-[#C92C1E] border border-red-200 rounded-xl font-bold text-xs hover:bg-red-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Wajib Bisnis</button>
-              <button onClick={() => handleAddItem("tidak-potensi")} className="px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs hover:bg-rose-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Tidak Potensi</button>
-              <button onClick={() => handleAddItem("todo-sales")} className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl font-bold text-xs hover:bg-amber-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Task Sales</button>
-              <button onClick={() => handleAddItem("todo-cs")} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs hover:bg-indigo-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Task CS</button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => handleAddItem("call")} className="px-3 py-1.5 bg-red-50 text-[#C92C1E] border border-red-200 rounded-xl font-bold text-xs hover:bg-red-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Modul Call</button>
-              <button onClick={() => handleAddItem("chat")} className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl font-bold text-xs hover:bg-purple-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Modul Chat</button>
-              <button onClick={() => handleAddItem("reason")} className="px-3 py-1.5 bg-gray-50 text-gray-700 border border-gray-200/80 rounded-xl font-bold text-xs hover:bg-gray-100 transition shadow-sm flex items-center gap-1 cursor-pointer"><SvgPlusIcon /> Reason Block</button>
-            </>
-          )}
         </div>
       </div>
 
       {/* Tab Navigasi Utama */}
       <div className="flex bg-gray-100 p-1 rounded-xl w-fit border border-gray-200/60">
         <button
-          onClick={() => { setActiveTab("klasifikasi"); setEditingKey(null); }}
+          onClick={() => setActiveTab("klasifikasi")}
           className={`px-4 py-1.5 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${activeTab === "klasifikasi" ? "bg-white text-[#C92C1E] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
         >
           Klasifikasi Nasabah & To Do List
         </button>
         <button
-          onClick={() => { setActiveTab("modul"); setEditingKey(null); }}
+          onClick={() => setActiveTab("modul")}
           className={`px-4 py-1.5 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${activeTab === "modul" ? "bg-white text-[#C92C1E] shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
         >
           Modul Call & Chat CS
@@ -229,10 +150,10 @@ export default function SopKelolaanPage() {
           {/* TAB 1: KLASIFIKASI NASABAH & TO DO LIST */}
           {activeTab === "klasifikasi" && (
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-              
+
               {/* KOLOM KIRI: KELOLAAN KLASIFIKASI NASABAH */}
               <div className="xl:col-span-7 space-y-6">
-                
+
                 {/* Card Nasabah Potensi */}
                 <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
                   <div className="bg-emerald-50 px-6 py-4 border-b border-emerald-100">
@@ -241,55 +162,23 @@ export default function SopKelolaanPage() {
                   <div className="p-6 space-y-4">
                     <p className="text-[13px] text-gray-500 font-medium leading-relaxed">Nasabah dapat dikategorikan sebagai **Nasabah Potensi** apabila memenuhi indikator berikut:</p>
                     <ul className="space-y-2.5 text-[13px] font-semibold text-gray-600">
-                      {indikatorPotensi.map((item, index) => {
-                        const key = `potensi-${index}`;
-                        return (
-                          <li key={item.id} className="flex items-start justify-between gap-2.5 group/item p-1 hover:bg-gray-50 rounded-lg transition">
-                            <div className="flex items-start gap-2.5 flex-1">
-                              <span className="text-emerald-600 mt-0.5 shrink-0">{item.label}</span>
-                              {editingKey === key ? (
-                                <input type="text" value={item.keterangan} onChange={(e) => { const u = [...indikatorPotensi]; u[index].keterangan = e.target.value; setIndikatorPotensi(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-2 py-0.5 rounded focus:outline-none bg-white text-sm text-gray-700" />
-                              ) : (
-                                <span onClick={() => setEditingKey(key)} className="cursor-pointer flex-1">{item.keterangan}</span>
-                              )}
-                            </div>
-                            {item.id > 6 && (
-                              <button onClick={() => handleDeleteItem(item.id)} className="text-gray-300 hover:text-rose-500 transition px-1 cursor-pointer md:opacity-0 group-hover/item:opacity-100">
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </li>
-                        );
-                      })}
+                      {indikatorPotensi.map((item) => (
+                        <li key={item.id} className="flex items-start gap-2.5 p-1 rounded-lg">
+                          <span className="text-emerald-600 mt-0.5 shrink-0">{item.label}</span>
+                          <span className="flex-1">{item.keterangan}</span>
+                        </li>
+                      ))}
                     </ul>
-                    
+
                     <div className="bg-red-50/40 p-4 rounded-xl border border-red-100 mt-4">
                       <span className="text-[11px] font-black text-[#C92C1E] uppercase block mb-2">Untuk nasabah potensi, tim bisnis wajib:</span>
                       <ul className="space-y-1.5 text-[12px] text-gray-600 font-semibold leading-relaxed">
-                        {kewajibanBisnis.map((item, index) => {
-                          const key = `wajib-${index}`;
-                          return (
-                            <li key={item.id} className="flex items-start justify-between gap-2 group/wajib">
-                              <div className="flex items-start gap-2 flex-1">
-                                <span className="text-[#C92C1E] shrink-0">{item.label}</span>
-                                {editingKey === key ? (
-                                  <input type="text" value={item.keterangan} onChange={(e) => { const u = [...kewajibanBisnis]; u[index].keterangan = e.target.value; setKewajibanBisnis(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-1 rounded focus:outline-none bg-white text-gray-700" />
-                                ) : (
-                                  <span onClick={() => setEditingKey(key)} className="cursor-pointer flex-1">{item.keterangan}</span>
-                                )}
-                              </div>
-                              {item.id > 103 && (
-                                <button onClick={() => handleDeleteItem(item.id)} className="text-gray-300 hover:text-rose-500 transition px-1 cursor-pointer md:opacity-0 group-hover/wajib:opacity-100">
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              )}
-                            </li>
-                          );
-                        })}
+                        {kewajibanBisnis.map((item) => (
+                          <li key={item.id} className="flex items-start gap-2">
+                            <span className="text-[#C92C1E] shrink-0">{item.label}</span>
+                            <span className="flex-1">{item.keterangan}</span>
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   </div>
@@ -303,28 +192,12 @@ export default function SopKelolaanPage() {
                   <div className="p-6 space-y-4">
                     <p className="text-[13px] text-gray-500 font-medium leading-relaxed">Nasabah ditarik dari daftar aktif apabila memenuhi kriteria berikut:</p>
                     <ul className="space-y-2.5 text-[13px] font-semibold text-gray-600">
-                      {indikatorTidakPotensi.map((item, index) => {
-                        const key = `tidak-${index}`;
-                        return (
-                          <li key={item.id} className="flex items-start justify-between gap-2.5 group/item p-1 hover:bg-gray-50 rounded-lg transition">
-                            <div className="flex items-start gap-2.5 flex-1">
-                              <span className="text-rose-600 mt-0.5 shrink-0">{item.label}</span>
-                              {editingKey === key ? (
-                                <input type="text" value={item.keterangan} onChange={(e) => { const u = [...indikatorTidakPotensi]; u[index].keterangan = e.target.value; setIndikatorTidakPotensi(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-2 py-0.5 rounded focus:outline-none bg-white text-gray-700" />
-                              ) : (
-                                <span onClick={() => setEditingKey(key)} className="cursor-pointer flex-1">{item.keterangan}</span>
-                              )}
-                            </div>
-                            {item.id > 13 && (
-                              <button onClick={() => handleDeleteItem(item.id)} className="text-gray-300 hover:text-rose-500 transition px-1 cursor-pointer md:opacity-0 group-hover/item:opacity-100">
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </li>
-                        );
-                      })}
+                      {indikatorTidakPotensi.map((item) => (
+                        <li key={item.id} className="flex items-start gap-2.5 p-1 rounded-lg">
+                          <span className="text-rose-600 mt-0.5 shrink-0">{item.label}</span>
+                          <span className="flex-1">{item.keterangan}</span>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -341,28 +214,12 @@ export default function SopKelolaanPage() {
                 <div className="space-y-3">
                   <h4 className="text-xs font-black text-gray-700 flex items-center gap-1.5 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100">Tim Sales</h4>
                   <div className="divide-y divide-gray-100 pl-1">
-                    {todoSales.map((item, index) => {
-                      const keyDesc = `sales-todo-${index}`;
-                      return (
-                        <div key={item.id} className="py-2.5 flex items-start justify-between gap-3 group/row text-[12.5px] font-semibold text-gray-600 hover:bg-gray-50 rounded-lg transition px-1">
-                          <div className="flex items-start gap-2.5 flex-1">
-                            <span className="font-bold text-[#C92C1E] shrink-0">{item.label}</span>
-                            {editingKey === keyDesc ? (
-                              <textarea value={item.keterangan} onChange={(e) => { const u = [...todoSales]; u[index].keterangan = e.target.value; setTodoSales(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-2 py-0.5 rounded text-xs focus:outline-none bg-white text-gray-700 resize-none" rows={2} />
-                            ) : (
-                              <span onClick={() => setEditingKey(keyDesc)} className="cursor-pointer flex-1 leading-relaxed">{item.keterangan}</span>
-                            )}
-                          </div>
-                          {item.id > 24 && (
-                            <button onClick={() => handleDeleteItem(item.id)} className="text-gray-300 hover:text-rose-500 transition px-1 cursor-pointer md:opacity-0 group-hover/row:opacity-100">
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {todoSales.map((item) => (
+                      <div key={item.id} className="py-2.5 flex items-start gap-3 text-[12.5px] font-semibold text-gray-600 rounded-lg px-1">
+                        <span className="font-bold text-[#C92C1E] shrink-0">{item.label}</span>
+                        <span className="flex-1 leading-relaxed">{item.keterangan}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -370,28 +227,12 @@ export default function SopKelolaanPage() {
                 <div className="space-y-3 pt-2">
                   <h4 className="text-xs font-black text-gray-700 flex items-center gap-1.5 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100">Tim CS</h4>
                   <div className="divide-y divide-gray-100 pl-1">
-                    {todoCs.map((item, index) => {
-                      const keyDesc = `cs-todo-${index}`;
-                      return (
-                        <div key={item.id} className="py-2.5 flex items-start justify-between gap-3 group/row text-[12.5px] font-semibold text-gray-600 hover:bg-gray-50 rounded-lg transition px-1">
-                          <div className="flex items-start gap-2.5 flex-1">
-                            <span className="font-bold text-[#C92C1E] shrink-0">{item.label}</span>
-                            {editingKey === keyDesc ? (
-                              <textarea value={item.keterangan} onChange={(e) => { const u = [...todoCs]; u[index].keterangan = e.target.value; setTodoCs(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-2 py-0.5 rounded text-xs focus:outline-none bg-white text-gray-700 resize-none" rows={2} />
-                            ) : (
-                              <span onClick={() => setEditingKey(keyDesc)} className="cursor-pointer flex-1 leading-relaxed">{item.keterangan}</span>
-                            )}
-                          </div>
-                          {item.id > 27 && (
-                            <button onClick={() => handleDeleteItem(item.id)} className="text-gray-300 hover:text-rose-500 transition px-1 cursor-pointer md:opacity-0 group-hover/row:opacity-100">
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {todoCs.map((item) => (
+                      <div key={item.id} className="py-2.5 flex items-start gap-3 text-[12.5px] font-semibold text-gray-600 rounded-lg px-1">
+                        <span className="font-bold text-[#C92C1E] shrink-0">{item.label}</span>
+                        <span className="flex-1 leading-relaxed">{item.keterangan}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -409,37 +250,14 @@ export default function SopKelolaanPage() {
                     <h3 className="text-base font-black text-gray-800">Modul Call CS</h3>
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {modulCall.map((item, index) => {
-                      const keyLabel = `call-label-${index}`;
-                      const keyDesc = `call-desc-${index}`;
-                      return (
-                        <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start justify-between gap-4 group/row hover:bg-gray-50 rounded-lg transition">
-                          <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-[13px] flex-1 w-full">
-                            <div className="sm:w-1/3 shrink-0 font-bold text-[#C92C1E]">
-                              {editingKey === keyLabel ? (
-                                <input type="text" value={item.label} onChange={(e) => { const u = [...modulCall]; u[index].label = e.target.value; setModulCall(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-1 rounded text-xs focus:outline-none bg-white text-gray-700" />
-                              ) : (
-                                <span onClick={() => setEditingKey(keyLabel)} className="cursor-pointer hover:bg-amber-50 rounded px-0.5">{item.label}</span>
-                              )}
-                            </div>
-                            <div className="text-gray-600 font-semibold leading-relaxed flex-1">
-                              {editingKey === keyDesc ? (
-                                <textarea value={item.keterangan} onChange={(e) => { const u = [...modulCall]; u[index].keterangan = e.target.value; setModulCall(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-1 rounded resize-none text-xs focus:outline-none bg-white text-gray-700" rows={2} />
-                              ) : (
-                                <span onClick={() => setEditingKey(keyDesc)} className="cursor-pointer hover:bg-amber-50 rounded px-0.5">{item.keterangan}</span>
-                              )}
-                            </div>
-                          </div>
-                          {item.id > 34 && (
-                            <button onClick={() => handleDeleteItem(item.id)} className="text-gray-300 hover:text-rose-500 transition sm:mt-0.5 px-1 cursor-pointer md:opacity-0 group-hover/row:opacity-100">
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
+                    {modulCall.map((item) => (
+                      <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start gap-4 rounded-lg">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-[13px] flex-1 w-full">
+                          <div className="sm:w-1/3 shrink-0 font-bold text-[#C92C1E]">{item.label}</div>
+                          <div className="text-gray-600 font-semibold leading-relaxed flex-1">{item.keterangan}</div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -449,37 +267,14 @@ export default function SopKelolaanPage() {
                     <h3 className="text-base font-black text-gray-800">Modul Chat CS</h3>
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {modulChat.map((item, index) => {
-                      const keyLabel = `chat-label-${index}`;
-                      const keyDesc = `chat-desc-${index}`;
-                      return (
-                        <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start justify-between gap-4 group/row hover:bg-gray-50 rounded-lg transition">
-                          <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-[13px] flex-1 w-full">
-                            <div className="sm:w-1/3 shrink-0 font-bold text-[#C92C1E]">
-                              {editingKey === keyLabel ? (
-                                <input type="text" value={item.label} onChange={(e) => { const u = [...modulChat]; u[index].label = e.target.value; setModulChat(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-1 rounded text-xs focus:outline-none bg-white text-gray-700" />
-                              ) : (
-                                <span onClick={() => setEditingKey(keyLabel)} className="cursor-pointer hover:bg-amber-50 rounded px-0.5">{item.label}</span>
-                              )}
-                            </div>
-                            <div className="text-gray-600 font-semibold leading-relaxed flex-1">
-                              {editingKey === keyDesc ? (
-                                <textarea value={item.keterangan} onChange={(e) => { const u = [...modulChat]; u[index].keterangan = e.target.value; setModulChat(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full border px-1 rounded resize-none text-xs focus:outline-none bg-white text-gray-700" rows={2} />
-                              ) : (
-                                <span onClick={() => setEditingKey(keyDesc)} className="cursor-pointer hover:bg-amber-50 rounded px-0.5">{item.keterangan}</span>
-                              )}
-                            </div>
-                          </div>
-                          {item.id > 41 && (
-                            <button onClick={() => handleDeleteItem(item.id)} className="text-gray-300 hover:text-rose-500 transition sm:mt-0.5 px-1 cursor-pointer md:opacity-0 group-hover/row:opacity-100">
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
+                    {modulChat.map((item) => (
+                      <div key={item.id} className="p-4 flex flex-col sm:flex-row items-start gap-4 rounded-lg">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-[13px] flex-1 w-full">
+                          <div className="sm:w-1/3 shrink-0 font-bold text-[#C92C1E]">{item.label}</div>
+                          <div className="text-gray-600 font-semibold leading-relaxed flex-1">{item.keterangan}</div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -493,26 +288,12 @@ export default function SopKelolaanPage() {
                   Alasan Utama Label "No Call / No Chat" (Reason)
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {reasons.map((item, index) => {
-                    const keyReason = `reason-${index}`;
-                    return (
-                      <div key={item.id} className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-center relative group/reason">
-                        {item.id > 44 && (
-                          <button onClick={() => handleDeleteItem(item.id)} className="absolute top-2 right-3 text-gray-300 hover:text-rose-500 transition cursor-pointer md:opacity-0 group-hover/reason:opacity-100">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
-                        <span className="text-lg font-bold text-gray-800 block">{item.label}</span>
-                        {editingKey === keyReason ? (
-                          <input type="text" value={item.keterangan} onChange={(e) => { const u = [...reasons]; u[index].keterangan = e.target.value; setReasons(u); }} onBlur={() => { setEditingKey(null); }} onKeyDown={handleKeyDownEnter} autoFocus className="w-full bg-white border px-1 py-0.5 rounded text-xs font-semibold text-center mt-1 outline-none text-gray-700" />
-                        ) : (
-                          <span onClick={() => setEditingKey(keyReason)} className="text-[12px] text-gray-600 font-semibold mt-1 block cursor-pointer hover:bg-amber-50 rounded p-0.5">{item.keterangan}</span>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {reasons.map((item) => (
+                    <div key={item.id} className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-center relative">
+                      <span className="text-lg font-bold text-gray-800 block">{item.label}</span>
+                      <span className="text-[12px] text-gray-600 font-semibold mt-1 block">{item.keterangan}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

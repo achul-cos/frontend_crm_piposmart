@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 type ApiMeta = {
   page?: number;
@@ -227,6 +228,7 @@ const normalizeList = <T,>(payload: unknown): T[] => {
 };
 
 export default function WalletsPage() {
+  usePageTitle("Topup");
   const [wallets, setWallets] = useState<WalletItem[]>([]);
   const [owners, setOwners] = useState<WalletOwner[]>([]);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
@@ -627,23 +629,22 @@ export default function WalletsPage() {
   };
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6 overflow-hidden font-sans text-[#1C1C1E]">
-      <section className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-sm">
-        <div className="relative p-6 md:p-8">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[80px] bg-red-50" />
-
-          <div className="relative z-10 flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <div className="inline-flex rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
-                Sprint 09 Wallet Ledger
-              </div>
-              <h1 className="mt-4 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">
-                Wallets
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-gray-500">
-                Kelola saldo wallet owner, top up, debit, adjustment, refund, payment, dan ledger aplikasi Piposmart.
-              </p>
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+              <span>Menu</span>
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+              <span className="text-[#C92C1E]">Topup</span>
             </div>
+            <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen Topup</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Kelola saldo wallet owner, top up, debit, adjustment, refund, payment, dan ledger aplikasi Piposmart.
+            </p>
+          </div>
 
             {isMounted && isAdmin && (
               <div className="flex flex-wrap gap-2">
@@ -697,38 +698,77 @@ export default function WalletsPage() {
                 </button>
               </div>
             )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+          <div className="relative z-10">
+            <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Revenue Top Up</p>
+            <h2 className="text-3xl font-black">{formatRupiah(summary.totalTopUp)}</h2>
+            <p className="mt-1 text-xs font-medium text-red-100/80">Berdasarkan paid_at</p>
+          </div>
+          <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 2v8m0 0v2m0-2c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Payment PAID</p>
+            <h2 className="text-3xl font-black text-gray-900">{summary.paidCount}</h2>
+            <p className="mt-1 text-xs font-medium text-gray-400">Dari {summary.totalPayments} payment</p>
+          </div>
+          <div className="absolute top-0 right-0 p-5">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
           </div>
         </div>
-      </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Revenue Top Up</p>
-          <p className="mt-3 text-2xl font-black text-gray-950">{formatRupiah(summary.totalTopUp)}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Berdasarkan paid_at</p>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total Saldo Wallet</p>
+            <h2 className="text-3xl font-black text-gray-900">{formatRupiah(summary.totalWalletBalance)}</h2>
+            <p className="mt-1 text-xs font-medium text-gray-400">Saldo aktif owner</p>
+          </div>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Payment PAID</p>
-          <p className="mt-3 text-3xl font-black text-gray-950">{summary.paidCount}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Dari {summary.totalPayments} payment</p>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total Ledger</p>
+            <h2 className="text-3xl font-black text-[#C92C1E]">{summary.totalLedger}</h2>
+            <p className="mt-1 text-xs font-medium text-gray-400">Credit, debit, adjustment, refund</p>
+          </div>
         </div>
+      </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Saldo Wallet</p>
-          <p className="mt-3 text-2xl font-black text-gray-950">{formatRupiah(summary.totalWalletBalance)}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Saldo aktif owner</p>
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          {[
+            { key: "payments", label: "Riwayat Top Up" },
+            { key: "wallets", label: "Saldo Wallet" },
+            { key: "ledger", label: "Ledger" },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setActiveTab(item.key as typeof activeTab)}
+              className={`rounded-lg px-5 py-2.5 transition-all ${
+                activeTab === item.key
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">Total Ledger</p>
-          <p className="mt-3 text-3xl font-black text-[#C92C1E]">{summary.totalLedger}</p>
-          <p className="mt-1 text-xs font-medium text-red-400">Credit, debit, adjustment, refund</p>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <section className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
           <div>
             <h2 className="text-sm font-black text-gray-900">Filter Data Wallets</h2>
             <p className="mt-1 text-xs font-medium text-gray-400">
@@ -736,18 +776,18 @@ export default function WalletsPage() {
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-4 xl:w-[840px]">
+          <div className="flex flex-wrap gap-2 w-full lg:w-auto items-center">
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Cari payment / owner..."
-              className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] min-w-[200px] text-gray-700"
             />
 
             <select
               value={channelFilter}
               onChange={(event) => setChannelFilter(event.target.value)}
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
             >
               <option value="Semua">Semua Channel</option>
               {channelOptions.map((item) => (
@@ -759,68 +799,47 @@ export default function WalletsPage() {
               type="date"
               value={paidFrom}
               onChange={(event) => setPaidFrom(event.target.value)}
-              className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
             />
 
             <input
               type="date"
               value={paidTo}
               onChange={(event) => setPaidTo(event.target.value)}
-              className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
             />
-
-
           </div>
         </div>
 
-        {errorMessage && (
-          <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
-            {errorMessage}
-          </div>
-        )}
+        <div className="px-4 pt-4">
+          {errorMessage && (
+            <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+              {errorMessage}
+            </div>
+          )}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {[
-            { key: "payments", label: "Riwayat Top Up" },
-            { key: "wallets", label: "Saldo Wallet" },
-            { key: "ledger", label: "Ledger" },
-          ].map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setActiveTab(item.key as typeof activeTab)}
-              className={`rounded-2xl border px-4 py-2 text-xs font-black transition ${
-                activeTab === item.key
-                  ? "border-red-100 bg-red-50 text-[#C92C1E]"
-                  : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+          <p className="text-[11px] font-bold text-gray-400">
+            Klik baris payment atau wallet untuk membuka detail. Tombol mutasi tetap khusus Admin.
+          </p>
         </div>
-
-        <p className="mt-3 text-[11px] font-bold text-gray-400">
-          Klik baris payment atau wallet untuk membuka detail. Tombol mutasi tetap khusus Admin.
-        </p>
 
         {activeTab === "payments" && (
-          <div className="mt-5 w-full overflow-x-auto rounded-2xl border border-gray-200">
-            <table className="w-full min-w-[980px] text-left text-xs">
-              <thead className="bg-[#C92C1E] text-white">
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
                 <tr>
-                  <th className="p-3 font-black">Payment</th>
-                  <th className="p-3 font-black">Owner</th>
-                  <th className="p-3 font-black">Channel</th>
-                  <th className="p-3 font-black">Status</th>
-                  <th className="p-3 font-black">Paid At</th>
-                  <th className="p-3 text-right font-black">Amount</th>
+                  <th className="px-4 py-4 font-black">Payment</th>
+                  <th className="px-4 py-4 font-black">Owner</th>
+                  <th className="px-4 py-4 font-black">Channel</th>
+                  <th className="px-4 py-4 font-black">Status</th>
+                  <th className="px-4 py-4 font-black">Paid At</th>
+                  <th className="px-4 py-4 text-right font-black">Amount</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {payments.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center font-bold text-gray-400">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Data top up tidak ditemukan.
                     </td>
                   </tr>
@@ -829,34 +848,32 @@ export default function WalletsPage() {
                     <tr
                       key={payment.id}
                       onClick={() => handleOpenPaymentDetail(payment)}
-                      className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-red-50/40"
+                      className="cursor-pointer transition-colors hover:bg-gray-50"
                       title="Klik baris untuk melihat detail payment"
                     >
-                      <td className="p-3 align-top">
+                      <td className="px-4 py-4 align-top">
                         <p className="font-black text-gray-900">{payment.code || `PAY-${payment.id}`}</p>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">
                           {payment.external_reference || "-"}
                         </p>
                       </td>
-                      <td className="p-3 align-top">
+                      <td className="px-4 py-4 align-top">
                         <p className="font-black text-gray-900">{getOwnerName(payment.owner)}</p>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">{getOwnerCode(payment.owner)}</p>
                       </td>
-                      <td className="p-3 align-top font-bold text-gray-600">
+                      <td className="px-4 py-4 align-top font-medium text-gray-600">
                         {payment.payment_channel || payment.channel || "-"}
                       </td>
-                      <td className="p-3 align-top">
-                        <span className="rounded-full border border-green-100 bg-green-50 px-3 py-1 text-[10px] font-black text-green-700">
+                      <td className="px-4 py-4 align-top">
+                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {payment.status || "-"}
                         </span>
                       </td>
-                      <td className="p-3 align-top font-bold text-gray-600">
+                      <td className="px-4 py-4 align-top font-medium text-gray-600">
                         {formatTanggal(payment.paid_at || payment.created_at)}
                       </td>
-                      <td className="p-3 text-right align-top">
-                        <span className="inline-flex min-w-[130px] justify-end rounded-2xl border border-red-100 bg-red-50 px-4 py-3 font-black text-[#C92C1E]">
-                          {formatRupiah(payment.amount)}
-                        </span>
+                      <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
+                        {formatRupiah(payment.amount)}
                       </td>
                     </tr>
                   ))
@@ -867,22 +884,22 @@ export default function WalletsPage() {
         )}
 
         {activeTab === "wallets" && (
-          <div className="mt-5 w-full overflow-x-auto rounded-2xl border border-gray-200">
-            <table className="w-full min-w-[820px] text-left text-xs">
-              <thead className="bg-[#C92C1E] text-white">
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
                 <tr>
-                  <th className="p-3 font-black">Wallet</th>
-                  <th className="p-3 font-black">Owner</th>
-                  <th className="p-3 font-black">Status</th>
-                  <th className="p-3 text-right font-black">Balance</th>
-                  <th className="p-3 text-right font-black">Ledger Balance</th>
-                  <th className="p-3 text-center font-black">Mutasi</th>
+                  <th className="px-4 py-4 font-black">Wallet</th>
+                  <th className="px-4 py-4 font-black">Owner</th>
+                  <th className="px-4 py-4 font-black">Status</th>
+                  <th className="px-4 py-4 text-right font-black">Balance</th>
+                  <th className="px-4 py-4 text-right font-black">Ledger Balance</th>
+                  <th className="px-4 py-4 text-center font-black">Mutasi</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {wallets.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center font-bold text-gray-400">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Data wallet tidak ditemukan.
                     </td>
                   </tr>
@@ -891,29 +908,29 @@ export default function WalletsPage() {
                     <tr
                       key={wallet.id}
                       onClick={() => handleOpenWalletDetail(wallet)}
-                      className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-red-50/40"
+                      className="cursor-pointer transition-colors hover:bg-gray-50"
                       title="Klik baris untuk melihat detail wallet"
                     >
-                      <td className="p-3 align-top font-black text-gray-900">
+                      <td className="px-4 py-4 align-top font-black text-gray-900">
                         {wallet.account_code || wallet.code || `WALLET-${wallet.id}`}
                       </td>
-                      <td className="p-3 align-top">
+                      <td className="px-4 py-4 align-top">
                         <p className="font-black text-gray-900">{getOwnerName(wallet.owner)}</p>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">{getOwnerCode(wallet.owner)}</p>
                       </td>
-                      <td className="p-3 align-top">
-                        <span className="rounded-full border border-green-100 bg-green-50 px-3 py-1 text-[10px] font-black text-green-700">
+                      <td className="px-4 py-4 align-top">
+                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {wallet.status || "-"}
                         </span>
                       </td>
-                      <td className="p-3 text-right align-top font-black text-gray-900">
+                      <td className="px-4 py-4 text-right align-top font-black text-gray-900">
                         {formatRupiah(wallet.balance)}
                       </td>
-                      <td className="p-3 text-right align-top font-black text-[#C92C1E]">
+                      <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
                         {formatRupiah(wallet.ledger_balance)}
                       </td>
-                      <td className="p-3 text-center align-top">
-                        <div className="flex flex-wrap justify-center gap-1">
+                      <td className="px-4 py-4 text-center align-top" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="flex flex-wrap justify-center gap-2">
                           {isMounted && isAdmin && (
                             <>
                               <button
@@ -922,9 +939,12 @@ export default function WalletsPage() {
                                   event.stopPropagation();
                                   handleOpenWalletAction("debit", String(wallet.owner?.id || wallet.owner_id || ""));
                                 }}
-                                className="rounded-xl border border-red-100 bg-red-50 px-2.5 py-2 text-[10px] font-black text-[#C92C1E] transition hover:bg-red-100"
+                                className="rounded-lg bg-red-50 p-2 text-[#C92C1E] transition-colors hover:bg-red-100"
+                                title="Debit"
                               >
-                                Debit
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                                </svg>
                               </button>
                               <button
                                 type="button"
@@ -932,9 +952,12 @@ export default function WalletsPage() {
                                   event.stopPropagation();
                                   handleOpenWalletAction("adjustment", String(wallet.owner?.id || wallet.owner_id || ""));
                                 }}
-                                className="rounded-xl border border-orange-100 bg-orange-50 px-2.5 py-2 text-[10px] font-black text-orange-700 transition hover:bg-orange-100"
+                                className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                                title="Adjustment"
                               >
-                                Adj
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
                               </button>
                               <button
                                 type="button"
@@ -942,9 +965,12 @@ export default function WalletsPage() {
                                   event.stopPropagation();
                                   handleOpenWalletAction("refund", String(wallet.owner?.id || wallet.owner_id || ""));
                                 }}
-                                className="rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-[10px] font-black text-gray-600 transition hover:bg-gray-50"
+                                className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                                title="Refund"
                               >
-                                Refund
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
                               </button>
                             </>
                           )}
@@ -959,48 +985,48 @@ export default function WalletsPage() {
         )}
 
         {activeTab === "ledger" && (
-          <div className="mt-5 w-full overflow-x-auto rounded-2xl border border-gray-200">
-            <table className="w-full min-w-[980px] text-left text-xs">
-              <thead className="bg-[#C92C1E] text-white">
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
                 <tr>
-                  <th className="p-3 font-black">Ledger</th>
-                  <th className="p-3 font-black">Owner</th>
-                  <th className="p-3 font-black">Type</th>
-                  <th className="p-3 font-black">Direction</th>
-                  <th className="p-3 font-black">Occurred At</th>
-                  <th className="p-3 text-right font-black">Amount</th>
+                  <th className="px-4 py-4 font-black">Ledger</th>
+                  <th className="px-4 py-4 font-black">Owner</th>
+                  <th className="px-4 py-4 font-black">Type</th>
+                  <th className="px-4 py-4 font-black">Direction</th>
+                  <th className="px-4 py-4 font-black">Occurred At</th>
+                  <th className="px-4 py-4 text-right font-black">Amount</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {ledgers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center font-bold text-gray-400">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Data ledger tidak ditemukan.
                     </td>
                   </tr>
                 ) : (
                   ledgers.map((ledger) => (
-                    <tr key={ledger.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                      <td className="p-3 align-top">
+                    <tr key={ledger.id} className="transition-colors hover:bg-gray-50">
+                      <td className="px-4 py-4 align-top">
                         <p className="font-black text-gray-900">{ledger.code || `TRX-${ledger.id}`}</p>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">
                           {ledger.source_reference || ledger.external_reference || "-"}
                         </p>
                       </td>
-                      <td className="p-3 align-top">
+                      <td className="px-4 py-4 align-top">
                         <p className="font-black text-gray-900">{getOwnerName(ledger.owner)}</p>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">{getOwnerCode(ledger.owner)}</p>
                       </td>
-                      <td className="p-3 align-top font-bold text-gray-600">{ledger.transaction_type || "-"}</td>
-                      <td className="p-3 align-top">
-                        <span className="rounded-full border border-green-100 bg-green-50 px-3 py-1 text-[10px] font-black text-green-700">
+                      <td className="px-4 py-4 align-top font-medium text-gray-600">{ledger.transaction_type || "-"}</td>
+                      <td className="px-4 py-4 align-top">
+                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {ledger.direction || "-"}
                         </span>
                       </td>
-                      <td className="p-3 align-top font-bold text-gray-600">
+                      <td className="px-4 py-4 align-top font-medium text-gray-600">
                         {formatTanggal(ledger.occurred_at || ledger.created_at)}
                       </td>
-                      <td className="p-3 text-right align-top font-black text-[#C92C1E]">
+                      <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
                         {formatRupiah(ledger.amount)}
                       </td>
                     </tr>

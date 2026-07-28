@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
   createPartner,
   createPartnerType,
@@ -206,6 +207,7 @@ function ModalShell({
 }
 
 export default function KelolaanMitraPage() {
+  usePageTitle("Mitra");
   const [currentRole, setCurrentRole] = useState("");
   const [tableMode, setTableMode] = useState<TableMode>("ACTIVE_PARTNERS");
   const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
@@ -713,62 +715,368 @@ export default function KelolaanMitraPage() {
   };
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-7 font-sans text-slate-900">
-      <section className="relative overflow-hidden rounded-[32px] border border-red-100 bg-[linear-gradient(135deg,#fff_0%,#fff7f5_58%,#fee2e2_100%)] shadow-sm">
-        <div className="relative p-6 md:p-8">
-          <div className="absolute right-0 top-0 h-44 w-44 rounded-bl-[84px] bg-red-50/80" />
-          <div className="relative z-10 flex min-w-0 flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="min-w-0">
-              <div className="inline-flex rounded-full border border-red-200 bg-white/90 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">Kelolaan Mitra</div>
-              <h1 className="mt-4 break-words text-2xl font-black tracking-tight text-slate-950 md:text-[32px]">Operasional Mitra CRM Piposmart</h1>
-              <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-slate-600">Semua pengelolaan jenis mitra, mitra aktif, dan mitra nonaktif sekarang berjalan pada basis API backend terbaru.</p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-              {canManageTypes ? <button type="button" onClick={openCreateTypeModal} className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-center text-xs font-black text-[#C92C1E] transition hover:bg-red-100">+ Tambah Jenis Mitra</button> : null}
-              {isAdmin ? <button type="button" onClick={openCreatePartnerModal} disabled={partnerTypes.length === 0} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:bg-red-300">+ Tambah Mitra</button> : null}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Jenis Mitra</p><p className="mt-4 text-3xl font-black text-slate-950">{partnerTypes.length}</p><p className="mt-2 text-xs font-bold text-slate-400">Master yang dapat dipakai untuk onboarding mitra baru.</p></div>
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Mitra Aktif</p><p className="mt-4 text-3xl font-black text-slate-950">{activePartners.length}</p><p className="mt-2 text-xs font-bold text-slate-400">Mitra yang masih bisa diinteraksikan oleh tim sales.</p></div>
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Mitra Nonaktif</p><p className="mt-4 text-3xl font-black text-slate-950">{inactivePartners.length}</p><p className="mt-2 text-xs font-bold text-slate-400">Data soft delete tetap aman dan dapat dipulihkan.</p></div>
-        <div className="rounded-[28px] border border-red-100 bg-[linear-gradient(135deg,#fff5f4_0%,#fff_60%,#fee2e2_100%)] p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">Paket Tersedia</p><p className="mt-4 text-3xl font-black text-[#C92C1E]">{packages.length}</p><p className="mt-2 text-xs font-bold text-[#C92C1E]/70">Rule komisi bisa diarahkan ke paket tertentu sesuai backend.</p></div>
-      </section>
-
-      <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-4 md:px-6 xl:flex-row xl:items-center xl:justify-between">
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-sm font-black text-slate-900">{tableMeta.title}</h2>
-            <p className="mt-1 text-xs font-medium text-slate-500">{tableMeta.description}</p>
+            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+              <span>Menu</span>
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+              <span className="text-[#C92C1E]">Mitra</span>
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen Mitra</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Semua pengelolaan jenis mitra, mitra aktif, dan mitra nonaktif berjalan pada basis API backend terbaru.
+            </p>
           </div>
-          <div className="grid w-full grid-cols-1 gap-2 rounded-[24px] bg-white p-2 shadow-inner shadow-slate-100 sm:grid-cols-3 xl:w-[760px]">
-            {[{ key: "PARTNER_TYPES", label: "Jenis Mitra" }, { key: "ACTIVE_PARTNERS", label: "Mitra Aktif" }, { key: "INACTIVE_PARTNERS", label: "Mitra Non Aktif" }].map((item) => (
-              <button key={item.key} type="button" onClick={() => setTableMode(item.key as TableMode)} className={`rounded-2xl px-4 py-3 text-xs font-black transition ${tableMode === item.key ? "bg-[#C92C1E] text-white shadow-sm" : "border border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50"}`}>{item.label}</button>
-            ))}
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+            {canManageTypes ? <button type="button" onClick={openCreateTypeModal} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm">+ Tambah Jenis Mitra</button> : null}
+            {isAdmin ? <button type="button" onClick={openCreatePartnerModal} disabled={partnerTypes.length === 0} className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700 shadow-sm shadow-red-200 disabled:cursor-not-allowed disabled:bg-red-300">+ Tambah Mitra</button> : null}
           </div>
         </div>
-        <div className="px-5 py-4 md:px-6">
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+          <div className="relative z-10">
+            <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Total Mitra</p>
+            <h2 className="text-3xl font-black">{partners.length}</h2>
+          </div>
+          <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.001 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Mitra Aktif</p>
+            <h2 className="text-3xl font-black text-gray-900">{activePartners.length}</h2>
+          </div>
+          <div className="absolute top-0 right-0 p-5">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Mitra Nonaktif</p>
+            <h2 className="text-3xl font-black text-gray-900">{inactivePartners.length}</h2>
+          </div>
+          <div className="absolute top-0 right-0 p-5">
+            <span className="flex h-3 w-3 relative">
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden">
+          <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Jenis Mitra</p>
+          <h2 className="text-2xl font-black text-gray-900">{partnerTypes.length}</h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">Master yang dapat dipakai untuk onboarding mitra baru.</p>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden">
+          <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Paket Tersedia</p>
+          <h2 className="text-2xl font-black text-gray-900">{packages.length}</h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">Rule komisi bisa diarahkan ke paket tertentu sesuai backend.</p>
+        </div>
+      </div>
+
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          {[{ key: "PARTNER_TYPES", label: "Jenis Mitra" }, { key: "ACTIVE_PARTNERS", label: "Mitra Aktif" }, { key: "INACTIVE_PARTNERS", label: "Mitra Non Aktif" }].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTableMode(item.key as TableMode)}
+              className={`rounded-lg px-5 py-2.5 transition-all ${
+                tableMode === item.key
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
           {tableMode === "PARTNER_TYPES" ? (
-            <input value={typeSearch} onChange={(event) => setTypeSearch(event.target.value)} placeholder="Cari code, nama, atau mode komisi jenis mitra" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#C92C1E] focus:ring-4 focus:ring-red-50" />
+            <input
+              value={typeSearch}
+              onChange={(event) => setTypeSearch(event.target.value)}
+              placeholder="Cari code, nama, atau mode komisi jenis mitra"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] min-w-[240px] text-gray-700"
+            />
           ) : (
-            <form onSubmit={handleSearch} className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Cari nama atau code mitra" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#C92C1E] focus:ring-4 focus:ring-red-50" />
-              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 outline-none transition focus:border-[#C92C1E] focus:ring-4 focus:ring-red-50"><option value="ALL">Semua Type</option>{partnerTypes.map((item) => <option key={item.id} value={item.code}>{item.code}</option>)}</select>
-              <button type="submit" className="rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-black">Terapkan Filter</button>
+            <form onSubmit={handleSearch} className="flex flex-wrap gap-2 items-center">
+              <input
+                value={searchDraft}
+                onChange={(event) => setSearchDraft(event.target.value)}
+                placeholder="Cari nama atau code mitra"
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] min-w-[200px] text-gray-700"
+              />
+              <select
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
+              >
+                <option value="ALL">Semua Type</option>
+                {partnerTypes.map((item) => (
+                  <option key={item.id} value={item.code}>{item.code}</option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="rounded-lg bg-[#C92C1E] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                Cari
+              </button>
             </form>
           )}
         </div>
-        {pageError ? <div className="mx-5 mb-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 md:mx-6">{pageError}</div> : null}
-      </section>
 
-      {tableMode === "PARTNER_TYPES" ? <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[940px] text-left text-xs"><thead className="bg-[#C92C1E] text-white"><tr><th className="p-4 font-black">Code</th><th className="p-4 font-black">Jenis Mitra</th><th className="p-4 font-black">Komisi Dasar</th><th className="p-4 font-black">Deskripsi</th><th className="p-4 text-center font-black">Action</th></tr></thead><tbody>{filteredPartnerTypes.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">Jenis mitra tidak ditemukan.</td></tr> : filteredPartnerTypes.map((item) => <tr key={item.id} className="border-b border-gray-100 bg-white align-top last:border-0 hover:bg-red-50/30"><td className="p-4 font-black text-gray-900">{item.code}</td><td className="p-4"><p className="font-black text-gray-900">{item.name}</p><p className="mt-1 text-[11px] font-bold text-gray-400">Mode dasar {item.commission_mode}</p></td><td className="p-4 font-bold text-gray-700">{formatFlatCommission(item)}</td><td className="p-4 font-bold leading-5 text-gray-500">{item.description || "Belum ada deskripsi."}</td><td className="p-4"><div className="flex justify-center">{canManageTypes ? <button type="button" onClick={() => void openEditTypeModal(item)} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600 transition hover:bg-white">Kelola</button> : <span className="text-xs font-bold text-gray-300">-</span>}</div></td></tr>)}</tbody></table></div></section> : null}
+        {pageError ? (
+          <div className="mx-4 mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{pageError}</div>
+        ) : null}
 
-      {tableMode === "ACTIVE_PARTNERS" ? <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-xs"><thead className="bg-[#C92C1E] text-white"><tr><th className="p-4 font-black">Mitra</th><th className="p-4 font-black">Type</th><th className="p-4 font-black">Kontak</th><th className="p-4 font-black">Komisi Dasar</th><th className="p-4 font-black">Updated</th><th className="p-4 text-center font-black">Action</th></tr></thead><tbody>{loading ? <tr><td colSpan={6} className="p-8 text-center text-sm font-bold text-gray-400">Memuat data mitra...</td></tr> : activePartners.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-sm font-bold text-gray-400">Tidak ada mitra aktif.</td></tr> : activePartners.map((partner) => <tr key={partner.id} className="border-b border-gray-100 bg-white align-top last:border-0 hover:bg-red-50/30"><td className="p-4"><p className="font-black text-gray-900">{partner.name}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{partner.code}</p></td><td className="p-4 font-bold text-gray-700">{partner.partner_type.name}<span className="mt-1 block text-[11px] text-gray-400">{partner.partner_type.code}</span></td><td className="p-4 font-bold text-gray-700">{partner.phone || "-"}<span className="mt-1 block text-[11px] text-gray-400">{partner.email || "-"}</span></td><td className="p-4 font-bold text-gray-700">{formatFlatCommission(partner.partner_type)}</td><td className="p-4 font-bold text-gray-700">{formatDateTime(partner.updated_at)}</td><td className="p-4"><div className="flex flex-wrap items-center justify-center gap-2"><Link href={isSales ? `/menu/kelolaan-mitra/detail?id=${partner.id}&tab=interaction` : `/menu/kelolaan-mitra/detail?id=${partner.id}`} className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black text-[#C92C1E]">{isSales ? "Interact" : "Detail"}</Link>{isAdmin ? <button type="button" onClick={() => openEditPartnerModal(partner)} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600">Edit</button> : null}{isAdmin ? <button type="button" onClick={() => void handleDeactivatePartner(partner)} disabled={saving} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">Delete</button> : null}</div></td></tr>)}</tbody></table></div></section> : null}
+        <div className="overflow-x-auto">
+          {tableMode === "PARTNER_TYPES" ? (
+            <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+                <tr>
+                  <th className="px-4 py-4 font-bold">Code</th>
+                  <th className="px-4 py-4 font-bold">Jenis Mitra</th>
+                  <th className="px-4 py-4 font-bold">Komisi Dasar</th>
+                  <th className="px-4 py-4 font-bold">Deskripsi</th>
+                  <th className="px-4 py-4 font-bold text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {filteredPartnerTypes.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">Jenis mitra tidak ditemukan.</td>
+                  </tr>
+                ) : (
+                  filteredPartnerTypes.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 align-top font-medium text-gray-900">{item.code}</td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-medium text-gray-900">{item.name}</p>
+                        <p className="mt-1 text-xs text-gray-400">Mode dasar {item.commission_mode}</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">{formatFlatCommission(item)}</td>
+                      <td className="px-4 py-4 align-top">{item.description || "Belum ada deskripsi."}</td>
+                      <td className="px-4 py-4 align-top text-center">
+                        {canManageTypes ? (
+                          <button
+                            type="button"
+                            onClick={() => void openEditTypeModal(item)}
+                            className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                            title="Kelola Jenis Mitra"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <span className="text-xs font-bold text-gray-300">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          ) : tableMode === "ACTIVE_PARTNERS" ? (
+            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+                <tr>
+                  <th className="px-4 py-4 font-bold">Mitra</th>
+                  <th className="px-4 py-4 font-bold">Type</th>
+                  <th className="px-4 py-4 font-bold">Kontak</th>
+                  <th className="px-4 py-4 font-bold">Komisi Dasar</th>
+                  <th className="px-4 py-4 font-bold">Updated</th>
+                  <th className="px-4 py-4 font-bold text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                      <div className="flex justify-center items-center gap-2">
+                        <svg className="animate-spin h-5 w-5 text-[#C92C1E]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Memuat data mitra...
+                      </div>
+                    </td>
+                  </tr>
+                ) : activePartners.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">Tidak ada mitra aktif.</td>
+                  </tr>
+                ) : (
+                  activePartners.map((partner) => (
+                    <tr key={partner.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-medium text-gray-900">{partner.name}</p>
+                        <p className="mt-1 text-xs text-gray-400">{partner.code}</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        {partner.partner_type.name}
+                        <span className="mt-1 block text-xs text-gray-400">{partner.partner_type.code}</span>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        {partner.phone || "-"}
+                        <span className="mt-1 block text-xs text-gray-400">{partner.email || "-"}</span>
+                      </td>
+                      <td className="px-4 py-4 align-top">{formatFlatCommission(partner.partner_type)}</td>
+                      <td className="px-4 py-4 align-top">{formatDateTime(partner.updated_at)}</td>
+                      <td className="px-4 py-4 align-top text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={isSales ? `/menu/kelolaan-mitra/detail?id=${partner.id}&tab=interaction` : `/menu/kelolaan-mitra/detail?id=${partner.id}`}
+                            className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            title={isSales ? "Interaksi Mitra" : "Detail Mitra"}
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </Link>
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditPartnerModal(partner)}
+                              className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                              title="Edit Mitra"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                          ) : null}
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeactivatePartner(partner)}
+                              disabled={saving}
+                              className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Nonaktifkan Mitra"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+                <tr>
+                  <th className="px-4 py-4 font-bold">Mitra</th>
+                  <th className="px-4 py-4 font-bold">Type</th>
+                  <th className="px-4 py-4 font-bold">Kontak</th>
+                  <th className="px-4 py-4 font-bold">Updated</th>
+                  <th className="px-4 py-4 font-bold text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">Memuat data mitra nonaktif...</td>
+                  </tr>
+                ) : inactivePartners.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">Tidak ada mitra nonaktif.</td>
+                  </tr>
+                ) : (
+                  inactivePartners.map((partner) => (
+                    <tr key={partner.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-medium text-gray-900">{partner.name}</p>
+                        <p className="mt-1 text-xs text-gray-400">{partner.code}</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        {partner.partner_type.name}
+                        <span className="mt-1 block text-xs text-gray-400">{partner.partner_type.code}</span>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        {partner.phone || "-"}
+                        <span className="mt-1 block text-xs text-gray-400">{partner.email || "-"}</span>
+                      </td>
+                      <td className="px-4 py-4 align-top">{formatDateTime(partner.updated_at)}</td>
+                      <td className="px-4 py-4 align-top text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/menu/kelolaan-mitra/detail?id=${partner.id}`}
+                            className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            title="Detail Mitra"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </Link>
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleRestorePartner(partner)}
+                              disabled={saving}
+                              className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Pulihkan Mitra"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-      {tableMode === "INACTIVE_PARTNERS" ? <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[920px] text-left text-xs"><thead className="bg-slate-950 text-white"><tr><th className="p-4 font-black">Mitra</th><th className="p-4 font-black">Type</th><th className="p-4 font-black">Kontak</th><th className="p-4 font-black">Updated</th><th className="p-4 text-center font-black">Action</th></tr></thead><tbody>{loading ? <tr><td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">Memuat data mitra nonaktif...</td></tr> : inactivePartners.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">Tidak ada mitra nonaktif.</td></tr> : inactivePartners.map((partner) => <tr key={partner.id} className="border-b border-gray-100 bg-white align-top last:border-0 hover:bg-red-50/30"><td className="p-4"><p className="font-black text-gray-900">{partner.name}</p><p className="mt-1 text-[11px] font-bold text-gray-400">{partner.code}</p></td><td className="p-4 font-bold text-gray-700">{partner.partner_type.name}<span className="mt-1 block text-[11px] text-gray-400">{partner.partner_type.code}</span></td><td className="p-4 font-bold text-gray-700">{partner.phone || "-"}<span className="mt-1 block text-[11px] text-gray-400">{partner.email || "-"}</span></td><td className="p-4 font-bold text-gray-700">{formatDateTime(partner.updated_at)}</td><td className="p-4"><div className="flex flex-wrap items-center justify-center gap-2"><Link href={`/menu/kelolaan-mitra/detail?id=${partner.id}`} className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600">Detail</Link>{isAdmin ? <button type="button" onClick={() => void handleRestorePartner(partner)} disabled={saving} className="rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-[10px] font-black text-green-700 disabled:cursor-not-allowed disabled:opacity-50">Pulihkan</button> : null}</div></td></tr>)}</tbody></table></div></section> : null}
+        {tableMode !== "PARTNER_TYPES" ? (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4">
+            <span className="text-xs text-gray-500">Halaman {page}</span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                Sebelumnya
+              </button>
+              <button
+                disabled={partners.length < PAGE_SIZE}
+                onClick={() => setPage((prev) => prev + 1)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
       <ModalShell open={showPartnerModal} title={editingPartner ? "Edit Mitra" : "Tambah Mitra"} subtitle="Form mitra tetap memakai schema backend terbaru, termasuk soft delete dan update status." onClose={() => setShowPartnerModal(false)}>
         <form onSubmit={handlePartnerSubmit} className="space-y-5">
           {partnerFormError ? <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{partnerFormError}</div> : null}

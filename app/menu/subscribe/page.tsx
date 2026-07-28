@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 type ApiMeta = {
   page?: number;
@@ -266,6 +267,7 @@ const toIsoFromDatetimeLocal = (value: string) => {
 };
 
 export default function SubscriptionPage() {
+  usePageTitle("Subscribe");
   const [orders, setOrders] = useState<SubscriptionOrderItem[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionItem[]>([]);
   const [reconciliations, setReconciliations] = useState<ReconciliationItem[]>([]);
@@ -695,65 +697,109 @@ export default function SubscriptionPage() {
   const statusOptions = ["PENDING_RECONCILIATION", "PAID", "RECONCILED", "REJECTED"];
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6 overflow-hidden font-sans text-[#1C1C1E]">
-      <section className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-sm">
-        <div className="relative p-6 md:p-8">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[80px] bg-red-50" />
-
-          <div className="relative z-10 flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <div className="inline-flex rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
-                Sprint 10 Subscription
-              </div>
-              <h1 className="mt-4 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">
-                Subscription
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-gray-500">
-                Kelola pembelian paket dari saldo wallet, subscription aktif, reconciliation, dan issue queue tanpa double counting revenue.
-              </p>
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+              <span>Menu</span>
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+              <span className="text-[#C92C1E]">Subscribe</span>
             </div>
+            <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen Subscribe</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Kelola pembelian paket dari saldo wallet, subscription aktif, reconciliation, dan issue queue tanpa double counting revenue.
+            </p>
+          </div>
 
-            {isMounted && isAdmin && (
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(true)}
-                className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]"
-              >
-                + Buat Order
-              </button>
-            )}
+          {isMounted && isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+              className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700 shadow-sm shadow-red-200"
+            >
+              + Buat Order
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+          <div className="relative z-10">
+            <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Total Order</p>
+            <h2 className="text-3xl font-black">{formatRupiah(summary.totalOrderAmount)}</h2>
+            <p className="mt-1 text-xs font-medium text-red-100/80">Pembelian paket dari wallet</p>
+          </div>
+          <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3v-6m-3 6v-9m-2 9V7a2 2 0 012-2h6a2 2 0 012 2v13a2 2 0 01-2 2H8a2 2 0 01-2-2z" />
+          </svg>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Subscription Aktif</p>
+            <h2 className="text-3xl font-black text-gray-900">{summary.activeSubscriptions}</h2>
+            <p className="mt-1 text-xs font-medium text-gray-400">Owner aktif berlangganan</p>
+          </div>
+          <div className="absolute top-0 right-0 p-5">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
           </div>
         </div>
-      </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Order</p>
-          <p className="mt-3 text-2xl font-black text-gray-950">{formatRupiah(summary.totalOrderAmount)}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Pembelian paket dari wallet</p>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Reconciliation Confirmed</p>
+            <h2 className="text-3xl font-black text-gray-900">{summary.confirmedReconciliations}</h2>
+            <p className="mt-1 text-xs font-medium text-gray-400">Order sudah dipertemukan dengan closing</p>
+          </div>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Subscription Aktif</p>
-          <p className="mt-3 text-3xl font-black text-gray-950">{summary.activeSubscriptions}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Owner aktif berlangganan</p>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Open Issue</p>
+            <h2 className="text-3xl font-black text-gray-900">{summary.openIssues}</h2>
+            <p className="mt-1 text-xs font-medium text-gray-400">Hanging order / manual review</p>
+          </div>
+          <div className="absolute top-0 right-0 p-5">
+            <span className="flex h-3 w-3 relative">
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+            </span>
+          </div>
         </div>
+      </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Reconciliation Confirmed</p>
-          <p className="mt-3 text-3xl font-black text-gray-950">{summary.confirmedReconciliations}</p>
-          <p className="mt-1 text-xs font-medium text-gray-400">Order sudah dipertemukan dengan closing</p>
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          {[
+            { key: "orders", label: "Subscription Order" },
+            { key: "subscriptions", label: "Subscription Aktif" },
+            { key: "reconciliations", label: "Reconciliation" },
+            { key: "issues", label: "Issue Queue" },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setActiveTab(item.key as typeof activeTab)}
+              className={`rounded-lg px-5 py-2.5 transition-all ${
+                activeTab === item.key
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">Open Issue</p>
-          <p className="mt-3 text-3xl font-black text-[#C92C1E]">{summary.openIssues}</p>
-          <p className="mt-1 text-xs font-medium text-red-400">Hanging order / manual review</p>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
           <div>
             <h2 className="text-sm font-black text-gray-900">Filter Subscription</h2>
             <p className="mt-1 text-xs font-medium text-gray-400">
@@ -761,18 +807,18 @@ export default function SubscriptionPage() {
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-4 xl:w-[840px]">
+          <div className="flex flex-wrap gap-2 items-center">
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Cari order / owner"
-              className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] min-w-[200px] text-gray-700"
             />
 
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
             >
               <option value="Semua">Semua Status</option>
               {statusOptions.map((item) => (
@@ -784,56 +830,33 @@ export default function SubscriptionPage() {
               type="date"
               value={purchasedFrom}
               onChange={(event) => setPurchasedFrom(event.target.value)}
-              className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
             />
 
             <input
               type="date"
               value={purchasedTo}
               onChange={(event) => setPurchasedTo(event.target.value)}
-              className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
             />
-
-
           </div>
         </div>
 
         {errorMessage && (
-          <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+          <div className="mx-4 mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
             {errorMessage}
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {[
-            { key: "orders", label: "Subscription Order" },
-            { key: "subscriptions", label: "Subscription Aktif" },
-            { key: "reconciliations", label: "Reconciliation" },
-            { key: "issues", label: "Issue Queue" },
-          ].map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setActiveTab(item.key as typeof activeTab)}
-              className={`rounded-2xl border px-4 py-2 text-xs font-black transition ${
-                activeTab === item.key
-                  ? "border-red-100 bg-red-50 text-[#C92C1E]"
-                  : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-3 text-[11px] font-bold text-gray-400">
+        <p className="px-4 pt-4 text-[11px] font-bold text-gray-400">
           Klik baris order atau subscription untuk membuka detail. Reconciliation dapat dilakukan Admin/Supervisor.
         </p>
+        <div className="h-2" />
 
         {activeTab === "orders" && (
-          <div className="mt-5 w-full overflow-x-auto rounded-2xl border border-gray-200">
+          <div className="w-full overflow-x-auto">
             <table className="w-full min-w-[1120px] text-left text-xs">
-              <thead className="bg-[#C92C1E] text-white">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
                 <tr>
                   <th className="p-3 font-black">Order</th>
                   <th className="p-3 font-black">Owner</th>
@@ -844,7 +867,7 @@ export default function SubscriptionPage() {
                   {canReconcile && <th className="p-3 text-center font-black">Reconcile</th>}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {orders.length === 0 ? (
                   <tr>
                     <td colSpan={canReconcile ? 7 : 6} className="p-8 text-center font-bold text-gray-400">
@@ -856,7 +879,7 @@ export default function SubscriptionPage() {
                     <tr
                       key={order.id}
                       onClick={() => handleOpenOrderDetail(order)}
-                      className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-red-50/40"
+                      className="cursor-pointer transition-colors hover:bg-gray-50"
                       title="Klik baris untuk melihat detail order"
                     >
                       <td className="p-3 align-top">
@@ -910,13 +933,13 @@ export default function SubscriptionPage() {
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
         )}
 
         {activeTab === "subscriptions" && (
-          <div className="mt-5 w-full overflow-x-auto rounded-2xl border border-gray-200">
+          <div className="w-full overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-xs">
-              <thead className="bg-[#C92C1E] text-white">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
                 <tr>
                   <th className="p-3 font-black">Subscription</th>
                   <th className="p-3 font-black">Owner</th>
@@ -926,7 +949,7 @@ export default function SubscriptionPage() {
                   <th className="p-3 text-right font-black">Durasi</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {subscriptions.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-8 text-center font-bold text-gray-400">
@@ -938,7 +961,7 @@ export default function SubscriptionPage() {
                     <tr
                       key={subscription.id}
                       onClick={() => handleOpenSubscriptionDetail(subscription)}
-                      className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-red-50/40"
+                      className="cursor-pointer transition-colors hover:bg-gray-50"
                       title="Klik baris untuk melihat detail subscription"
                     >
                       <td className="p-3 align-top">
@@ -970,13 +993,13 @@ export default function SubscriptionPage() {
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
         )}
 
         {activeTab === "reconciliations" && (
-          <div className="mt-5 w-full overflow-x-auto rounded-2xl border border-gray-200">
+          <div className="w-full overflow-x-auto">
             <table className="w-full min-w-[920px] text-left text-xs">
-              <thead className="bg-[#C92C1E] text-white">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
                 <tr>
                   <th className="p-3 font-black">Reconciliation</th>
                   <th className="p-3 font-black">Owner</th>
@@ -986,7 +1009,7 @@ export default function SubscriptionPage() {
                   <th className="p-3 text-right font-black">Selisih</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {reconciliations.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-8 text-center font-bold text-gray-400">
@@ -995,7 +1018,7 @@ export default function SubscriptionPage() {
                   </tr>
                 ) : (
                   reconciliations.map((reconciliation) => (
-                    <tr key={reconciliation.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <tr key={reconciliation.id} className="transition-colors hover:bg-gray-50">
                       <td className="p-3 align-top">
                         <p className="font-black text-gray-900">{reconciliation.code || `REC-${reconciliation.id}`}</p>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">
@@ -1025,13 +1048,13 @@ export default function SubscriptionPage() {
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
         )}
 
         {activeTab === "issues" && (
-          <div className="mt-5 w-full overflow-x-auto rounded-2xl border border-gray-200">
+          <div className="w-full overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-xs">
-              <thead className="bg-[#C92C1E] text-white">
+              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
                 <tr>
                   <th className="p-3 font-black">Issue</th>
                   <th className="p-3 font-black">Owner</th>
@@ -1041,7 +1064,7 @@ export default function SubscriptionPage() {
                   <th className="p-3 font-black">Detected</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {issues.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-8 text-center font-bold text-gray-400">
@@ -1050,7 +1073,7 @@ export default function SubscriptionPage() {
                   </tr>
                 ) : (
                   issues.map((issue) => (
-                    <tr key={issue.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <tr key={issue.id} className="transition-colors hover:bg-gray-50">
                       <td className="p-3 align-top">
                         <p className="font-black text-gray-900">{issue.code || `ISSUE-${issue.id}`}</p>
                         <p className="mt-1 line-clamp-2 text-[11px] font-bold text-gray-400">
@@ -1078,9 +1101,9 @@ export default function SubscriptionPage() {
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
         )}
-      </section>
+      </div>
 
       {(selectedOrderDetail || selectedSubscriptionDetail) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">

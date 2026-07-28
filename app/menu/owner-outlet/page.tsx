@@ -20,10 +20,12 @@ import {
   bulkCreateOwnerOutlets,
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import * as XLSX from "xlsx";
 import AnalyticsTab from "./AnalyticsTab";
 
 export default function OwnerOutletPage() {
+  usePageTitle("Owner");
   const router = useRouter();
   const [owners, setOwners] = useState<BackendOwner[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -484,9 +486,12 @@ export default function OwnerOutletPage() {
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
               </svg>
-              <span className="text-[#C92C1E]">Owner & Outlet</span>
+              <span className="text-[#C92C1E]">Owner</span>
             </div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Manajemen Owner & Outlet</h1>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Manajemen Owner</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Kelola data owner beserta outlet miliknya, import Excel, dan riwayat perubahan data.
+            </p>
           </div>
         </div>
       </div>
@@ -628,7 +633,7 @@ export default function OwnerOutletPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm md:text-base text-gray-600">
+          <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
             <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
               <tr>
                 <th className="px-4 py-4 text-center w-12">
@@ -677,6 +682,7 @@ export default function OwnerOutletPage() {
                     key={owner.id} 
                     className="transition-colors hover:bg-gray-50"
                   >
+<<<<<<< Updated upstream
                     <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <input 
                           type="checkbox" 
@@ -686,28 +692,40 @@ export default function OwnerOutletPage() {
                             else setSelectedOwnerIds(selectedOwnerIds.filter(id => id !== owner.id));
                           }}
                           className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+=======
+                    <td className="px-4 py-4 align-top text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          readOnly
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
+>>>>>>> Stashed changes
                         />
                     </td>
-                    <td className="px-4 py-4 font-medium text-gray-900">{owner.code}</td>
-                    <td className="px-4 py-4 font-medium text-gray-900">{owner.name}</td>
-                    <td className="px-4 py-4">{owner.brand_name || "-"}</td>
-                    <td className="px-4 py-4">{owner.phone}</td>
-                    <td className="px-4 py-4">{owner.city ? `${owner.city}, ${owner.province || ""}` : "-"}</td>
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-4 py-4 align-top font-medium text-gray-900">{owner.code}</td>
+                    <td className="px-4 py-4 align-top font-medium text-gray-900">{owner.name}</td>
+                    <td className="px-4 py-4 align-top">{owner.brand_name || "-"}</td>
+                    <td className="px-4 py-4 align-top">{owner.phone}</td>
+                    <td className="px-4 py-4 align-top">{owner.city ? `${owner.city}, ${owner.province || ""}` : "-"}</td>
+                    <td className="px-4 py-4 align-top text-center">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${
-                        owner.status === "ACTIVE" 
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                        owner.status === "ACTIVE"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                           : "bg-red-50 text-red-700 border border-red-200"
                       }`}>
                         {owner.status}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-4 py-4 align-top text-center">
                       <span className="inline-flex items-center justify-center bg-gray-100 text-gray-700 font-bold px-2 py-1 rounded-md text-xs">
                         {owner.outlet_count || 0}
                       </span>
                     </td>
+<<<<<<< Updated upstream
                     <td className="px-4 py-4 text-center">
+=======
+                    <td className="px-4 py-4 align-top text-center" onMouseDown={(e) => e.stopPropagation()}>
+>>>>>>> Stashed changes
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={(e) => {

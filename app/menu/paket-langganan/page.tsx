@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
   Search,
   Plus,
@@ -132,7 +133,7 @@ function Pagination({
   const start = (currentPage - 1) * rowsPerPage + 1;
   const end = Math.min(currentPage * rowsPerPage, totalItems);
   return (
-    <div className="flex flex-col gap-4 border-t border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4">
       <p className="text-xs font-bold text-gray-400">
         Menampilkan <span className="text-gray-700">{start} - {end}</span> dari{" "}
         <span className="text-gray-700">{totalItems}</span> data
@@ -141,7 +142,7 @@ function Pagination({
         <select
           value={rowsPerPage}
           onChange={(e) => onRowsPerPageChange(Number(e.target.value))}
-          className="h-8 cursor-pointer rounded-lg border border-gray-100 bg-gray-50/50 px-2 text-[11px] font-black text-slate-700 outline-none"
+          className="h-8 cursor-pointer rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#C92C1E]"
         >
           {[10, 25, 50, 100].map((v) => (
             <option key={v} value={v}>{v} / halaman</option>
@@ -150,7 +151,7 @@ function Pagination({
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage <= 1}
-          className="h-8 rounded-lg border border-gray-100 bg-white px-3 text-[11px] font-black text-gray-400 transition hover:bg-gray-50 disabled:opacity-40"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
         >
           Prev
         </button>
@@ -160,7 +161,7 @@ function Pagination({
         <button
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage >= totalPages}
-          className="h-8 rounded-lg border border-gray-100 bg-white px-3 text-[11px] font-black text-gray-400 transition hover:bg-gray-50 disabled:opacity-40"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
         >
           Next
         </button>
@@ -357,6 +358,7 @@ function BulkActionBar({
 // ============================================================
 
 export default function PaketLanggananPage() {
+  usePageTitle("Katalog");
   const [entity, setEntity] = useState<Entity>("package");
   const [scope, setScope] = useState<CatalogScope>("ACTIVE");
   const [search, setSearch] = useState("");
@@ -468,6 +470,14 @@ export default function PaketLanggananPage() {
     return promotions.map((p) => p.id);
   }, [entity, packages, plans, promotions]);
 
+  const currentItemsForCount = useMemo(() => {
+    if (entity === "package") return packages;
+    if (entity === "plan") return plans;
+    return promotions;
+  }, [entity, packages, plans, promotions]);
+  const activeCount = currentItemsForCount.filter((item) => item.active).length;
+  const inactiveCount = currentItemsForCount.length - activeCount;
+
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -518,44 +528,84 @@ export default function PaketLanggananPage() {
   const addLabel = { package: "Tambah Package", plan: "Tambah Plan", promotion: "Tambah Promo" }[entity];
 
   return (
-    <div className="space-y-6 font-sans text-[#1C1C1E]">
+    <div className="space-y-6">
       {/* === PAGE HEADER === */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-[#C92C1E]">
-            <Tag className="h-6 w-6" />
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+        <div className="p-5 border-b-2 border-[#C92C1E]">
+          <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+            <span>Menu</span>
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-[#C92C1E]">Katalog</span>
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#C92C1E]">
-              Manajemen
-            </p>
-            <h1 className="text-2xl font-black text-gray-950">Katalog</h1>
+          <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen Katalog</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Kelola Package, Plan, dan Promotion untuk katalog paket langganan.
+          </p>
+        </div>
+      </div>
+
+      {/* === QUICK INFO CARDS === */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+          <div className="relative z-10">
+            <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Total {entityLabel}</p>
+            <h2 className="text-3xl font-black">{total}</h2>
+          </div>
+          <Package className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" />
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{entityLabel} Aktif</p>
+            <h2 className="text-3xl font-black text-gray-900">{activeCount}</h2>
+          </div>
+          <div className="absolute top-0 right-0 p-5">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+          <div className="relative z-10">
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{entityLabel} Nonaktif</p>
+            <h2 className="text-3xl font-black text-gray-900">{inactiveCount}</h2>
+          </div>
+          <div className="absolute top-0 right-0 p-5">
+            <span className="flex h-3 w-3 relative">
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+            </span>
           </div>
         </div>
       </div>
 
       {/* === ENTITY TABS === */}
-      <div className="inline-flex overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        {(["package", "plan", "promotion"] as Entity[]).map((e) => (
-          <button
-            key={e}
-            onClick={() => changeEntity(e)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black transition ${
-              entity === e ? "bg-[#C92C1E] text-white" : "text-gray-500 hover:bg-gray-50"
-            }`}
-          >
-            {e === "package" && <Package className="h-3.5 w-3.5" />}
-            {e === "plan" && <Layers className="h-3.5 w-3.5" />}
-            {e === "promotion" && <Tag className="h-3.5 w-3.5" />}
-            {e === "package" ? "Package" : e === "plan" ? "Plan" : "Promotion"}
-          </button>
-        ))}
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          {(["package", "plan", "promotion"] as Entity[]).map((e) => (
+            <button
+              key={e}
+              onClick={() => changeEntity(e)}
+              className={`flex items-center gap-1.5 rounded-lg px-5 py-2.5 transition-all ${
+                entity === e
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+              }`}
+            >
+              {e === "package" && <Package className="h-3.5 w-3.5" />}
+              {e === "plan" && <Layers className="h-3.5 w-3.5" />}
+              {e === "promotion" && <Tag className="h-3.5 w-3.5" />}
+              {e === "package" ? "Package" : e === "plan" ? "Plan" : "Promotion"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* === SINGLE ADAPTIVE TABLE CARD === */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
         {/* Toolbar */}
-        <div className="border-b border-gray-100 px-5 py-3">
+        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[180px] max-w-xs flex-1">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -567,7 +617,7 @@ export default function PaketLanggananPage() {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="h-9 w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-9 pr-3 text-xs font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:bg-white"
+                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
               />
             </div>
 
@@ -660,48 +710,49 @@ export default function PaketLanggananPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs font-semibold text-gray-600 md:text-sm">
-            <thead className="bg-[#C92C1E] text-white">
+          <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+            <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
               <tr>
-                <th className="w-10 px-4 py-3 text-center">
+                <th className="w-10 px-4 py-4 text-center">
                   <input
                     type="checkbox"
                     checked={currentIds.length > 0 && currentIds.every((id) => selectedIds.has(id))}
                     onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                   />
                 </th>
                 {entity === "package" && (
                   <>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Kode</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Nama</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Level</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Status</th>
+                    <th className="px-4 py-4">Kode</th>
+                    <th className="px-4 py-4">Nama</th>
+                    <th className="px-4 py-4">Level</th>
+                    <th className="px-4 py-4">Status</th>
                   </>
                 )}
                 {entity === "plan" && (
                   <>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Kode</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Nama</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Package</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Tenor</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Harga</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Status</th>
+                    <th className="px-4 py-4">Kode</th>
+                    <th className="px-4 py-4">Nama</th>
+                    <th className="px-4 py-4">Package</th>
+                    <th className="px-4 py-4">Tenor</th>
+                    <th className="px-4 py-4">Harga</th>
+                    <th className="px-4 py-4">Status</th>
                   </>
                 )}
                 {entity === "promotion" && (
                   <>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Kode</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Nama</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Tipe</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Biaya</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Benefit</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Status</th>
+                    <th className="px-4 py-4">Kode</th>
+                    <th className="px-4 py-4">Nama</th>
+                    <th className="px-4 py-4">Tipe</th>
+                    <th className="px-4 py-4">Biaya</th>
+                    <th className="px-4 py-4">Benefit</th>
+                    <th className="px-4 py-4">Status</th>
                   </>
                 )}
-                <th className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/90">Aksi</th>
+                <th className="px-4 py-4 text-center">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-100 bg-white">
               {isLoading ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-gray-400">Memuat...</td>
@@ -718,15 +769,15 @@ export default function PaketLanggananPage() {
                 </tr>
               ) : entity === "package" ? (
                 packages.map((p) => (
-                  <tr key={p.id} className="hover:bg-red-50/30">
-                    <td className="px-4 py-3.5 text-center">
+                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3.5 text-center align-top">
                       <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
                     </td>
-                    <td className="px-4 py-3.5 font-mono font-bold text-gray-700">{p.code}</td>
-                    <td className="px-4 py-3.5 font-black text-gray-800">{p.name}</td>
-                    <td className="px-4 py-3.5">{p.level_order}</td>
-                    <td className="px-4 py-3.5"><StatusBadge active={p.active} /></td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
+                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{p.name}</td>
+                    <td className="px-4 py-3.5 align-top">{p.level_order}</td>
+                    <td className="px-4 py-3.5 align-top"><StatusBadge active={p.active} /></td>
+                    <td className="px-4 py-3.5 align-top">
                       <RowActions
                         scope={scope}
                         active={p.active}
@@ -743,21 +794,21 @@ export default function PaketLanggananPage() {
                 ))
               ) : entity === "plan" ? (
                 plans.map((p) => (
-                  <tr key={p.id} className="hover:bg-red-50/30">
-                    <td className="px-4 py-3.5 text-center">
+                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3.5 text-center align-top">
                       <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
                     </td>
-                    <td className="px-4 py-3.5 font-mono font-bold text-gray-700">{p.code}</td>
-                    <td className="px-4 py-3.5 font-black text-gray-800">{p.name}</td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
+                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{p.name}</td>
+                    <td className="px-4 py-3.5 align-top">
                       <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-black text-orange-600">
                         {p.package.name}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5">{p.tenure_months} bln</td>
-                    <td className="px-4 py-3.5 font-black text-gray-800">{formatRupiah(p.price)}</td>
-                    <td className="px-4 py-3.5"><StatusBadge active={p.active} /></td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5 align-top">{p.tenure_months} bln</td>
+                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{formatRupiah(p.price)}</td>
+                    <td className="px-4 py-3.5 align-top"><StatusBadge active={p.active} /></td>
+                    <td className="px-4 py-3.5 align-top">
                       <RowActions
                         scope={scope}
                         active={p.active}
@@ -774,23 +825,23 @@ export default function PaketLanggananPage() {
                 ))
               ) : (
                 promotions.map((p) => (
-                  <tr key={p.id} className="hover:bg-red-50/30">
-                    <td className="px-4 py-3.5 text-center">
+                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3.5 text-center align-top">
                       <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
                     </td>
-                    <td className="px-4 py-3.5 font-mono font-bold text-gray-700">{p.code}</td>
-                    <td className="px-4 py-3.5 font-black text-gray-800">{p.name}</td>
-                    <td className="px-4 py-3.5">{p.promotion_type}</td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
+                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{p.name}</td>
+                    <td className="px-4 py-3.5 align-top">{p.promotion_type}</td>
+                    <td className="px-4 py-3.5 align-top">
                       {p.charge_type === "FREE" ? (
                         <span className="font-black text-emerald-600">Gratis</span>
                       ) : (
                         <span className="font-black text-gray-800">{formatRupiah(p.additional_charge)}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-gray-500">{p.benefits?.length || 0} benefit</td>
-                    <td className="px-4 py-3.5"><StatusBadge active={p.active} /></td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5 align-top text-gray-500">{p.benefits?.length || 0} benefit</td>
+                    <td className="px-4 py-3.5 align-top"><StatusBadge active={p.active} /></td>
+                    <td className="px-4 py-3.5 align-top">
                       <RowActions
                         scope={scope}
                         active={p.active}
@@ -937,36 +988,36 @@ function RowActions({
 }) {
   if (scope === "DELETED") {
     return (
-      <div className="flex items-center gap-3">
-        <button onClick={onView} className="text-gray-400 transition hover:scale-110 hover:text-gray-700" title="Lihat Detail">
+      <div className="flex items-center justify-center gap-2">
+        <button onClick={onView} className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700" title="Lihat Detail">
           <Eye className="h-4 w-4" />
         </button>
-        <button onClick={onRestore} className="text-gray-400 transition hover:scale-110 hover:text-emerald-600" title="Pulihkan">
+        <button onClick={onRestore} className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700" title="Pulihkan">
           <ArchiveRestore className="h-4 w-4" />
         </button>
-        <button onClick={onForceDelete} className="text-gray-400 transition hover:scale-110 hover:text-red-600" title="Hapus Permanen">
+        <button onClick={onForceDelete} className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-700" title="Hapus Permanen">
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-3">
-      <button onClick={onView} className="text-gray-400 transition hover:scale-110 hover:text-gray-700" title="Lihat Detail">
+    <div className="flex items-center justify-center gap-2">
+      <button onClick={onView} className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700" title="Lihat Detail">
         <Eye className="h-4 w-4" />
       </button>
       <button
         onClick={onToggleActive}
         disabled={isToggling}
-        className={`transition hover:scale-110 disabled:opacity-40 ${active ? "text-emerald-500 hover:text-gray-400" : "text-gray-300 hover:text-emerald-600"}`}
+        className={`rounded-lg p-2 transition-colors disabled:opacity-40 ${active ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-700"}`}
         title={active ? "Nonaktifkan" : "Aktifkan"}
       >
         {active ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
       </button>
-      <button onClick={onEdit} className="text-gray-400 transition hover:scale-110 hover:text-[#C92C1E]" title="Edit">
+      <button onClick={onEdit} className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700" title="Edit">
         <Pencil className="h-4 w-4" />
       </button>
-      <button onClick={onDelete} className="text-gray-400 transition hover:scale-110 hover:text-red-600" title="Hapus">
+      <button onClick={onDelete} className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-700" title="Hapus">
         <Trash2 className="h-4 w-4" />
       </button>
     </div>

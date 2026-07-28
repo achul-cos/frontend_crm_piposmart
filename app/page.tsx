@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 type NasabahItem = {
   no: number;
@@ -98,6 +99,7 @@ const isValidPicName = (value?: string) => {
 const SOP_READ_DELAY_SECONDS = 5;
 
 export default function DashboardOverviewPage() {
+  usePageTitle("Dashboard");
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
   const [userName, setUserName] = useState("User");
   const [userRole, setUserRole] = useState("Sales");

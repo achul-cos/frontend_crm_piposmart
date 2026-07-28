@@ -12,8 +12,10 @@ import {
   bulkSoftDeleteOwnerOutlets,
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 export default function OwnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  usePageTitle("Detail Owner");
   const router = useRouter();
   const resolvedParams = use(params);
   const ownerId = Number(resolvedParams.id);
@@ -206,117 +208,125 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Kolom Kiri: Info Owner & Summary */}
-          <div className="w-full space-y-6">
-            
-            {/* Quick Stats Card */}
-            <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
-              <div className="relative z-10 flex items-center justify-between">
-                <div>
-                  <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Total Outlet Terdaftar</p>
-                  <h2 className="text-4xl font-black">{outlets.length}</h2>
-                </div>
-                <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
-                  <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
+        <div className="space-y-6">
+          {/* Level 1: Ringkasan (Quick Stats) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+              <div className="relative z-10">
+                <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Total Outlet Terdaftar</p>
+                <h2 className="text-3xl font-black">{outlets.length}</h2>
               </div>
-              <svg className="absolute -bottom-6 -right-6 w-32 h-32 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
-
-            {/* Profil Owner Card */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm relative">
-              {/* Badge Status */}
-              <div className="absolute top-6 right-6">
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black uppercase tracking-tight ${
-                  owner.status === "ACTIVE" 
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
-                    : "bg-red-50 text-red-700 border border-red-200"
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${owner.status === "ACTIVE" ? "bg-emerald-500" : "bg-red-500"}`}></span>
-                  {owner.status}
+            <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+              <div className="relative z-10">
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Kode Owner</p>
+                <h2 className="text-3xl font-black text-gray-900">{owner.code}</h2>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+              <div className="relative z-10">
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Status Owner</p>
+                <h2 className="text-3xl font-black text-gray-900">{owner.status}</h2>
+              </div>
+              <div className="absolute top-0 right-0 p-5">
+                <span className="flex h-3 w-3 relative">
+                  {owner.status === "ACTIVE" && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  )}
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${owner.status === "ACTIVE" ? "bg-emerald-500" : "bg-red-500"}`}></span>
                 </span>
               </div>
-              
-              <div className="flex items-center gap-3 mb-6">
-                <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
-                  <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+            </div>
+          </div>
+
+          {/* Level 2: Informasi Dasar */}
+          <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
+              <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-base font-black text-gray-900 leading-tight">Informasi Dasar</h4>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Identitas owner</p>
+              </div>
+            </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Owner</span>
+                <span className="font-bold text-gray-900">{owner.name}</span>
+              </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Brand</span>
+                <span className="font-bold text-gray-900">{owner.brand_name || "-"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Level 3: Kontak & Lokasi */}
+          <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
+              <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-base font-black text-gray-900 leading-tight">Kontak &amp; Lokasi</h4>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cara menghubungi dan alamat owner</p>
+              </div>
+            </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
+                   <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                   </svg>
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-gray-900 leading-tight">Profil Owner</h4>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{owner.code}</p>
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nomor Kontak</span>
+                  <span className="font-semibold text-gray-900 text-sm">{owner.phone || "-"}</span>
                 </div>
               </div>
-              
-              <div className="space-y-4">
-                <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Owner</span>
-                  <span className="font-bold text-gray-900">{owner.name}</span>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
-                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                     </svg>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
-                    <span className="font-semibold text-gray-900 text-sm">{owner.brand_name || "-"}</span>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
-                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                     </svg>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nomor Kontak</span>
-                    <span className="font-semibold text-gray-900 text-sm">{owner.phone || "-"}</span>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
+                   <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                   </svg>
                 </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
-                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                     </svg>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lokasi Asal</span>
-                    <span className="font-semibold text-gray-900 text-sm">
-                      {owner.city && owner.province ? `${owner.city}, ${owner.province}` : owner.city || owner.province || "-"}
-                    </span>
-                  </div>
+                <div>
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lokasi Asal</span>
+                  <span className="font-semibold text-gray-900 text-sm">
+                    {owner.city && owner.province ? `${owner.city}, ${owner.province}` : owner.city || owner.province || "-"}
+                  </span>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
-                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                     </svg>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Alamat Lengkap</span>
-                    <span className="font-semibold text-gray-900 text-sm">
-                      {owner.address || "-"}
-                    </span>
-                  </div>
+              </div>
+
+              <div className="flex items-start gap-3 sm:col-span-2">
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
+                   <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                   </svg>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Alamat Lengkap</span>
+                  <span className="font-semibold text-gray-900 text-sm">
+                    {owner.address || "-"}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Kolom Kanan: Tabel Outlet */}
-          <div className="w-full lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+          {/* Level 4: Daftar Outlet */}
+          <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50/50">
               <div className="flex items-center gap-3">
                 <div className="bg-red-50 p-2.5 rounded-xl border border-red-100 hidden sm:block">
