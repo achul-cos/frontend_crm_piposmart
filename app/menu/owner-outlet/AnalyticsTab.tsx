@@ -17,6 +17,12 @@ import {
   Bar,
   Legend,
 } from "recharts";
+import { geoMercator, geoPath } from "d3-geo";
+import {
+  INDONESIA_PROVINCE_GEOJSON,
+  matchProvinceToGadmName,
+  type IndonesiaProvinceFeature,
+} from "@/app/lib/geo/indonesia-provinces";
 
 export default function AnalyticsTab() {
   const [data, setData] = useState<BackendOwner[]>([]);
@@ -82,6 +88,36 @@ export default function AnalyticsTab() {
       .sort((a, b) => b.Total - a.Total)
       .slice(0, 5); // Top 5
   }, [data]);
+
+  const { countByProvince, unmatchedCount } = useMemo(() => {
+    const counts = new Map<string, number>();
+    let unmatched = 0;
+    for (const owner of data) {
+      const gadmName = matchProvinceToGadmName(owner.province || "");
+      if (!gadmName) {
+        unmatched += 1;
+        continue;
+      }
+      counts.set(gadmName, (counts.get(gadmName) || 0) + 1);
+    }
+    return { countByProvince: counts, unmatchedCount: unmatched };
+  }, [data]);
+
+  const maxCount = Math.max(1, ...Array.from(countByProvince.values()));
+
+  const projection = useMemo(
+    () =>
+      geoMercator().fitSize(
+        [760, 340],
+        INDONESIA_PROVINCE_GEOJSON as unknown as Parameters<
+          ReturnType<typeof geoMercator>["fitSize"]
+        >[1],
+      ),
+    [],
+  );
+  const pathGenerator = useMemo(() => geoPath(projection), [projection]);
+
+  const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
 
   const COLORS = ["#059669", "#DC2626"]; // Emerald for active, Red for inactive
 
@@ -175,6 +211,43 @@ export default function AnalyticsTab() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </div>
+
+      {/* D3 Geo Map - Province Distribution */}
+      <div className="rounded-2xl border border-gray-200/60 bg-white p-5 shadow-xs">
+        <h3 className="mb-1 text-sm font-black text-gray-900">Peta Persebaran Owner per Provinsi</h3>
+        {unmatchedCount > 0 && (
+          <p className="mb-2 text-[10px] text-gray-400">
+            {unmatchedCount} owner tidak teridentifikasi provinsinya (data provinsi kosong/tidak baku) — tidak
+            dihitung di peta.
+          </p>
+        )}
+        <div className="relative">
+          <svg viewBox="0 0 760 340" className="w-full">
+            {INDONESIA_PROVINCE_GEOJSON.features.map((feature: IndonesiaProvinceFeature) => {
+              const name = feature.properties.NAME_1;
+              const count = countByProvince.get(name) || 0;
+              const intensity = count === 0 ? 0 : 0.25 + (count / maxCount) * 0.75;
+              const path = pathGenerator(feature as never) || "";
+              return (
+                <path
+                  key={name}
+                  d={path}
+                  fill={count === 0 ? "#F3F4F6" : `rgba(201, 44, 30, ${intensity})`}
+                  stroke="#fff"
+                  strokeWidth={0.5}
+                  onMouseEnter={() => setHoveredProvince(name)}
+                  onMouseLeave={() => setHoveredProvince((prev) => (prev === name ? null : prev))}
+                />
+              );
+            })}
+          </svg>
+          {hoveredProvince && (
+            <div className="pointer-events-none absolute left-3 top-3 rounded-lg bg-gray-900/90 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg">
+              {hoveredProvince}: {countByProvince.get(hoveredProvince) || 0} owner
+            </div>
+          )}
         </div>
       </div>
     </div>

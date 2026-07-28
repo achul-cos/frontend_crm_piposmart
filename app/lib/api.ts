@@ -47,6 +47,9 @@ export interface OwnerListParams {
   limit?: number;
   sort?: string;
   status?: string;
+  start_date?: string;
+  end_date?: string;
+  scope?: "active" | "trash" | "unscoped";
 }
 
 export interface BackendOwner {
@@ -117,13 +120,17 @@ export async function fetchOwners(
   const query = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
+    if (value !== undefined && value !== null && value !== "" && key !== "scope") {
       query.set(key, String(value));
     }
   });
 
   const qs = query.toString();
-  const url = `${API_BASE_URL}/api/v1/owners${qs ? `?${qs}` : ""}`;
+  let basePath = "/api/v1/owners";
+  if (params.scope === "trash") basePath = "/api/v1/owners/trash";
+  else if (params.scope === "unscoped") basePath = "/api/v1/owners/unscoped";
+
+  const url = `${API_BASE_URL}${basePath}${qs ? `?${qs}` : ""}`;
 
   const res = await fetch(url, {
     method: "GET",
@@ -288,6 +295,19 @@ export async function bulkSoftDeleteOwners(
   return handleResponse<BulkDeleteResponse>(res);
 }
 
+export async function bulkForceDeleteOwners(
+  ids: number[],
+): Promise<BulkDeleteResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/bulk/force`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ids }),
+  });
+
+  return handleResponse<BulkDeleteResponse>(res);
+}
+
 export async function bulkUpdateOwners(
   items: { id: number;[key: string]: unknown }[],
 ): Promise<unknown> {
@@ -396,11 +416,23 @@ export interface ScheduleTrainingRequest {
 
 export async function getLeads(): Promise<BackendLead[]> {
   const headers = getAuthHeaders();
-  const res = await fetch(`${API_BASE_URL}/api/v1/leads?limit=1000`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/leads?limit=100000`, {
     headers,
   });
   const data = await handleResponse<{ data: LeadListResponse }>(res);
   return data.data?.items || [];
+}
+
+export async function getLeadsWithTotal(): Promise<{ items: BackendLead[], total: number }> {
+  const headers = getAuthHeaders();
+  const res = await fetch(`${API_BASE_URL}/api/v1/leads?limit=100000`, {
+    headers,
+  });
+  const data = await handleResponse<{ data: LeadListResponse }>(res);
+  return { 
+    items: data.data?.items || [], 
+    total: data.data?.pagination?.total || 0 
+  };
 }
 
 export async function getLead(leadId: number): Promise<BackendLead> {
@@ -1100,12 +1132,28 @@ export async function getProfile(): Promise<UserResponse> {
 // IMPORTS API
 // -----------------------------------------------------------------------------
 
+export interface ImportRowError {
+  id: number;
+  batch_id: number;
+  row_index: number;
+  raw_payload: any;
+  status: string;
+  validation_errors?: string[] | Record<string, string>;
+  commit_error?: string;
+}
+
+export interface ImportRowListResponse {
+  items: ImportRowError[];
+  pagination: ApiPagination;
+}
+
 export interface ImportBatchResponse {
   id: number;
   code: string;
   profile: string;
   original_filename: string;
   status: string; // 'UPLOADED' | 'VALIDATING' | 'VALIDATED' | 'VALIDATION_FAILED'
+  progress_percentage?: number;
   total_rows: number;
   valid_rows: number;
   invalid_rows: number;
@@ -1144,6 +1192,48 @@ export async function commitImportBatch(id: number): Promise<{ message: string }
     headers: getAuthHeaders(),
   });
   return handleResponse<{ message: string }>(res);
+}
+
+export async function downloadImportErrors(batchId: number): Promise<void> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("piposmart_access_token") || "" : "";
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/${batchId}/rejected-rows/export`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  
+  if (!res.ok) {
+    throw new Error("Gagal mengunduh file error");
+  }
+  
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `piposmart_import_errors_${batchId}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+}
+
+export async function getImportErrorRows(batchId: number, page = 1, limit = 50): Promise<ImportRowListResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/${batchId}/rows?status=INVALID&page=${page}&limit=${limit}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  const json = await handleResponse<{ data: ImportRowListResponse }>(res);
+  return json.data;
+}
+
+export async function getImportValidRows(batchId: number, page = 1, limit = 100000): Promise<ImportRowListResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/${batchId}/rows?status=VALID&page=${page}&limit=${limit}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  const json = await handleResponse<{ data: ImportRowListResponse }>(res);
+  return json.data;
 }
 
 export async function bulkReleaseLeads(leadIds: number[], reason: string) {

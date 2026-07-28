@@ -926,7 +926,7 @@ function DeskripsiLanggananContent() {
     <div className="mx-auto min-min-h-screen max-w-5xl space-y-4 rounded-[28px] border border-red-100 bg-[#FFF8F6] p-4 pb-12 text-gray-900 shadow-sm">
       <div className="flex items-center justify-end">
         <Link
-          href="/menu/data-kelolaan"
+          href="/menu/lead"
           className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#C92C1E] bg-[#C92C1E] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-200 hover:bg-[#A82216] hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
         >
           <svg
