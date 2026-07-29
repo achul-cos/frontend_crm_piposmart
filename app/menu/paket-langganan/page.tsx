@@ -41,19 +41,6 @@ import {
   type CatalogScope,
 } from "@/app/lib/api";
 
-/**
- * Katalog — Package / Plan / Promotion (branch main, integrasi backend
- * `internal/catalog`). Menggantikan Master Paket + Master Promo lama
- * (`paket-langganan-data.ts` statis, model rata 2-entitas) dengan struktur
- * backend sesungguhnya: Package (tanpa harga) → Plan (harga per tenor,
- * milik satu Package) → Promotion (+ Benefit, eligible untuk Plan tertentu).
- *
- * Satu tabel (bukan kartu terpisah per entitas) yang berubah kolom/filter
- * mengikuti `entity` yang aktif — sesuai permintaan eksplisit user, bukan 3
- * halaman terpisah. Form pakai modal terpusat (bukan drawer slide-in seperti
- * versi lama) dengan backdrop gelap + body-scroll-lock.
- */
-
 type Entity = "package" | "plan" | "promotion";
 
 type ViewTarget =
@@ -63,7 +50,9 @@ type ViewTarget =
 
 function formatRupiah(value: string | number): string {
   const n = typeof value === "string" ? parseFloat(value) : value;
+
   if (Number.isNaN(n)) return "-";
+
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
@@ -71,9 +60,16 @@ function formatRupiah(value: string | number): string {
   }).format(n);
 }
 
-// ============================================================
-// SHARED UI PRIMITIVES
-// ============================================================
+const modalInputClass =
+  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+
+const modalSelectClass =
+  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+
+const modalTextareaClass =
+  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+
+const inputClass = modalInputClass;
 
 function StatusBadge({ active }: { active: boolean }) {
   return active ? (
@@ -132,14 +128,17 @@ function Pagination({
   onRowsPerPageChange: (n: number) => void;
 }) {
   if (totalItems === 0) return null;
+
   const start = (currentPage - 1) * rowsPerPage + 1;
   const end = Math.min(currentPage * rowsPerPage, totalItems);
+
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4">
+    <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
       <p className="text-xs font-bold text-gray-400">
         Menampilkan <span className="text-gray-700">{start} - {end}</span> dari{" "}
         <span className="text-gray-700">{totalItems}</span> data
       </p>
+
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={rowsPerPage}
@@ -147,9 +146,12 @@ function Pagination({
           className="h-8 cursor-pointer rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#C92C1E]"
         >
           {[10, 25, 50, 100].map((v) => (
-            <option key={v} value={v}>{v} / halaman</option>
+            <option key={v} value={v}>
+              {v} / halaman
+            </option>
           ))}
         </select>
+
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage <= 1}
@@ -157,9 +159,11 @@ function Pagination({
         >
           Prev
         </button>
+
         <div className="flex h-8 items-center justify-center rounded-lg bg-red-50 px-3 text-[11px] font-black text-[#C92C1E]">
           {currentPage} / {totalPages}
         </div>
+
         <button
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage >= totalPages}
@@ -172,7 +176,6 @@ function Pagination({
   );
 }
 
-/** Modal terpusat — backdrop hitam gelap, body dikunci (tidak bisa scroll). */
 function Modal({
   title,
   subtitle,
@@ -192,6 +195,7 @@ function Modal({
     const sb = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (sb > 0) document.body.style.paddingRight = `${sb}px`;
+
     return () => {
       document.body.style.overflow = "";
       document.body.style.paddingRight = "";
@@ -199,36 +203,54 @@ function Modal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className={`relative z-10 flex max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-md"} flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-6 py-4">
-          <div className="flex items-center gap-3">
-            {icon && (
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-[#C92C1E]">
-                {icon}
+    <div className="fixed inset-0 z-50 bg-slate-950/70" onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
+        <div
+          className={`w-full ${
+            wide ? "max-w-2xl" : "max-w-md"
+          } overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                {icon && (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-red-100 bg-red-50 text-[#C92C1E]">
+                    {icon}
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                    Katalog
+                  </p>
+
+                  <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
+                    {title}
+                  </h2>
+
+                  {subtitle && (
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      {subtitle}
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-            <div>
-              <h2 className="text-base font-black text-gray-900">{title}</h2>
-              {subtitle && (
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                  {subtitle}
-                </p>
-              )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              >
+                Tutup
+              </button>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-gray-200 p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
-          >
-            <X className="h-4 w-4" />
-          </button>
+
+          <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 md:p-6">
+            {children}
+          </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
       </div>
     </div>
   );
@@ -246,8 +268,8 @@ function FieldGroup({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-[10px] font-black uppercase tracking-wide text-gray-400">
+    <label className="block space-y-2">
+      <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
         {label} {required && <span className="text-[#C92C1E]">*</span>}
       </span>
       {children}
@@ -255,9 +277,6 @@ function FieldGroup({
     </label>
   );
 }
-
-const inputClass =
-  "w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]/20";
 
 function ConfirmDialog({
   title,
@@ -276,31 +295,52 @@ function ConfirmDialog({
 }) {
   useEffect(() => {
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = "";
     };
   }, []);
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-        <h3 className="text-base font-black text-gray-900">{title}</h3>
-        <p className="mt-1.5 text-sm font-medium text-gray-500">{description}</p>
-        <div className="mt-5 flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
-          >
-            Batal
-          </button>
-          <button
-            onClick={onConfirm}
-            className={`flex-1 rounded-xl py-2.5 text-sm font-black text-white shadow-sm transition ${
-              danger ? "bg-red-600 hover:bg-red-700" : "bg-[#C92C1E] hover:bg-[#A82216]"
-            }`}
-          >
-            {confirmLabel}
-          </button>
+    <div className="fixed inset-0 z-[60] bg-slate-950/70" onClick={onCancel}>
+      <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
+        <div
+          className="w-full max-w-sm overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+              Konfirmasi
+            </p>
+
+            <h3 className="mt-2 text-lg font-black text-slate-950">{title}</h3>
+
+            <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
+              {description}
+            </p>
+          </div>
+
+          <div className="p-5">
+            <div className="flex gap-3">
+              <button
+                onClick={onCancel}
+                className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+              >
+                Batal
+              </button>
+
+              <button
+                onClick={onConfirm}
+                className={`flex-1 rounded-2xl py-3 text-sm font-black text-white shadow-sm transition ${
+                  danger
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-[#C92C1E] hover:bg-[#A82216]"
+                }`}
+              >
+                {confirmLabel}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -325,6 +365,7 @@ function BulkActionBar({
   return (
     <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-gray-900 px-5 py-3 text-white shadow-2xl">
       <span className="text-xs font-bold">{count} data dipilih</span>
+
       {isTrash ? (
         <>
           <button
@@ -333,6 +374,7 @@ function BulkActionBar({
           >
             Pulihkan Massal
           </button>
+
           <button
             onClick={onForceDelete}
             className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-black transition hover:bg-red-700"
@@ -348,19 +390,20 @@ function BulkActionBar({
           Hapus Massal
         </button>
       )}
-      <button onClick={onClear} className="text-xs font-bold text-white/60 hover:text-white">
+
+      <button
+        onClick={onClear}
+        className="text-xs font-bold text-white/60 hover:text-white"
+      >
         Batal
       </button>
     </div>
   );
 }
 
-// ============================================================
-// MAIN PAGE
-// ============================================================
-
 export default function PaketLanggananPage() {
   usePageTitle("Katalog");
+
   const router = useRouter();
   const [entity, setEntity] = useState<Entity>("package");
   const [scope, setScope] = useState<CatalogScope>("ACTIVE");
@@ -379,12 +422,20 @@ export default function PaketLanggananPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
   const [packageOptions, setPackageOptions] = useState<CatalogPackageItem[]>([]);
 
-  const [packageForm, setPackageForm] = useState<{ mode: "create" | "edit"; item?: CatalogPackageItem } | null>(null);
-  const [planForm, setPlanForm] = useState<{ mode: "create" | "edit"; item?: CatalogPlanItem } | null>(null);
-  const [promotionForm, setPromotionForm] = useState<{ mode: "create" | "edit"; item?: CatalogPromotionItem } | null>(null);
+  const [packageForm, setPackageForm] = useState<{
+    mode: "create" | "edit";
+    item?: CatalogPackageItem;
+  } | null>(null);
+  const [planForm, setPlanForm] = useState<{
+    mode: "create" | "edit";
+    item?: CatalogPlanItem;
+  } | null>(null);
+  const [promotionForm, setPromotionForm] = useState<{
+    mode: "create" | "edit";
+    item?: CatalogPromotionItem;
+  } | null>(null);
 
   const [confirmTarget, setConfirmTarget] = useState<
     | { kind: "delete" | "restore" | "forceDelete"; ids: number[] }
@@ -394,7 +445,8 @@ export default function PaketLanggananPage() {
   const [viewStack, setViewStack] = useState<ViewTarget[]>([]);
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  const pushView = (target: ViewTarget) => setViewStack((prev) => [...prev, target]);
+  const pushView = (target: ViewTarget) =>
+    setViewStack((prev) => [...prev, target]);
   const popView = () => setViewStack((prev) => prev.slice(0, -1));
   const closeView = () => setViewStack([]);
 
@@ -417,7 +469,6 @@ export default function PaketLanggananPage() {
     resetSelection();
   };
 
-  // Load packages once for the Plan "package" filter dropdown & Plan/Promotion forms.
   useEffect(() => {
     packageApi
       .list({ active: true, limit: 100 })
@@ -428,6 +479,7 @@ export default function PaketLanggananPage() {
   const load = React.useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
+
     try {
       const baseParams: Record<string, unknown> = {
         q: search || undefined,
@@ -436,6 +488,7 @@ export default function PaketLanggananPage() {
         limit: rowsPerPage,
         scope,
       };
+
       if (entity === "package") {
         const res = await packageApi.list(baseParams);
         setPackages(res.items);
@@ -456,17 +509,29 @@ export default function PaketLanggananPage() {
         setTotal(res.pagination.total);
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Gagal memuat data katalog.");
+      setLoadError(
+        err instanceof Error ? err.message : "Gagal memuat data katalog.",
+      );
     } finally {
       setIsLoading(false);
     }
-  }, [entity, scope, search, activeFilter, packageFilter, chargeTypeFilter, page, rowsPerPage]);
+  }, [
+    entity,
+    scope,
+    search,
+    activeFilter,
+    packageFilter,
+    chargeTypeFilter,
+    page,
+    rowsPerPage,
+  ]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
+
   const currentIds = useMemo(() => {
     if (entity === "package") return packages.map((p) => p.id);
     if (entity === "plan") return plans.map((p) => p.id);
@@ -478,14 +543,17 @@ export default function PaketLanggananPage() {
     if (entity === "plan") return plans;
     return promotions;
   }, [entity, packages, plans, promotions]);
+
   const activeCount = currentItemsForCount.filter((item) => item.active).length;
   const inactiveCount = currentItemsForCount.length - activeCount;
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
+
       if (next.has(id)) next.delete(id);
       else next.add(id);
+
       return next;
     });
   };
@@ -496,15 +564,23 @@ export default function PaketLanggananPage() {
     );
   };
 
-  const activeApi = entity === "package" ? packageApi : entity === "plan" ? planApi : promotionApi;
+  const activeApi =
+    entity === "package"
+      ? packageApi
+      : entity === "plan"
+        ? planApi
+        : promotionApi;
 
   const handleConfirmed = async () => {
     if (!confirmTarget) return;
+
     const { kind, ids } = confirmTarget;
+
     try {
       if (kind === "delete") await activeApi.bulkRemove(ids);
       else if (kind === "restore") await activeApi.bulkRestore(ids);
       else await activeApi.bulkForceRemove(ids);
+
       setConfirmTarget(null);
       resetSelection();
       void load();
@@ -515,10 +591,12 @@ export default function PaketLanggananPage() {
 
   const handleToggleActive = async (id: number, nextActive: boolean) => {
     setTogglingId(id);
+
     try {
       if (entity === "package") await packageApi.update(id, { active: nextActive });
       else if (entity === "plan") await planApi.update(id, { active: nextActive });
       else await promotionApi.update(id, { active: nextActive });
+
       void load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Gagal mengubah status.");
@@ -527,63 +605,95 @@ export default function PaketLanggananPage() {
     }
   };
 
-  const entityLabel = { package: "Package", plan: "Plan", promotion: "Promotion" }[entity];
-  const addLabel = { package: "Tambah Package", plan: "Tambah Plan", promotion: "Tambah Promo" }[entity];
+  const entityLabel = {
+    package: "Package",
+    plan: "Plan",
+    promotion: "Promotion",
+  }[entity];
+
+  const addLabel = {
+    package: "Tambah Package",
+    plan: "Tambah Plan",
+    promotion: "Tambah Promo",
+  }[entity];
 
   return (
     <div className="space-y-6">
-      {/* === PAGE HEADER === */}
-      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
-        <div className="p-5 border-b-2 border-[#C92C1E]">
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
+        <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
             <span>Menu</span>
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                d="M9 5l7 7-7 7"
+              />
             </svg>
             <span className="text-[#C92C1E]">Katalog</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen Katalog</h1>
+
+          <h1 className="text-2xl font-black tracking-tight text-gray-900">
+            Manajemen Katalog
+          </h1>
+
           <p className="mt-1 text-sm text-gray-500">
             Kelola Package, Plan, dan Promotion untuk katalog paket langganan.
           </p>
         </div>
       </div>
 
-      {/* === QUICK INFO CARDS === */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
           <div className="relative z-10">
-            <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Total {entityLabel}</p>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
+              Total {entityLabel}
+            </p>
             <h2 className="text-3xl font-black">{total}</h2>
           </div>
-          <Package className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" />
+          <Package className="absolute -bottom-4 -right-4 h-28 w-28 text-white opacity-10" />
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+
+        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
           <div className="relative z-10">
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{entityLabel} Aktif</p>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
+              {entityLabel} Aktif
+            </p>
             <h2 className="text-3xl font-black text-gray-900">{activeCount}</h2>
           </div>
-          <div className="absolute top-0 right-0 p-5">
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+
+          <div className="absolute right-0 top-0 p-5">
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
             </span>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
+
+        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
           <div className="relative z-10">
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{entityLabel} Nonaktif</p>
-            <h2 className="text-3xl font-black text-gray-900">{inactiveCount}</h2>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
+              {entityLabel} Nonaktif
+            </p>
+            <h2 className="text-3xl font-black text-gray-900">
+              {inactiveCount}
+            </h2>
           </div>
-          <div className="absolute top-0 right-0 p-5">
-            <span className="flex h-3 w-3 relative">
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+
+          <div className="absolute right-0 top-0 p-5">
+            <span className="relative flex h-3 w-3">
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
             </span>
           </div>
         </div>
       </div>
 
-      {/* === ENTITY TABS === */}
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
           {(["package", "plan", "promotion"] as Entity[]).map((e) => (
@@ -605,10 +715,8 @@ export default function PaketLanggananPage() {
         </div>
       </div>
 
-      {/* === SINGLE ADAPTIVE TABLE CARD === */}
-      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
-        {/* Toolbar */}
-        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="border-b border-gray-100 bg-gray-50/50 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[180px] max-w-xs flex-1">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -646,7 +754,10 @@ export default function PaketLanggananPage() {
                   setPackageFilter(v);
                   setPage(1);
                 }}
-                options={packageOptions.map((p) => ({ value: String(p.id), label: p.name }))}
+                options={packageOptions.map((p) => ({
+                  value: String(p.id),
+                  label: p.name,
+                }))}
                 placeholder="Semua Package"
               />
             )}
@@ -684,7 +795,9 @@ export default function PaketLanggananPage() {
 
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => changeScope(scope === "DELETED" ? "ACTIVE" : "DELETED")}
+                onClick={() =>
+                  changeScope(scope === "DELETED" ? "ACTIVE" : "DELETED")
+                }
                 className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-black transition ${
                   scope === "DELETED"
                     ? "border-gray-800 bg-gray-800 text-white"
@@ -694,6 +807,7 @@ export default function PaketLanggananPage() {
                 <Trash2 className="h-3.5 w-3.5" />
                 {scope === "DELETED" ? "Kembali" : "Trash"}
               </button>
+
               {scope !== "DELETED" && (
                 <button
                   onClick={() => {
@@ -711,19 +825,22 @@ export default function PaketLanggananPage() {
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
-            <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+            <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="w-10 px-4 py-4 text-center">
                   <input
                     type="checkbox"
-                    checked={currentIds.length > 0 && currentIds.every((id) => selectedIds.has(id))}
+                    checked={
+                      currentIds.length > 0 &&
+                      currentIds.every((id) => selectedIds.has(id))
+                    }
                     onChange={toggleSelectAll}
                     className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                   />
                 </th>
+
                 {entity === "package" && (
                   <>
                     <th className="px-4 py-4">Kode</th>
@@ -732,6 +849,7 @@ export default function PaketLanggananPage() {
                     <th className="px-4 py-4">Status</th>
                   </>
                 )}
+
                 {entity === "plan" && (
                   <>
                     <th className="px-4 py-4">Kode</th>
@@ -742,6 +860,7 @@ export default function PaketLanggananPage() {
                     <th className="px-4 py-4">Status</th>
                   </>
                 )}
+
                 {entity === "promotion" && (
                   <>
                     <th className="px-4 py-4">Kode</th>
@@ -752,31 +871,45 @@ export default function PaketLanggananPage() {
                     <th className="px-4 py-4">Status</th>
                   </>
                 )}
+
                 <th className="px-4 py-4 text-center">Aksi</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-gray-100 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-400">Memuat...</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
+                    Memuat...
+                  </td>
                 </tr>
               ) : loadError ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-red-500">{loadError}</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-red-500">
+                    {loadError}
+                  </td>
                 </tr>
               ) : currentIds.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-14 text-center text-gray-400">
                     Tidak ada data.
                   </td>
                 </tr>
               ) : entity === "package" ? (
                 packages.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={p.id} className="transition-colors hover:bg-gray-50">
                     <td className="px-4 py-3.5 text-center align-top">
-                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(p.id)}
+                        onChange={() => toggleSelect(p.id)}
+                      />
                     </td>
-                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
+
+                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">
+                      {p.code}
+                    </td>
+
                     <td className="px-4 py-3.5 align-top">
                       <Link
                         href={`/menu/paket-langganan/packages/${p.id}`}
@@ -785,30 +918,53 @@ export default function PaketLanggananPage() {
                         {p.name}
                       </Link>
                     </td>
+
                     <td className="px-4 py-3.5 align-top">{p.level_order}</td>
-                    <td className="px-4 py-3.5 align-top"><StatusBadge active={p.active} /></td>
+
+                    <td className="px-4 py-3.5 align-top">
+                      <StatusBadge active={p.active} />
+                    </td>
+
                     <td className="px-4 py-3.5 align-top">
                       <RowActions
                         scope={scope}
                         active={p.active}
                         isToggling={togglingId === p.id}
-                        onView={() => router.push(`/menu/paket-langganan/packages/${p.id}`)}
+                        onView={() =>
+                          router.push(`/menu/paket-langganan/packages/${p.id}`)
+                        }
                         onEdit={() => setPackageForm({ mode: "edit", item: p })}
-                        onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
-                        onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
-                        onForceDelete={() => setConfirmTarget({ kind: "forceDelete", ids: [p.id] })}
-                        onToggleActive={() => void handleToggleActive(p.id, !p.active)}
+                        onDelete={() =>
+                          setConfirmTarget({ kind: "delete", ids: [p.id] })
+                        }
+                        onRestore={() =>
+                          setConfirmTarget({ kind: "restore", ids: [p.id] })
+                        }
+                        onForceDelete={() =>
+                          setConfirmTarget({ kind: "forceDelete", ids: [p.id] })
+                        }
+                        onToggleActive={() =>
+                          void handleToggleActive(p.id, !p.active)
+                        }
                       />
                     </td>
                   </tr>
                 ))
               ) : entity === "plan" ? (
                 plans.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={p.id} className="transition-colors hover:bg-gray-50">
                     <td className="px-4 py-3.5 text-center align-top">
-                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(p.id)}
+                        onChange={() => toggleSelect(p.id)}
+                      />
                     </td>
-                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
+
+                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">
+                      {p.code}
+                    </td>
+
                     <td className="px-4 py-3.5 align-top">
                       <Link
                         href={`/menu/paket-langganan/plans/${p.id}`}
@@ -817,36 +973,65 @@ export default function PaketLanggananPage() {
                         {p.name}
                       </Link>
                     </td>
+
                     <td className="px-4 py-3.5 align-top">
                       <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-black text-orange-600">
                         {p.package.name}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 align-top">{p.tenure_months} bln</td>
-                    <td className="px-4 py-3.5 align-top font-black text-gray-800">{formatRupiah(p.price)}</td>
-                    <td className="px-4 py-3.5 align-top"><StatusBadge active={p.active} /></td>
+
+                    <td className="px-4 py-3.5 align-top">
+                      {p.tenure_months} bln
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top font-black text-gray-800">
+                      {formatRupiah(p.price)}
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top">
+                      <StatusBadge active={p.active} />
+                    </td>
+
                     <td className="px-4 py-3.5 align-top">
                       <RowActions
                         scope={scope}
                         active={p.active}
                         isToggling={togglingId === p.id}
-                        onView={() => router.push(`/menu/paket-langganan/plans/${p.id}`)}
+                        onView={() =>
+                          router.push(`/menu/paket-langganan/plans/${p.id}`)
+                        }
                         onEdit={() => setPlanForm({ mode: "edit", item: p })}
-                        onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
-                        onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
-                        onForceDelete={() => setConfirmTarget({ kind: "forceDelete", ids: [p.id] })}
-                        onToggleActive={() => void handleToggleActive(p.id, !p.active)}
+                        onDelete={() =>
+                          setConfirmTarget({ kind: "delete", ids: [p.id] })
+                        }
+                        onRestore={() =>
+                          setConfirmTarget({ kind: "restore", ids: [p.id] })
+                        }
+                        onForceDelete={() =>
+                          setConfirmTarget({ kind: "forceDelete", ids: [p.id] })
+                        }
+                        onToggleActive={() =>
+                          void handleToggleActive(p.id, !p.active)
+                        }
                       />
                     </td>
                   </tr>
                 ))
               ) : (
                 promotions.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={p.id} className="transition-colors hover:bg-gray-50">
                     <td className="px-4 py-3.5 text-center align-top">
-                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(p.id)}
+                        onChange={() => toggleSelect(p.id)}
+                      />
                     </td>
-                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">{p.code}</td>
+
+                    <td className="px-4 py-3.5 align-top font-mono font-bold text-gray-700">
+                      {p.code}
+                    </td>
+
                     <td className="px-4 py-3.5 align-top">
                       <Link
                         href={`/menu/paket-langganan/promotions/${p.id}`}
@@ -855,27 +1040,54 @@ export default function PaketLanggananPage() {
                         {p.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3.5 align-top">{p.promotion_type}</td>
+
+                    <td className="px-4 py-3.5 align-top">
+                      {p.promotion_type}
+                    </td>
+
                     <td className="px-4 py-3.5 align-top">
                       {p.charge_type === "FREE" ? (
-                        <span className="font-black text-emerald-600">Gratis</span>
+                        <span className="font-black text-emerald-600">
+                          Gratis
+                        </span>
                       ) : (
-                        <span className="font-black text-gray-800">{formatRupiah(p.additional_charge)}</span>
+                        <span className="font-black text-gray-800">
+                          {formatRupiah(p.additional_charge)}
+                        </span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 align-top text-gray-500">{p.benefits?.length || 0} benefit</td>
-                    <td className="px-4 py-3.5 align-top"><StatusBadge active={p.active} /></td>
+
+                    <td className="px-4 py-3.5 align-top text-gray-500">
+                      {p.benefits?.length || 0} benefit
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top">
+                      <StatusBadge active={p.active} />
+                    </td>
+
                     <td className="px-4 py-3.5 align-top">
                       <RowActions
                         scope={scope}
                         active={p.active}
                         isToggling={togglingId === p.id}
-                        onView={() => router.push(`/menu/paket-langganan/promotions/${p.id}`)}
-                        onEdit={() => setPromotionForm({ mode: "edit", item: p })}
-                        onDelete={() => setConfirmTarget({ kind: "delete", ids: [p.id] })}
-                        onRestore={() => setConfirmTarget({ kind: "restore", ids: [p.id] })}
-                        onForceDelete={() => setConfirmTarget({ kind: "forceDelete", ids: [p.id] })}
-                        onToggleActive={() => void handleToggleActive(p.id, !p.active)}
+                        onView={() =>
+                          router.push(`/menu/paket-langganan/promotions/${p.id}`)
+                        }
+                        onEdit={() =>
+                          setPromotionForm({ mode: "edit", item: p })
+                        }
+                        onDelete={() =>
+                          setConfirmTarget({ kind: "delete", ids: [p.id] })
+                        }
+                        onRestore={() =>
+                          setConfirmTarget({ kind: "restore", ids: [p.id] })
+                        }
+                        onForceDelete={() =>
+                          setConfirmTarget({ kind: "forceDelete", ids: [p.id] })
+                        }
+                        onToggleActive={() =>
+                          void handleToggleActive(p.id, !p.active)
+                        }
                       />
                     </td>
                   </tr>
@@ -900,19 +1112,32 @@ export default function PaketLanggananPage() {
         )}
       </div>
 
-      {/* === BULK ACTION BAR === */}
       {selectedIds.size > 0 && (
         <BulkActionBar
           count={selectedIds.size}
           isTrash={scope === "DELETED"}
           onClear={resetSelection}
-          onDelete={() => setConfirmTarget({ kind: "delete", ids: Array.from(selectedIds) })}
-          onRestore={() => setConfirmTarget({ kind: "restore", ids: Array.from(selectedIds) })}
-          onForceDelete={() => setConfirmTarget({ kind: "forceDelete", ids: Array.from(selectedIds) })}
+          onDelete={() =>
+            setConfirmTarget({
+              kind: "delete",
+              ids: Array.from(selectedIds),
+            })
+          }
+          onRestore={() =>
+            setConfirmTarget({
+              kind: "restore",
+              ids: Array.from(selectedIds),
+            })
+          }
+          onForceDelete={() =>
+            setConfirmTarget({
+              kind: "forceDelete",
+              ids: Array.from(selectedIds),
+            })
+          }
         />
       )}
 
-      {/* === MODALS === */}
       {packageForm && (
         <PackageFormModal
           mode={packageForm.mode}
@@ -979,7 +1204,11 @@ export default function PaketLanggananPage() {
           }
           danger={confirmTarget.kind === "forceDelete"}
           confirmLabel={
-            confirmTarget.kind === "delete" ? "Hapus" : confirmTarget.kind === "restore" ? "Pulihkan" : "Hapus Permanen"
+            confirmTarget.kind === "delete"
+              ? "Hapus"
+              : confirmTarget.kind === "restore"
+                ? "Pulihkan"
+                : "Hapus Permanen"
           }
           onConfirm={() => void handleConfirmed()}
           onCancel={() => setConfirmTarget(null)}
@@ -1013,44 +1242,74 @@ function RowActions({
   if (scope === "DELETED") {
     return (
       <div className="flex items-center justify-center gap-2">
-        <button onClick={onView} className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700" title="Lihat Detail">
+        <button
+          onClick={onView}
+          className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+          title="Lihat Detail"
+        >
           <Eye className="h-4 w-4" />
         </button>
-        <button onClick={onRestore} className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700" title="Pulihkan">
+
+        <button
+          onClick={onRestore}
+          className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+          title="Pulihkan"
+        >
           <ArchiveRestore className="h-4 w-4" />
         </button>
-        <button onClick={onForceDelete} className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-700" title="Hapus Permanen">
+
+        <button
+          onClick={onForceDelete}
+          className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-700"
+          title="Hapus Permanen"
+        >
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
     );
   }
+
   return (
     <div className="flex items-center justify-center gap-2">
-      <button onClick={onView} className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700" title="Lihat Detail">
+      <button
+        onClick={onView}
+        className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+        title="Lihat Detail"
+      >
         <Eye className="h-4 w-4" />
       </button>
+
       <button
         onClick={onToggleActive}
         disabled={isToggling}
-        className={`rounded-lg p-2 transition-colors disabled:opacity-40 ${active ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-700"}`}
+        className={`rounded-lg p-2 transition-colors disabled:opacity-40 ${
+          active
+            ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700"
+            : "bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+        }`}
         title={active ? "Nonaktifkan" : "Aktifkan"}
       >
         {active ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
       </button>
-      <button onClick={onEdit} className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700" title="Edit">
+
+      <button
+        onClick={onEdit}
+        className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+        title="Edit"
+      >
         <Pencil className="h-4 w-4" />
       </button>
-      <button onClick={onDelete} className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-700" title="Hapus">
+
+      <button
+        onClick={onDelete}
+        className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-700"
+        title="Hapus"
+      >
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
   );
 }
-
-// ============================================================
-// PACKAGE FORM MODAL
-// ============================================================
 
 function PackageFormModal({
   mode,
@@ -1075,15 +1334,19 @@ function PackageFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!form.code.trim() || !form.name.trim()) {
       setError("Kode dan nama wajib diisi.");
       return;
     }
+
     setIsSaving(true);
     setError(null);
+
     try {
       if (mode === "edit" && item) await packageApi.update(item.id, form);
       else await packageApi.create(form);
+
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menyimpan package.");
@@ -1099,54 +1362,93 @@ function PackageFormModal({
       icon={<Package className="h-5 w-5" />}
       onClose={onClose}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <FieldGroup label="Kode Package" required>
-          <input
-            value={form.code}
-            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-            placeholder="Contoh: PRO"
-            className={inputClass}
-          />
-        </FieldGroup>
-        <FieldGroup label="Nama Package" required>
-          <input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Contoh: Pro"
-            className={inputClass}
-          />
-        </FieldGroup>
-        <FieldGroup label="Level Order" required>
-          <input
-            type="number"
-            min={1}
-            value={form.level_order}
-            onChange={(e) => setForm((f) => ({ ...f, level_order: Number(e.target.value) }))}
-            className={inputClass}
-          />
-        </FieldGroup>
-        <FieldGroup label="Deskripsi">
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            rows={3}
-            className={inputClass}
-          />
-        </FieldGroup>
-        <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
-          <input
-            type="checkbox"
-            checked={form.active}
-            onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-          />
-          Aktif
-        </label>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+          <p className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+            Data Package
+          </p>
+
+          <div className="space-y-4">
+            <FieldGroup label="Kode Package" required>
+              <input
+                value={form.code}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    code: e.target.value.toUpperCase(),
+                  }))
+                }
+                placeholder="Contoh: PRO"
+                className={modalInputClass}
+              />
+            </FieldGroup>
+
+            <FieldGroup label="Nama Package" required>
+              <input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
+                placeholder="Contoh: Pro"
+                className={modalInputClass}
+              />
+            </FieldGroup>
+
+            <FieldGroup label="Level Order" required>
+              <input
+                type="number"
+                min={1}
+                value={form.level_order}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    level_order: Number(e.target.value),
+                  }))
+                }
+                className={modalInputClass}
+              />
+            </FieldGroup>
+
+            <FieldGroup label="Deskripsi">
+              <textarea
+                value={form.description}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+                rows={3}
+                className={modalTextareaClass}
+              />
+            </FieldGroup>
+
+            <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, active: e.target.checked }))
+                }
+              />
+              Aktif
+            </label>
+          </div>
+        </div>
+
         {error && <p className="text-xs font-bold text-red-600">{error}</p>}
-        <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+          >
             Batal
           </button>
-          <button type="submit" disabled={isSaving} className="flex-1 rounded-xl bg-[#C92C1E] py-2.5 text-sm font-black text-white hover:bg-[#A82216] disabled:opacity-60">
+
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+          >
             {isSaving ? "Menyimpan..." : "Simpan"}
           </button>
         </div>
@@ -1154,10 +1456,6 @@ function PackageFormModal({
     </Modal>
   );
 }
-
-// ============================================================
-// PLAN FORM MODAL
-// ============================================================
 
 function PlanFormModal({
   mode,
@@ -1188,16 +1486,24 @@ function PlanFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!form.package_id || !form.code.trim() || !form.name.trim() || !form.price.trim()) {
       setError("Package, kode, nama, dan harga wajib diisi.");
       return;
     }
+
     setIsSaving(true);
     setError(null);
+
     try {
-      const payload = { ...form, effective_to: form.effective_to || undefined };
+      const payload = {
+        ...form,
+        effective_to: form.effective_to || undefined,
+      };
+
       if (mode === "edit" && item) await planApi.update(item.id, payload);
       else await planApi.create(payload);
+
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menyimpan plan.");
@@ -1213,86 +1519,145 @@ function PlanFormModal({
       icon={<Layers className="h-5 w-5" />}
       onClose={onClose}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <FieldGroup label="Package" required>
-          <select
-            value={form.package_id}
-            onChange={(e) => setForm((f) => ({ ...f, package_id: Number(e.target.value) }))}
-            className={inputClass}
-          >
-            <option value={0}>Pilih package...</option>
-            {packageOptions.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </FieldGroup>
-        <FieldGroup label="Kode Plan" required>
-          <input
-            value={form.code}
-            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-            placeholder="Contoh: PRO_12_MONTHS"
-            className={inputClass}
-          />
-        </FieldGroup>
-        <FieldGroup label="Nama Plan" required>
-          <input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Contoh: Pro 12 Bulan"
-            className={inputClass}
-          />
-        </FieldGroup>
-        <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="Tenor (bulan)" required>
-            <input
-              type="number"
-              min={1}
-              value={form.tenure_months}
-              onChange={(e) => setForm((f) => ({ ...f, tenure_months: Number(e.target.value) }))}
-              className={inputClass}
-            />
-          </FieldGroup>
-          <FieldGroup label="Harga (IDR)" required>
-            <input
-              value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-              placeholder="990000.00"
-              className={inputClass}
-            />
-          </FieldGroup>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+          <p className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+            Data Plan
+          </p>
+
+          <div className="space-y-4">
+            <FieldGroup label="Package" required>
+              <select
+                value={form.package_id}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    package_id: Number(e.target.value),
+                  }))
+                }
+                className={modalSelectClass}
+              >
+                <option value={0}>Pilih package...</option>
+                {packageOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </FieldGroup>
+
+            <FieldGroup label="Kode Plan" required>
+              <input
+                value={form.code}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    code: e.target.value.toUpperCase(),
+                  }))
+                }
+                placeholder="Contoh: PRO_12_MONTHS"
+                className={modalInputClass}
+              />
+            </FieldGroup>
+
+            <FieldGroup label="Nama Plan" required>
+              <input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
+                placeholder="Contoh: Pro 12 Bulan"
+                className={modalInputClass}
+              />
+            </FieldGroup>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <FieldGroup label="Tenor (bulan)" required>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.tenure_months}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      tenure_months: Number(e.target.value),
+                    }))
+                  }
+                  className={modalInputClass}
+                />
+              </FieldGroup>
+
+              <FieldGroup label="Harga (IDR)" required>
+                <input
+                  value={form.price}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, price: e.target.value }))
+                  }
+                  placeholder="990000.00"
+                  className={modalInputClass}
+                />
+              </FieldGroup>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <FieldGroup label="Berlaku Dari" required>
+                <input
+                  type="date"
+                  value={form.effective_from}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      effective_from: e.target.value,
+                    }))
+                  }
+                  className={modalInputClass}
+                />
+              </FieldGroup>
+
+              <FieldGroup label="Berlaku Sampai">
+                <input
+                  type="date"
+                  value={form.effective_to}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      effective_to: e.target.value,
+                    }))
+                  }
+                  className={modalInputClass}
+                />
+              </FieldGroup>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, active: e.target.checked }))
+                }
+              />
+              Aktif
+            </label>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="Berlaku Dari" required>
-            <input
-              type="date"
-              value={form.effective_from}
-              onChange={(e) => setForm((f) => ({ ...f, effective_from: e.target.value }))}
-              className={inputClass}
-            />
-          </FieldGroup>
-          <FieldGroup label="Berlaku Sampai">
-            <input
-              type="date"
-              value={form.effective_to}
-              onChange={(e) => setForm((f) => ({ ...f, effective_to: e.target.value }))}
-              className={inputClass}
-            />
-          </FieldGroup>
-        </div>
-        <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
-          <input
-            type="checkbox"
-            checked={form.active}
-            onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-          />
-          Aktif
-        </label>
+
         {error && <p className="text-xs font-bold text-red-600">{error}</p>}
-        <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+          >
             Batal
           </button>
-          <button type="submit" disabled={isSaving} className="flex-1 rounded-xl bg-[#C92C1E] py-2.5 text-sm font-black text-white hover:bg-[#A82216] disabled:opacity-60">
+
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+          >
             {isSaving ? "Menyimpan..." : "Simpan"}
           </button>
         </div>
@@ -1300,10 +1665,6 @@ function PlanFormModal({
     </Modal>
   );
 }
-
-// ============================================================
-// PROMOTION FORM MODAL (+ Benefit + Eligible Plans)
-// ============================================================
 
 const PROMOTION_TYPE_SUGGESTIONS = ["FREE_DURATION", "DEVICE_BUNDLE", "DISCOUNT"];
 const BENEFIT_TYPE_SUGGESTIONS = ["FREE_DURATION", "DEVICE", "DISCOUNT"];
@@ -1321,7 +1682,8 @@ function PromotionFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [savedPromotion, setSavedPromotion] = useState<CatalogPromotionItem | null>(item || null);
+  const [savedPromotion, setSavedPromotion] =
+    useState<CatalogPromotionItem | null>(item || null);
   const [form, setForm] = useState<CreatePromotionPayload>({
     code: item?.code || "",
     name: item?.name || "",
@@ -1339,24 +1701,30 @@ function PromotionFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!form.code.trim() || !form.name.trim() || !form.promotion_type.trim()) {
       setError("Kode, nama, dan tipe promosi wajib diisi.");
       return;
     }
+
     setIsSaving(true);
     setError(null);
+
     try {
-      const payload = { ...form, effective_to: form.effective_to || undefined };
+      const payload = {
+        ...form,
+        effective_to: form.effective_to || undefined,
+      };
+
       let result: CatalogPromotionItem;
+
       if (mode === "edit" && item) result = await promotionApi.update(item.id, payload);
       else result = await promotionApi.create(payload);
+
       setSavedPromotion(result);
-      if (mode === "create") {
-        // Setelah promosi dibuat, tetap di modal supaya user bisa langsung
-        // kelola Benefit + eligible-plans (butuh promotion_id, tidak bisa
-        // sebelum promosi ada).
-        return;
-      }
+
+      if (mode === "create") return;
+
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menyimpan promosi.");
@@ -1367,118 +1735,201 @@ function PromotionFormModal({
 
   return (
     <Modal
-      title={mode === "edit" ? "Edit Promosi" : savedPromotion ? "Kelola Benefit & Eligibilitas" : "Tambah Promosi Baru"}
+      title={
+        mode === "edit"
+          ? "Edit Promosi"
+          : savedPromotion
+            ? "Kelola Benefit & Eligibilitas"
+            : "Tambah Promosi Baru"
+      }
       subtitle="Master Promotion"
       icon={<Tag className="h-5 w-5" />}
       onClose={savedPromotion && mode === "create" ? onSaved : onClose}
       wide
     >
       {!savedPromotion || mode === "edit" ? (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <FieldGroup label="Kode Promosi" required>
-              <input
-                value={form.code}
-                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-                className={inputClass}
-              />
-            </FieldGroup>
-            <FieldGroup label="Nama Promosi" required>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className={inputClass}
-              />
-            </FieldGroup>
-          </div>
-          <FieldGroup label="Tipe Promosi" required>
-            <input
-              list="promotion-type-suggestions"
-              value={form.promotion_type}
-              onChange={(e) => setForm((f) => ({ ...f, promotion_type: e.target.value }))}
-              placeholder="cth: FREE_DURATION"
-              className={inputClass}
-            />
-            <datalist id="promotion-type-suggestions">
-              {PROMOTION_TYPE_SUGGESTIONS.map((t) => <option key={t} value={t} />)}
-            </datalist>
-          </FieldGroup>
-          <div className="grid grid-cols-2 gap-3">
-            <FieldGroup label="Tipe Biaya" required>
-              <div className="flex overflow-hidden rounded-xl border border-gray-200">
-                {(["FREE", "PAID"] as const).map((ct) => (
-                  <button
-                    key={ct}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, charge_type: ct }))}
-                    className={`flex-1 py-2 text-xs font-black transition ${
-                      form.charge_type === ct ? "bg-[#C92C1E] text-white" : "bg-white text-gray-500 hover:bg-gray-50"
-                    }`}
-                  >
-                    {ct === "FREE" ? "Gratis" : "Berbayar"}
-                  </button>
-                ))}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+              Data Promosi
+            </p>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <FieldGroup label="Kode Promosi" required>
+                  <input
+                    value={form.code}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        code: e.target.value.toUpperCase(),
+                      }))
+                    }
+                    className={modalInputClass}
+                  />
+                </FieldGroup>
+
+                <FieldGroup label="Nama Promosi" required>
+                  <input
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                    className={modalInputClass}
+                  />
+                </FieldGroup>
               </div>
-            </FieldGroup>
-            {form.charge_type === "PAID" && (
-              <FieldGroup label="Biaya Tambahan (IDR)">
+
+              <FieldGroup label="Tipe Promosi" required>
                 <input
-                  value={form.additional_charge}
-                  onChange={(e) => setForm((f) => ({ ...f, additional_charge: e.target.value }))}
-                  className={inputClass}
+                  list="promotion-type-suggestions"
+                  value={form.promotion_type}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      promotion_type: e.target.value,
+                    }))
+                  }
+                  placeholder="cth: FREE_DURATION"
+                  className={modalInputClass}
+                />
+                <datalist id="promotion-type-suggestions">
+                  {PROMOTION_TYPE_SUGGESTIONS.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </FieldGroup>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <FieldGroup label="Tipe Biaya" required>
+                  <div className="flex overflow-hidden rounded-2xl border border-gray-200 bg-[#FAFAFA] p-1">
+                    {(["FREE", "PAID"] as const).map((ct) => (
+                      <button
+                        key={ct}
+                        type="button"
+                        onClick={() =>
+                          setForm((f) => ({ ...f, charge_type: ct }))
+                        }
+                        className={`flex-1 rounded-xl py-2.5 text-xs font-black transition ${
+                          form.charge_type === ct
+                            ? "bg-[#C92C1E] text-white shadow-sm"
+                            : "text-gray-500 hover:bg-white"
+                        }`}
+                      >
+                        {ct === "FREE" ? "Gratis" : "Berbayar"}
+                      </button>
+                    ))}
+                  </div>
+                </FieldGroup>
+
+                {form.charge_type === "PAID" && (
+                  <FieldGroup label="Biaya Tambahan (IDR)">
+                    <input
+                      value={form.additional_charge}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          additional_charge: e.target.value,
+                        }))
+                      }
+                      className={modalInputClass}
+                    />
+                  </FieldGroup>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <FieldGroup label="Berlaku Dari" required>
+                  <input
+                    type="date"
+                    value={form.effective_from}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        effective_from: e.target.value,
+                      }))
+                    }
+                    className={modalInputClass}
+                  />
+                </FieldGroup>
+
+                <FieldGroup label="Berlaku Sampai">
+                  <input
+                    type="date"
+                    value={form.effective_to}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        effective_to: e.target.value,
+                      }))
+                    }
+                    className={modalInputClass}
+                  />
+                </FieldGroup>
+              </div>
+
+              <FieldGroup label="Prioritas">
+                <input
+                  type="number"
+                  value={form.priority}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      priority: Number(e.target.value),
+                    }))
+                  }
+                  className={modalInputClass}
                 />
               </FieldGroup>
-            )}
+
+              <FieldGroup label="Deskripsi">
+                <textarea
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      description: e.target.value,
+                    }))
+                  }
+                  rows={3}
+                  className={modalTextareaClass}
+                />
+              </FieldGroup>
+
+              <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, active: e.target.checked }))
+                  }
+                />
+                Aktif
+              </label>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <FieldGroup label="Berlaku Dari" required>
-              <input
-                type="date"
-                value={form.effective_from}
-                onChange={(e) => setForm((f) => ({ ...f, effective_from: e.target.value }))}
-                className={inputClass}
-              />
-            </FieldGroup>
-            <FieldGroup label="Berlaku Sampai">
-              <input
-                type="date"
-                value={form.effective_to}
-                onChange={(e) => setForm((f) => ({ ...f, effective_to: e.target.value }))}
-                className={inputClass}
-              />
-            </FieldGroup>
-          </div>
-          <FieldGroup label="Prioritas">
-            <input
-              type="number"
-              value={form.priority}
-              onChange={(e) => setForm((f) => ({ ...f, priority: Number(e.target.value) }))}
-              className={inputClass}
-            />
-          </FieldGroup>
-          <FieldGroup label="Deskripsi">
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              rows={2}
-              className={inputClass}
-            />
-          </FieldGroup>
-          <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
-            <input
-              type="checkbox"
-              checked={form.active}
-              onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-            />
-            Aktif
-          </label>
+
           {error && <p className="text-xs font-bold text-red-600">{error}</p>}
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+            >
               Batal
             </button>
-            <button type="submit" disabled={isSaving} className="flex-1 rounded-xl bg-[#C92C1E] py-2.5 text-sm font-black text-white hover:bg-[#A82216] disabled:opacity-60">
-              {isSaving ? "Menyimpan..." : mode === "edit" ? "Simpan Perubahan" : "Simpan & Lanjut"}
+
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {isSaving
+                ? "Menyimpan..."
+                : mode === "edit"
+                  ? "Simpan Perubahan"
+                  : "Simpan & Lanjut"}
             </button>
           </div>
         </form>
@@ -1502,7 +1953,9 @@ function PromotionBenefitsAndEligibility({
   packageOptions: CatalogPackageItem[];
   onDone: () => void;
 }) {
-  const [benefits, setBenefits] = useState<CatalogBenefitItem[]>(promotion.benefits || []);
+  const [benefits, setBenefits] = useState<CatalogBenefitItem[]>(
+    promotion.benefits || [],
+  );
   const [plans, setPlans] = useState<CatalogPlanItem[]>([]);
   const [selectedPlanIds, setSelectedPlanIds] = useState<Set<number>>(new Set());
   const [isSavingEligibility, setIsSavingEligibility] = useState(false);
@@ -1525,16 +1978,21 @@ function PromotionBenefitsAndEligibility({
       setBenefitError("Tipe benefit wajib diisi.");
       return;
     }
+
     setIsAddingBenefit(true);
     setBenefitError(null);
+
     try {
       const created = await createPromotionBenefit(promotion.id, {
         benefit_type: benefitType,
         package_id: benefitPackageId || undefined,
-        duration_days: benefitDurationDays ? Number(benefitDurationDays) : undefined,
+        duration_days: benefitDurationDays
+          ? Number(benefitDurationDays)
+          : undefined,
         quantity: benefitQuantity ? Number(benefitQuantity) : undefined,
         description: benefitDescription || undefined,
       });
+
       setBenefits((prev) => [...prev, created]);
       setBenefitType("");
       setBenefitPackageId(0);
@@ -1542,7 +2000,9 @@ function PromotionBenefitsAndEligibility({
       setBenefitQuantity("");
       setBenefitDescription("");
     } catch (err) {
-      setBenefitError(err instanceof Error ? err.message : "Gagal menambah benefit.");
+      setBenefitError(
+        err instanceof Error ? err.message : "Gagal menambah benefit.",
+      );
     } finally {
       setIsAddingBenefit(false);
     }
@@ -1562,12 +2022,16 @@ function PromotionBenefitsAndEligibility({
       alert("Pilih minimal 1 plan.");
       return;
     }
+
     setIsSavingEligibility(true);
+
     try {
       await setPromotionEligiblePlans(promotion.id, Array.from(selectedPlanIds));
       onDone();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Gagal menyimpan eligibilitas.");
+      alert(
+        err instanceof Error ? err.message : "Gagal menyimpan eligibilitas.",
+      );
     } finally {
       setIsSavingEligibility(false);
     }
@@ -1575,92 +2039,141 @@ function PromotionBenefitsAndEligibility({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700">
-        Promosi &quot;{promotion.name}&quot; tersimpan. Tambahkan benefit dan tentukan plan mana yang
-        eligible di bawah, lalu tutup modal ini untuk selesai.
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700">
+        Promosi &quot;{promotion.name}&quot; tersimpan. Tambahkan benefit dan
+        tentukan plan mana yang eligible di bawah, lalu tutup modal ini untuk
+        selesai.
       </div>
 
-      {/* Benefits */}
-      <div>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">Benefit</h3>
+      <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+        <h3 className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+          Benefit
+        </h3>
+
         <div className="space-y-2">
           {benefits.map((b) => (
-            <div key={b.id} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-3 py-2 text-xs">
+            <div
+              key={b.id}
+              className="flex items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-3 text-xs"
+            >
               <div>
                 <span className="font-black text-gray-800">{b.benefit_type}</span>
-                {b.package && <span className="ml-2 text-gray-500">· {b.package.name}</span>}
-                {b.duration_days != null && <span className="ml-2 text-gray-500">· {b.duration_days} hari</span>}
-                {b.quantity != null && <span className="ml-2 text-gray-500">· qty {b.quantity}</span>}
+                {b.package && (
+                  <span className="ml-2 text-gray-500">· {b.package.name}</span>
+                )}
+                {b.duration_days != null && (
+                  <span className="ml-2 text-gray-500">
+                    · {b.duration_days} hari
+                  </span>
+                )}
+                {b.quantity != null && (
+                  <span className="ml-2 text-gray-500">· qty {b.quantity}</span>
+                )}
               </div>
-              <button onClick={() => void handleDeleteBenefit(b.id)} className="text-gray-400 hover:text-red-600">
+
+              <button
+                onClick={() => void handleDeleteBenefit(b.id)}
+                className="text-gray-400 hover:text-red-600"
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
-          {benefits.length === 0 && <p className="text-xs text-gray-400">Belum ada benefit.</p>}
+
+          {benefits.length === 0 && (
+            <p className="text-xs text-gray-400">Belum ada benefit.</p>
+          )}
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-dashed border-gray-200 p-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-dashed border-gray-200 bg-white p-4 md:grid-cols-2">
           <input
             list="benefit-type-suggestions"
             placeholder="Tipe benefit"
             value={benefitType}
             onChange={(e) => setBenefitType(e.target.value)}
-            className={inputClass}
+            className={modalInputClass}
           />
+
           <datalist id="benefit-type-suggestions">
-            {BENEFIT_TYPE_SUGGESTIONS.map((t) => <option key={t} value={t} />)}
+            {BENEFIT_TYPE_SUGGESTIONS.map((t) => (
+              <option key={t} value={t} />
+            ))}
           </datalist>
-          <select value={benefitPackageId} onChange={(e) => setBenefitPackageId(Number(e.target.value))} className={inputClass}>
+
+          <select
+            value={benefitPackageId}
+            onChange={(e) => setBenefitPackageId(Number(e.target.value))}
+            className={modalSelectClass}
+          >
             <option value={0}>Package (opsional)</option>
-            {packageOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {packageOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
           </select>
+
           <input
             type="number"
             placeholder="Durasi (hari)"
             value={benefitDurationDays}
             onChange={(e) => setBenefitDurationDays(e.target.value)}
-            className={inputClass}
+            className={modalInputClass}
           />
+
           <input
             type="number"
             placeholder="Qty"
             value={benefitQuantity}
             onChange={(e) => setBenefitQuantity(e.target.value)}
-            className={inputClass}
+            className={modalInputClass}
           />
+
           <input
             placeholder="Deskripsi"
             value={benefitDescription}
             onChange={(e) => setBenefitDescription(e.target.value)}
-            className={`col-span-2 ${inputClass}`}
+            className={`md:col-span-2 ${modalInputClass}`}
           />
-          {benefitError && <p className="col-span-2 text-[10px] font-bold text-red-600">{benefitError}</p>}
+
+          {benefitError && (
+            <p className="text-[10px] font-bold text-red-600 md:col-span-2">
+              {benefitError}
+            </p>
+          )}
+
           <button
             type="button"
             onClick={() => void handleAddBenefit()}
             disabled={isAddingBenefit}
-            className="col-span-2 rounded-lg bg-gray-800 py-2 text-xs font-black text-white hover:bg-gray-900 disabled:opacity-60"
+            className="rounded-2xl bg-gray-800 py-3 text-xs font-black text-white hover:bg-gray-900 disabled:opacity-60 md:col-span-2"
           >
             {isAddingBenefit ? "Menambahkan..." : "+ Tambah Benefit"}
           </button>
         </div>
       </div>
 
-      {/* Eligible Plans */}
-      <div>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">Eligible untuk Plan</h3>
-        <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-gray-100 p-2">
+      <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+        <h3 className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+          Eligible untuk Plan
+        </h3>
+
+        <div className="max-h-48 space-y-1 overflow-y-auto rounded-2xl border border-gray-100 bg-[#FAFAFA] p-2">
           {plans.map((pl) => (
-            <label key={pl.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50">
+            <label
+              key={pl.id}
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 hover:bg-white"
+            >
               <input
                 type="checkbox"
                 checked={selectedPlanIds.has(pl.id)}
                 onChange={() =>
                   setSelectedPlanIds((prev) => {
                     const next = new Set(prev);
+
                     if (next.has(pl.id)) next.delete(pl.id);
                     else next.add(pl.id);
+
                     return next;
                   })
                 }
@@ -1671,15 +2184,20 @@ function PromotionBenefitsAndEligibility({
         </div>
       </div>
 
-      <div className="flex gap-3 pt-2">
-        <button type="button" onClick={onDone} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onDone}
+          className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+        >
           Selesai Nanti
         </button>
+
         <button
           type="button"
           onClick={() => void handleSaveEligibility()}
           disabled={isSavingEligibility}
-          className="flex-1 rounded-xl bg-[#C92C1E] py-2.5 text-sm font-black text-white hover:bg-[#A82216] disabled:opacity-60"
+          className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
         >
           {isSavingEligibility ? "Menyimpan..." : "Simpan Eligibilitas & Selesai"}
         </button>
@@ -1688,14 +2206,12 @@ function PromotionBenefitsAndEligibility({
   );
 }
 
-// ============================================================
-// DETAIL DIALOGS (view-only, dengan drill-down Package → Plan → Promotion)
-// ============================================================
-
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-gray-50 py-2 text-xs last:border-0">
-      <span className="font-black uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="font-black uppercase tracking-wide text-gray-400">
+        {label}
+      </span>
       <span className="text-right font-bold text-gray-800">{value}</span>
     </div>
   );
@@ -1715,9 +2231,20 @@ function DetailModal({
   onNavigate: (t: ViewTarget) => void;
 }) {
   const title =
-    target.kind === "package" ? "Detail Package" : target.kind === "plan" ? "Detail Plan" : "Detail Promosi";
+    target.kind === "package"
+      ? "Detail Package"
+      : target.kind === "plan"
+        ? "Detail Plan"
+        : "Detail Promosi";
+
   const icon =
-    target.kind === "package" ? <Package className="h-5 w-5" /> : target.kind === "plan" ? <Layers className="h-5 w-5" /> : <Tag className="h-5 w-5" />;
+    target.kind === "package" ? (
+      <Package className="h-5 w-5" />
+    ) : target.kind === "plan" ? (
+      <Layers className="h-5 w-5" />
+    ) : (
+      <Tag className="h-5 w-5" />
+    );
 
   return (
     <Modal title={title} subtitle={target.item.code} icon={icon} onClose={onClose} wide>
@@ -1731,9 +2258,18 @@ function DetailModal({
           Kembali
         </button>
       )}
-      {target.kind === "package" && <PackageDetailBody item={target.item} onNavigate={onNavigate} />}
-      {target.kind === "plan" && <PlanDetailBody item={target.item} onNavigate={onNavigate} />}
-      {target.kind === "promotion" && <PromotionDetailBody item={target.item} onNavigate={onNavigate} />}
+
+      {target.kind === "package" && (
+        <PackageDetailBody item={target.item} onNavigate={onNavigate} />
+      )}
+
+      {target.kind === "plan" && (
+        <PlanDetailBody item={target.item} onNavigate={onNavigate} />
+      )}
+
+      {target.kind === "promotion" && (
+        <PromotionDetailBody item={target.item} onNavigate={onNavigate} />
+      )}
     </Modal>
   );
 }
@@ -1757,33 +2293,36 @@ function PackageDetailBody({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+      <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
         <InfoRow label="Nama" value={item.name} />
         <InfoRow label="Level Order" value={item.level_order} />
         <InfoRow label="Status" value={<StatusBadge active={item.active} />} />
         {item.description && <InfoRow label="Deskripsi" value={item.description} />}
       </div>
 
-      <div>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+      <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+        <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
           Plan pada Package ini {plans && `(${plans.length})`}
         </h3>
+
         {plans === null ? (
           <p className="text-xs text-gray-400">Memuat plan...</p>
         ) : plans.length === 0 ? (
           <p className="text-xs text-gray-400">Belum ada plan untuk package ini.</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {plans.map((pl) => (
               <button
                 key={pl.id}
                 type="button"
                 onClick={() => onNavigate({ kind: "plan", item: pl })}
-                className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30"
+                className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-[#FAFAFA] px-4 py-3 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30"
               >
                 <div>
                   <span className="font-black text-gray-800">{pl.name}</span>
-                  <span className="ml-2 text-gray-400">{pl.tenure_months} bln · {formatRupiah(pl.price)}</span>
+                  <span className="ml-2 text-gray-400">
+                    {pl.tenure_months} bln · {formatRupiah(pl.price)}
+                  </span>
                 </div>
                 <StatusBadge active={pl.active} />
               </button>
@@ -1815,6 +2354,7 @@ function PlanDetailBody({
 
   const handleOpenPromotion = async (promoId: number) => {
     setNavigatingId(promoId);
+
     try {
       const full = await promotionApi.get(promoId);
       onNavigate({ kind: "promotion", item: full });
@@ -1827,6 +2367,7 @@ function PlanDetailBody({
 
   const handleOpenPackage = async () => {
     setIsOpeningPackage(true);
+
     try {
       const full = await packageApi.get(item.package.id);
       onNavigate({ kind: "package", item: full });
@@ -1839,7 +2380,7 @@ function PlanDetailBody({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+      <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
         <InfoRow label="Nama" value={item.name} />
         <InfoRow
           label="Package"
@@ -1854,36 +2395,46 @@ function PlanDetailBody({
             </button>
           }
         />
-        <InfoRow label="Tenor" value={`${item.tenure_months} bulan (${item.duration_days} hari)`} />
+        <InfoRow
+          label="Tenor"
+          value={`${item.tenure_months} bulan (${item.duration_days} hari)`}
+        />
         <InfoRow label="Harga" value={formatRupiah(item.price)} />
         <InfoRow label="Berlaku Dari" value={item.effective_from} />
-        {item.effective_to && <InfoRow label="Berlaku Sampai" value={item.effective_to} />}
+        {item.effective_to && (
+          <InfoRow label="Berlaku Sampai" value={item.effective_to} />
+        )}
         <InfoRow label="Status" value={<StatusBadge active={item.active} />} />
       </div>
 
-      <div>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+      <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+        <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
           Promo Berlaku untuk Plan ini {promotions && `(${promotions.length})`}
         </h3>
+
         {promotions === null ? (
           <p className="text-xs text-gray-400">Memuat promo...</p>
         ) : promotions.length === 0 ? (
           <p className="text-xs text-gray-400">Belum ada promo aktif untuk plan ini.</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {promotions.map((promo) => (
               <button
                 key={promo.id}
                 type="button"
                 disabled={navigatingId === promo.id}
                 onClick={() => void handleOpenPromotion(promo.id)}
-                className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30 disabled:opacity-50"
+                className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-[#FAFAFA] px-4 py-3 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30 disabled:opacity-50"
               >
                 <div>
                   <span className="font-black text-gray-800">{promo.name}</span>
-                  {promo.description && <span className="ml-2 text-gray-400">{promo.description}</span>}
+                  {promo.description && (
+                    <span className="ml-2 text-gray-400">{promo.description}</span>
+                  )}
                 </div>
-                <span className="font-mono text-[11px] text-gray-400">{promo.code}</span>
+                <span className="font-mono text-[11px] text-gray-400">
+                  {promo.code}
+                </span>
               </button>
             ))}
           </div>
@@ -1901,70 +2452,91 @@ function PromotionDetailBody({
   onNavigate: (t: ViewTarget) => void;
 }) {
   const [plans, setPlans] = useState<CatalogPlanItem[] | null>(null);
-  const [benefits, setBenefits] = useState<CatalogBenefitItem[]>(item.benefits || []);
+  const [benefits, setBenefits] = useState<CatalogBenefitItem[]>(
+    item.benefits || [],
+  );
 
   useEffect(() => {
     setPlans(null);
     void getPromotionEligiblePlans(item.id)
       .then(setPlans)
       .catch(() => setPlans([]));
-    void listPromotionBenefits(item.id)
-      .then(setBenefits)
-      .catch(() => {});
+    void listPromotionBenefits(item.id).then(setBenefits).catch(() => {});
   }, [item.id]);
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+      <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
         <InfoRow label="Nama" value={item.name} />
         <InfoRow label="Tipe" value={item.promotion_type} />
         <InfoRow
           label="Biaya"
-          value={item.charge_type === "FREE" ? "Gratis" : formatRupiah(item.additional_charge)}
+          value={
+            item.charge_type === "FREE"
+              ? "Gratis"
+              : formatRupiah(item.additional_charge)
+          }
         />
         <InfoRow label="Prioritas" value={item.priority} />
         <InfoRow label="Berlaku Dari" value={item.effective_from} />
-        {item.effective_to && <InfoRow label="Berlaku Sampai" value={item.effective_to} />}
+        {item.effective_to && (
+          <InfoRow label="Berlaku Sampai" value={item.effective_to} />
+        )}
         <InfoRow label="Status" value={<StatusBadge active={item.active} />} />
         {item.description && <InfoRow label="Deskripsi" value={item.description} />}
       </div>
 
-      <div>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+      <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+        <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
           Benefit ({benefits.length})
         </h3>
+
         {benefits.length === 0 ? (
           <p className="text-xs text-gray-400">Belum ada benefit.</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {benefits.map((b) => (
-              <div key={b.id} className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-xs">
+              <div
+                key={b.id}
+                className="rounded-2xl border border-gray-100 bg-[#FAFAFA] px-4 py-3 text-xs"
+              >
                 <span className="font-black text-gray-800">{b.benefit_type}</span>
-                {b.package && <span className="ml-2 text-gray-500">· {b.package.name}</span>}
-                {b.duration_days != null && <span className="ml-2 text-gray-500">· {b.duration_days} hari</span>}
-                {b.quantity != null && <span className="ml-2 text-gray-500">· qty {b.quantity}</span>}
+                {b.package && (
+                  <span className="ml-2 text-gray-500">· {b.package.name}</span>
+                )}
+                {b.duration_days != null && (
+                  <span className="ml-2 text-gray-500">
+                    · {b.duration_days} hari
+                  </span>
+                )}
+                {b.quantity != null && (
+                  <span className="ml-2 text-gray-500">· qty {b.quantity}</span>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">
+      <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+        <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
           Eligible untuk Plan {plans && `(${plans.length})`}
         </h3>
+
         {plans === null ? (
           <p className="text-xs text-gray-400">Memuat plan...</p>
         ) : plans.length === 0 ? (
-          <p className="text-xs text-gray-400">Belum ada plan yang eligible untuk promo ini.</p>
+          <p className="text-xs text-gray-400">
+            Belum ada plan yang eligible untuk promo ini.
+          </p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {plans.map((pl) => (
               <button
                 key={pl.id}
                 type="button"
                 onClick={() => onNavigate({ kind: "plan", item: pl })}
-                className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30"
+                className="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-[#FAFAFA] px-4 py-3 text-left text-xs transition hover:border-[#C92C1E]/30 hover:bg-red-50/30"
               >
                 <div>
                   <span className="font-black text-gray-800">{pl.name}</span>
