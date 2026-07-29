@@ -6,6 +6,7 @@ import SalesFormModal, {
   type SalesItem,
   type SalesStatus,
 } from "./form/page";
+import AnalyticsTab from "./AnalyticsTab";
 
 const EMPTY_FORM: SalesFormState = {
   name: "",
@@ -170,6 +171,7 @@ function normalizeSales(item: SalesItem): SalesItem {
 }
 
 export default function SalesPage() {
+  const [activeTab, setActiveTab] = useState<"data" | "analytics">("data");
   const [sales, setSales] = useState<SalesItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -443,7 +445,29 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          {[
+            { value: "data", label: "Data Sales" },
+            { value: "analytics", label: "Analitik" },
+          ].map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value as "data" | "analytics")}
+              className={`flex items-center gap-1.5 rounded-lg px-5 py-2.5 transition-all ${
+                activeTab === tab.value
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "data" ? (
+        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
           <div>
             <p className="text-sm font-black text-gray-900">Daftar Sales</p>
@@ -577,6 +601,9 @@ export default function SalesPage() {
           </table>
         </div>
       </div>
+      ) : (
+        <AnalyticsTab />
+      )}
 
       <SalesFormModal
         open={showModal}

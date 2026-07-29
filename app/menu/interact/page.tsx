@@ -1,10 +1,9 @@
-import ComingSoon from "@/app/components/ComingSoon";
+"use client";
+
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import AnalyticsTab from "./AnalyticsTab";
 
 export default function InteractPage() {
-  return (
-    <ComingSoon
-      title="Interact"
-      description="Riwayat call/chat dan interaksi customer akan tersedia di sini."
-    />
-  );
+  usePageTitle("Interact");
+  return <AnalyticsTab />;
 }

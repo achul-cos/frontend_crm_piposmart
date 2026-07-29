@@ -40,6 +40,7 @@ import {
   type CreatePromotionPayload,
   type CatalogScope,
 } from "@/app/lib/api";
+import AnalyticsTab from "./AnalyticsTab";
 
 type Entity = "package" | "plan" | "promotion";
 
@@ -405,6 +406,7 @@ export default function PaketLanggananPage() {
   usePageTitle("Katalog");
 
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<"data" | "analytics">("data");
   const [entity, setEntity] = useState<Entity>("package");
   const [scope, setScope] = useState<CatalogScope>("ACTIVE");
   const [search, setSearch] = useState("");
@@ -694,6 +696,29 @@ export default function PaketLanggananPage() {
         </div>
       </div>
 
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          {[
+            { value: "data", label: "Data Katalog" },
+            { value: "analytics", label: "Analitik" },
+          ].map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setViewMode(tab.value as "data" | "analytics")}
+              className={`flex items-center gap-1.5 rounded-lg px-5 py-2.5 transition-all ${
+                viewMode === tab.value
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {viewMode === "data" ? (
+        <>
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
           {(["package", "plan", "promotion"] as Entity[]).map((e) => (
@@ -1111,6 +1136,10 @@ export default function PaketLanggananPage() {
           />
         )}
       </div>
+        </>
+      ) : (
+        <AnalyticsTab />
+      )}
 
       {selectedIds.size > 0 && (
         <BulkActionBar

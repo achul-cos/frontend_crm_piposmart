@@ -21,8 +21,7 @@ import OutletFormModal from "./OutletFormModal";
 import OutletAnalytics from "./OutletAnalytics";
 import BulkEditOutletModal, { type BulkEditFields } from "./BulkEditOutletModal";
 
-type TableState = "umum" | "langganan" | "sampah";
-type ViewMode = "table" | "analytics";
+type TableState = "umum" | "langganan" | "sampah" | "analytics";
 
 const SUBSCRIPTION_STATUS_OPTIONS = [
   { value: "", label: "Semua Status" },
@@ -74,7 +73,6 @@ async function runBulkByOwner(
 export default function KelolaanOutletPage() {
   usePageTitle("Outlet");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [view, setView] = useState<ViewMode>("table");
   const [tableState, setTableState] = useState<TableState>("umum");
 
   const [searchInput, setSearchInput] = useState("");
@@ -132,26 +130,39 @@ export default function KelolaanOutletPage() {
   }, [tableState, page, search, subscriptionStatus, month]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
-  const visibleCount = tableState === "langganan" ? subscriptionItems.length : overviewItems.length;
+  const visibleCount =
+    tableState === "langganan"
+      ? subscriptionItems.length
+      : tableState === "analytics"
+        ? 0
+        : overviewItems.length;
   const activeTabLabel =
     tableState === "umum"
       ? "Informasi Umum"
       : tableState === "langganan"
         ? "Langganan Outlet"
-        : "Sampah Outlet";
+        : tableState === "sampah"
+          ? "Sampah Outlet"
+          : "Analitik Outlet";
   const activeTabDescription =
     tableState === "umum"
       ? "Data outlet aktif lintas owner."
       : tableState === "langganan"
         ? "Rekap status langganan per outlet."
-        : "Riwayat outlet yang sudah dihapus sementara.";
+        : tableState === "sampah"
+          ? "Riwayat outlet yang sudah dihapus sementara."
+          : "Dashboard diagram analitik khusus modul outlet.";
 
   const loadData = useMemo(
     () => async () => {
       setIsLoading(true);
       setError(null);
       try {
-        if (tableState === "langganan") {
+        if (tableState === "analytics") {
+          setOverviewItems([]);
+          setSubscriptionItems([]);
+          setTotal(0);
+        } else if (tableState === "langganan") {
           const res = await listOutletSubscriptionStatuses({
             q: search || undefined,
             subscription_status: subscriptionStatus || undefined,
@@ -288,33 +299,6 @@ export default function KelolaanOutletPage() {
               Data seluruh outlet lintas owner untuk informasi umum, status langganan, dan sampah outlet.
             </p>
           </div>
-          <div className="flex rounded-xl border border-gray-200 bg-gray-100 p-1.5 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setView("table")}
-              className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
-                view === "table"
-                  ? "bg-white text-[#C92C1E] shadow-sm"
-                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-              }`}
-            >
-              Tabel
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("analytics")}
-              className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
-                view === "analytics"
-                  ? "bg-white text-[#C92C1E] shadow-sm"
-                  : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-              }`}
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-              </svg>
-              Analitik
-            </button>
-          </div>
         </div>
       </div>
 
@@ -353,35 +337,36 @@ export default function KelolaanOutletPage() {
         </div>
       </div>
 
-      {view === "analytics" ? (
-        <OutletAnalytics />
-      ) : (
-        <div className="space-y-4">
-          <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
-            <div className="flex text-sm font-bold">
-              {(
-                [
-                  { key: "umum" as const, label: "Informasi Umum" },
-                  { key: "langganan" as const, label: "Langganan" },
-                  { key: "sampah" as const, label: "Sampah" },
-                ]
-              ).map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => changeTableState(tab.key)}
-                  className={`rounded-lg px-5 py-2.5 transition-all ${
-                    tableState === tab.key
-                      ? "bg-white text-[#C92C1E] shadow-sm"
-                      : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+      <div className="space-y-4">
+        <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+          <div className="flex text-sm font-bold">
+            {(
+              [
+                { key: "umum" as const, label: "Informasi Umum" },
+                { key: "langganan" as const, label: "Langganan" },
+                { key: "sampah" as const, label: "Sampah" },
+                { key: "analytics" as const, label: "Analitik" },
+              ]
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => changeTableState(tab.key)}
+                className={`rounded-lg px-5 py-2.5 transition-all ${
+                  tableState === tab.key
+                    ? "bg-white text-[#C92C1E] shadow-sm"
+                    : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
+        </div>
 
+        {tableState === "analytics" ? (
+          <OutletAnalytics />
+        ) : (
           <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
               <div className="flex flex-1 flex-wrap items-center gap-2">
@@ -540,8 +525,8 @@ export default function KelolaanOutletPage() {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {showForm && (
         <OutletFormModal

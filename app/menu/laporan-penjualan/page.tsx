@@ -13,8 +13,10 @@ import TransactionTable from "./components/TransactionTable";
 import TransactionTableSkeleton from "./components/TransactionTableSkeleton";
 import TransactionDetailDrawer from "./components/TransactionDetailDrawer";
 import Pagination from "./components/Pagination";
+import AnalyticsTab from "./AnalyticsTab";
 
 export default function LaporanPenjualanPage() {
+  const [activeTab, setActiveTab] = useState<"report" | "analytics">("report");
   const [selectedTrx, setSelectedTrx] = useState<SalesTransaction | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -185,6 +187,35 @@ export default function LaporanPenjualanPage() {
         </div>
       </div>
 
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          <button
+            type="button"
+            onClick={() => setActiveTab("report")}
+            className={`rounded-lg px-5 py-2.5 transition-all ${
+              activeTab === "report"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+            }`}
+          >
+            Laporan Penjualan
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("analytics")}
+            className={`rounded-lg px-5 py-2.5 transition-all ${
+              activeTab === "analytics"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+            }`}
+          >
+            Analitik 14g5
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "report" ? (
+        <>
       {/* === TOOLBAR === */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end mb-2">
         {/* Right Actions */}
@@ -260,6 +291,10 @@ export default function LaporanPenjualanPage() {
         selectedTrx={selectedTrx}
         setSelectedTrx={setSelectedTrx}
       />
+        </>
+      ) : (
+        <AnalyticsTab />
+      )}
     </div>
   );
 }

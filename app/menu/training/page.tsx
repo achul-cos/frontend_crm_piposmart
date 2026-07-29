@@ -1,10 +1,9 @@
-import ComingSoon from "@/app/components/ComingSoon";
+"use client";
+
+import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import AnalyticsTab from "./AnalyticsTab";
 
 export default function TrainingPage() {
-  return (
-    <ComingSoon
-      title="Training"
-      description="Jadwal dan laporan training/demo aplikasi untuk owner akan tersedia di sini."
-    />
-  );
+  usePageTitle("Training");
+  return <AnalyticsTab />;
 }

@@ -31,8 +31,13 @@ import {
   type PartnerItem,
   type PartnerTypeItem,
 } from "@/app/lib/api";
+import AnalyticsTab from "./AnalyticsTab";
 
-type TableMode = "PARTNER_TYPES" | "ACTIVE_PARTNERS" | "INACTIVE_PARTNERS";
+type TableMode =
+  | "PARTNER_TYPES"
+  | "ACTIVE_PARTNERS"
+  | "INACTIVE_PARTNERS"
+  | "ANALYTICS";
 
 type PartnerFormState = {
   partnerTypeId: string;
@@ -966,6 +971,7 @@ export default function KelolaanMitraPage() {
             { key: "PARTNER_TYPES", label: "Jenis Mitra" },
             { key: "ACTIVE_PARTNERS", label: "Mitra Aktif" },
             { key: "INACTIVE_PARTNERS", label: "Mitra Non Aktif" },
+            { key: "ANALYTICS", label: "Analitik" },
           ].map((item) => (
             <button
               key={item.key}
@@ -983,6 +989,9 @@ export default function KelolaanMitraPage() {
         </div>
       </div>
 
+      {tableMode === "ANALYTICS" ? (
+        <AnalyticsTab />
+      ) : (
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
           {tableMode === "PARTNER_TYPES" ? (
@@ -1222,6 +1231,7 @@ export default function KelolaanMitraPage() {
           </div>
         ) : null}
       </div>
+      )}
 
       <ModalShell
         open={showPartnerModal}

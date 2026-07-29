@@ -2574,5 +2574,180 @@ export async function getSubscriptionDetail(
   };
 }
 
+export interface AnalyticsCatalogItem {
+  module: string;
+  key: string;
+  name: string;
+  type: string;
+  function: string;
+  purpose: string;
+  how_to_read: string;
+  analysis_goal: string;
+  supported_metrics?: string[];
+  supported_filters?: string[];
+  supported_compare_modes?: string[];
+  query_endpoint: string;
+  export_endpoint?: string;
+  polarity_rule: string;
+  export_available: boolean;
+  comparison_enabled: boolean;
+}
+
+export interface AnalyticsTimeFilterRequest {
+  mode: "date_range" | "month_range" | "year_range";
+  date_from?: string;
+  date_to?: string;
+  month_from?: string;
+  month_to?: string;
+  year_from?: number;
+  year_to?: number;
+  granularity: "day" | "month" | "year";
+}
+
+export interface AnalyticsComparisonSeriesRequest {
+  field: string;
+  label: string;
+  value: string;
+}
+
+export interface AnalyticsComparisonRequest {
+  enabled: boolean;
+  mode?: string;
+  baseline_time_filter?: AnalyticsTimeFilterRequest;
+  compare_series?: AnalyticsComparisonSeriesRequest[];
+}
+
+export interface AnalyticsFilterRequest {
+  province?: string[];
+  city?: string[];
+  sales_id?: number[];
+  supervisor_id?: number[];
+  owner_id?: number[];
+  outlet_id?: number[];
+  status?: string[];
+}
+
+export interface AnalyticsQueryOptions {
+  limit?: number;
+  sort?: string;
+  include_table?: boolean;
+  include_summary?: boolean;
+  include_previous_points?: boolean;
+}
+
+export interface AnalyticsQueryRequest {
+  time_filter: AnalyticsTimeFilterRequest;
+  comparison?: AnalyticsComparisonRequest;
+  metrics?: string[];
+  dimensions?: string[];
+  filters?: AnalyticsFilterRequest;
+  options?: AnalyticsQueryOptions;
+}
+
+export interface AnalyticsDiagramMetadata {
+  key: string;
+  module: string;
+  name: string;
+  type: string;
+  function: string;
+  purpose: string;
+  how_to_read: string;
+  analysis_goal: string;
+}
+
+export interface AnalyticsComparisonSummary {
+  enabled: boolean;
+  mode?: string;
+  baseline_label?: string;
+  current_value?: number;
+  baseline_value?: number;
+  delta?: number;
+  delta_percent?: number;
+  direction?: string;
+  polarity_rule?: string;
+  status_value?: number;
+}
+
+export interface AnalyticsChartPoint {
+  x: unknown;
+  y: number;
+}
+
+export interface AnalyticsChartSeries {
+  key: string;
+  label: string;
+  points: AnalyticsChartPoint[];
+}
+
+export interface AnalyticsInsight {
+  summary?: string;
+  conclusion?: string;
+  recommendation?: string;
+}
+
+export interface AnalyticsQueryResult {
+  diagram: AnalyticsDiagramMetadata;
+  time_filter?: Record<string, unknown>;
+  comparison?: AnalyticsComparisonSummary;
+  series?: AnalyticsChartSeries[];
+  table?: Record<string, unknown>[];
+  extra?: Record<string, unknown>;
+  insight?: AnalyticsInsight;
+}
+
+export async function fetchAnalyticsCatalog(): Promise<AnalyticsCatalogItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/catalog`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<{ items: AnalyticsCatalogItem[] }>>(res);
+  return data.data.items || [];
+}
+
+export async function fetchAnalyticsCatalogByModule(
+  module: string,
+): Promise<AnalyticsCatalogItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/catalog/${module}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<{ items: AnalyticsCatalogItem[] }>>(res);
+  return data.data.items || [];
+}
+
+export async function fetchAnalyticsCatalogDiagram(
+  module: string,
+  diagram: string,
+): Promise<AnalyticsCatalogItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/catalog/${module}/${diagram}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<AnalyticsCatalogItem>>(res);
+  return data.data;
+}
+
+export async function queryAnalyticsDiagram(
+  module: string,
+  diagram: string,
+  payload: AnalyticsQueryRequest,
+): Promise<AnalyticsQueryResult> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/${module}/${diagram}/query`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<AnalyticsQueryResult>>(res);
+  return data.data;
+}
+
 
 

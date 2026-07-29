@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import AnalyticsTab from "./AnalyticsTab";
 
 type ApiMeta = {
   page?: number;
@@ -302,9 +303,9 @@ export default function WalletsPage() {
   const [owners, setOwners] = useState<WalletOwner[]>([]);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [ledgers, setLedgers] = useState<LedgerItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"payments" | "wallets" | "ledger">(
-    "payments",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "payments" | "wallets" | "ledger" | "analytics"
+  >("payments");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [paidFrom, setPaidFrom] = useState("");
@@ -896,6 +897,7 @@ export default function WalletsPage() {
             { key: "payments", label: "Riwayat Top Up" },
             { key: "wallets", label: "Saldo Wallet" },
             { key: "ledger", label: "Ledger" },
+            { key: "analytics", label: "Analitik" },
           ].map((item) => (
             <button
               key={item.key}
@@ -913,6 +915,9 @@ export default function WalletsPage() {
         </div>
       </div>
 
+      {activeTab === "analytics" ? (
+        <AnalyticsTab />
+      ) : (
       <section className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
           <div>
@@ -1248,6 +1253,7 @@ export default function WalletsPage() {
           </div>
         )}
       </section>
+      )}
 
       <ModalShell
         open={isWalletActionOpen}

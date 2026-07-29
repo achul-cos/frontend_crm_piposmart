@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import AnalyticsTab from "./AnalyticsTab";
 
 type ApiMeta = {
   page?: number;
@@ -353,7 +354,7 @@ export default function SubscriptionPage() {
   const [wallets, setWallets] = useState<WalletItem[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "orders" | "subscriptions" | "reconciliations" | "issues"
+    "orders" | "subscriptions" | "reconciliations" | "issues" | "analytics"
   >("orders");
 
   const [search, setSearch] = useState("");
@@ -973,6 +974,7 @@ export default function SubscriptionPage() {
             { key: "subscriptions", label: "Subscription Aktif" },
             { key: "reconciliations", label: "Reconciliation" },
             { key: "issues", label: "Issue Queue" },
+            { key: "analytics", label: "Analitik" },
           ].map((item) => (
             <button
               key={item.key}
@@ -990,6 +992,9 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
+      {activeTab === "analytics" ? (
+        <AnalyticsTab />
+      ) : (
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
           <div>
@@ -1420,6 +1425,7 @@ export default function SubscriptionPage() {
           </div>
         )}
       </div>
+      )}
 
       <ModalShell
         open={Boolean(selectedOrderDetail || selectedSubscriptionDetail)}

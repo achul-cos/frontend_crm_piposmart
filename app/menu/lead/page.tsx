@@ -1846,7 +1846,7 @@ export default function DataKelolaanPage() {
       </div>
 
       {activeTab === 'analytics' ? (
-        <AnalyticsTab dataNasabah={dataNasabah} />
+        <AnalyticsTab />
       ) : (
         <>
       {/* PANEL FILTER & SEARCHING */}
