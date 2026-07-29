@@ -619,9 +619,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                         <p className="text-sm font-bold text-gray-900">
                           Dijadwalkan {formatDateTime(item.scheduled_at)}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Trainer: {item.trainer_name || "-"} • Peserta: {item.participant_name || "-"}
-                        </p>
                       </div>
                       <p className="text-xs font-bold text-gray-400 whitespace-nowrap">{formatDateTime(item.created_at)}</p>
                     </div>
