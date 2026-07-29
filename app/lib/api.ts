@@ -521,6 +521,29 @@ export interface InteractionItem {
   created_at: string;
 }
 
+export interface InteractionListParams {
+  type?: string;
+  score?: number;
+  sales_id?: number;
+  interaction_from?: string;
+  interaction_to?: string;
+  follow_up_from?: string;
+  follow_up_to?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+}
+
+export async function fetchCustomerInteractions(params: InteractionListParams = {}): Promise<{ items: InteractionItem[]; pagination: any }> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  });
+  const res = await fetch(`${API_BASE_URL}/api/v1/customer-interactions?${query.toString()}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: { items: InteractionItem[]; pagination: any } }>(res);
+  return data.data;
+}
+
 export interface TrainingItem {
   id: number;
   training_type: string;
@@ -529,10 +552,13 @@ export interface TrainingItem {
   completed_at?: string | null;
   canceled_at?: string | null;
   rescheduled_at?: string | null;
+  lead_id?: number | null;
+  lead_code?: string;
+  owner_id?: number | null;
+  owner_code?: string;
+  owner_name?: string;
   location?: string;
   meeting_url?: string;
-  trainer_name?: string;
-  participant_name?: string;
   note?: string;
   result_note?: string;
   cancel_reason?: string;
@@ -543,6 +569,35 @@ export interface TrainingItem {
   created_at: string;
   updated_at: string;
 }
+
+
+export interface TrainingListParams {
+  status?: string;
+  training_type?: string;
+  sales_id?: number;
+  scheduled_from?: string;
+  scheduled_to?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+}
+
+export async function fetchTrainings(params: TrainingListParams = {}): Promise<{ items: TrainingItem[]; pagination: any }> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  });
+  const res = await fetch(`${API_BASE_URL}/api/v1/trainings?${query.toString()}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: { items: TrainingItem[]; pagination: any } }>(res);
+  return data.data;
+}
+
+export async function getTrainingById(id: number): Promise<TrainingItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/trainings/${id}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: TrainingItem }>(res);
+  return data.data;
+}
+
 
 export async function getLeadInteractions(leadId: number): Promise<InteractionItem[]> {
   const res = await fetch(
@@ -592,6 +647,8 @@ export interface ClosingItem {
   id: number;
   code?: string;
   status: string;
+  owner?: { id: number; code?: string; name: string } | null;
+  lead?: { id: number; code?: string; name: string } | null;
   plan?: { id: number; code?: string; name: string } | null;
   package?: { id: number; code?: string; name: string } | null;
   package_snapshot?: any;
@@ -607,7 +664,28 @@ export interface ClosingItem {
   final_amount: string;
   currency: string;
   closed_at: string;
-  sales?: { id: number; name: string } | null;
+  sales?: { id: number; name: string; role?: string } | null;
+}
+
+export interface ClosingListParams {
+  q?: string;
+  status?: string;
+  sales_id?: number;
+  closed_from?: string;
+  closed_to?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+}
+
+export async function fetchClosings(params: ClosingListParams = {}): Promise<{ items: ClosingItem[]; pagination: any }> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  });
+  const res = await fetch(`${API_BASE_URL}/api/v1/closings?${query.toString()}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: { items: ClosingItem[]; pagination: any } }>(res);
+  return data.data;
 }
 
 export async function getLeadClosings(leadId: number): Promise<ClosingItem[]> {
@@ -1066,68 +1144,16 @@ export async function getSalesList(): Promise<UserResponse[]> {
   return data.data?.items || [];
 }
 
-// TODO: Replace with real backend call to /api/v1/supervisors once created by the backend team
-// WORKAROUND: Extract real supervisors directly from the current leads data to bypass backend limitations.
+// getSupervisorList fetches real supervisor accounts from the backend.
 export async function getSupervisorList(): Promise<UserResponse[]> {
-  try {
-    const leads = await getLeads();
-    const discoveredSupervisors: UserResponse[] = [];
-    const seenIds = new Set<number>();
-
-    leads.forEach(lead => {
-      // Periksa current_owner jika dia adalah SUPERVISOR
-      if (lead.current_owner && (lead.current_owner.role === "SUPERVISOR" || lead.current_owner_role === "SUPERVISOR") && !seenIds.has(lead.current_owner.id)) {
-        seenIds.add(lead.current_owner.id);
-        discoveredSupervisors.push({
-          id: lead.current_owner.id,
-          code: "",
-          name: lead.current_owner.name,
-          email: "",
-          phone: "",
-          role: "SUPERVISOR",
-          status: "active",
-          is_active: true
-        });
-      }
-      // Periksa field supervisor
-      if (lead.supervisor && !seenIds.has(lead.supervisor.id)) {
-        seenIds.add(lead.supervisor.id);
-        discoveredSupervisors.push({
-          id: lead.supervisor.id,
-          code: "",
-          name: lead.supervisor.name,
-          email: "",
-          phone: "",
-          role: "SUPERVISOR",
-          status: "active",
-          is_active: true
-        });
-      }
-    });
-
-    // Jika berhasil menemukan supervisor asli dari data nasabah, kembalikan data tersebut.
-    if (discoveredSupervisors.length > 0) {
-      return discoveredSupervisors;
-    }
-
-    // Fallback dummy
-    return [
-      {
-        id: 99,
-        code: "SUP-01",
-        name: "Budi (Supervisor Dummy)",
-        email: "budi.dummy@example.com",
-        phone: "081234567890",
-        role: "SUPERVISOR",
-        status: "active",
-        is_active: true,
-      }
-    ];
-  } catch (err) {
-    console.error("Gagal mengekstrak data supervisor dari leads", err);
-    return [];
-  }
+  const headers = getAuthHeaders();
+  const res = await fetch(`${API_BASE_URL}/api/v1/supervisors?status=active`, {
+    headers,
+  });
+  const data = await handleResponse<{ data: SalesListResponse }>(res);
+  return data.data?.items || [];
 }
+
 
 // ─── Lead Actions ─────────────────────────────────────────────────────────────
 
