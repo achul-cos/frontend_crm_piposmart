@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 type ApiMeta = {
@@ -74,16 +80,6 @@ type LedgerItem = {
   note?: string;
 };
 
-type TopUpForm = {
-  ownerId: string;
-  amount: string;
-  paymentChannel: string;
-  externalReference: string;
-  idempotencyKey: string;
-  paidAt: string;
-  note: string;
-};
-
 type WalletActionType = "topup" | "debit" | "adjustment" | "refund";
 
 type WalletActionForm = {
@@ -105,25 +101,26 @@ type PaymentDetailResponse = {
   wallet?: WalletItem;
 };
 
-type WalletDetailResponse = WalletItem | {
-  wallet?: WalletItem;
-  transactions?: LedgerItem[];
-};
+type WalletDetailResponse =
+  | WalletItem
+  | {
+      wallet?: WalletItem;
+      transactions?: LedgerItem[];
+    };
+
+const inputClass =
+  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+
+const selectClass =
+  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+
+const textareaClass =
+  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100";
 
 const getTodayDatetimeLocal = () => {
   const now = new Date();
   const offsetMs = now.getTimezoneOffset() * 60 * 1000;
   return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
-};
-
-const emptyTopUpForm: TopUpForm = {
-  ownerId: "",
-  amount: "",
-  paymentChannel: "MANUAL",
-  externalReference: "",
-  idempotencyKey: "",
-  paidAt: getTodayDatetimeLocal(),
-  note: "",
 };
 
 const getEmptyWalletActionForm = (ownerId = ""): WalletActionForm => ({
@@ -147,9 +144,18 @@ const walletActionLabel: Record<WalletActionType, string> = {
 };
 
 const getWalletActionDescription = (type: WalletActionType) => {
-  if (type === "topup") return "Mencatat pembayaran top up dan menambah saldo wallet owner.";
-  if (type === "debit") return "Mencatat saldo terpakai dan mengurangi saldo wallet owner.";
-  if (type === "adjustment") return "Koreksi saldo wallet, bisa CREDIT atau DEBIT.";
+  if (type === "topup") {
+    return "Mencatat pembayaran top up dan menambah saldo wallet owner.";
+  }
+
+  if (type === "debit") {
+    return "Mencatat saldo terpakai dan mengurangi saldo wallet owner.";
+  }
+
+  if (type === "adjustment") {
+    return "Koreksi saldo wallet, bisa CREDIT atau DEBIT.";
+  }
+
   return "Mencatat refund saldo keluar dari wallet owner.";
 };
 
@@ -228,13 +234,77 @@ const normalizeList = <T,>(payload: unknown): T[] => {
   return [];
 };
 
+function ModalShell({
+  open,
+  title,
+  subtitle,
+  label = "Topup",
+  maxWidth = "max-w-3xl",
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  subtitle: string;
+  label?: string;
+  maxWidth?: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/70" onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
+        <div
+          className={`w-full ${maxWidth} overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                  {label}
+                </p>
+
+                <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
+                  {title}
+                </h2>
+
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  {subtitle}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 md:p-6">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function WalletsPage() {
   usePageTitle("Topup");
+
   const [wallets, setWallets] = useState<WalletItem[]>([]);
   const [owners, setOwners] = useState<WalletOwner[]>([]);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [ledgers, setLedgers] = useState<LedgerItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"payments" | "wallets" | "ledger">("payments");
+  const [activeTab, setActiveTab] = useState<"payments" | "wallets" | "ledger">(
+    "payments",
+  );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [paidFrom, setPaidFrom] = useState("");
@@ -242,14 +312,20 @@ export default function WalletsPage() {
   const [channelFilter, setChannelFilter] = useState("Semua");
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [form, setForm] = useState<TopUpForm>(emptyTopUpForm);
-  const [walletActionType, setWalletActionType] = useState<WalletActionType>("topup");
-  const [walletActionForm, setWalletActionForm] = useState<WalletActionForm>(getEmptyWalletActionForm());
+
+  const [walletActionType, setWalletActionType] =
+    useState<WalletActionType>("topup");
+  const [walletActionForm, setWalletActionForm] = useState<WalletActionForm>(
+    getEmptyWalletActionForm(),
+  );
   const [isWalletActionOpen, setIsWalletActionOpen] = useState(false);
-  const [selectedPaymentDetail, setSelectedPaymentDetail] = useState<PaymentDetailResponse | null>(null);
-  const [selectedWalletDetail, setSelectedWalletDetail] = useState<WalletItem | null>(null);
-  const [selectedOwnerLedger, setSelectedOwnerLedger] = useState<LedgerItem[]>([]);
+  const [selectedPaymentDetail, setSelectedPaymentDetail] =
+    useState<PaymentDetailResponse | null>(null);
+  const [selectedWalletDetail, setSelectedWalletDetail] =
+    useState<WalletItem | null>(null);
+  const [selectedOwnerLedger, setSelectedOwnerLedger] = useState<LedgerItem[]>(
+    [],
+  );
   const [detailTitle, setDetailTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -285,7 +361,9 @@ export default function WalletsPage() {
     const json = (await response.json().catch(() => ({}))) as ApiResponse<T>;
 
     if (!response.ok) {
-      throw new Error(json.error?.message || `Request gagal (${response.status})`);
+      throw new Error(
+        json.error?.message || `Request gagal (${response.status})`,
+      );
     }
 
     return json;
@@ -341,20 +419,21 @@ export default function WalletsPage() {
         limit: "100",
       });
 
-      const [paymentResult, walletResult, ledgerResult, ownerResult] = await Promise.allSettled([
-        authFetch<PaymentItem[] | { items?: PaymentItem[]; rows?: PaymentItem[] }>(
-          `/wallet-payments${paymentQuery}`,
-        ),
-        authFetch<WalletItem[] | { items?: WalletItem[]; rows?: WalletItem[] }>(
-          `/wallets${walletQuery}`,
-        ),
-        authFetch<LedgerItem[] | { items?: LedgerItem[]; rows?: LedgerItem[] }>(
-          `/wallet-transactions${ledgerQuery}`,
-        ),
-        authFetch<WalletOwner[] | { items?: WalletOwner[]; rows?: WalletOwner[] }>(
-          `/owners${ownersQuery}`,
-        ),
-      ]);
+      const [paymentResult, walletResult, ledgerResult, ownerResult] =
+        await Promise.allSettled([
+          authFetch<
+            PaymentItem[] | { items?: PaymentItem[]; rows?: PaymentItem[] }
+          >(`/wallet-payments${paymentQuery}`),
+          authFetch<
+            WalletItem[] | { items?: WalletItem[]; rows?: WalletItem[] }
+          >(`/wallets${walletQuery}`),
+          authFetch<
+            LedgerItem[] | { items?: LedgerItem[]; rows?: LedgerItem[] }
+          >(`/wallet-transactions${ledgerQuery}`),
+          authFetch<
+            WalletOwner[] | { items?: WalletOwner[]; rows?: WalletOwner[] }
+          >(`/owners${ownersQuery}`),
+        ]);
 
       if (paymentResult.status === "fulfilled") {
         setPayments(normalizeList<PaymentItem>(paymentResult.value.data));
@@ -380,15 +459,26 @@ export default function WalletsPage() {
         setOwners([]);
       }
 
-      const firstError = [paymentResult, walletResult, ledgerResult, ownerResult].find(
-        (result) => result.status === "rejected",
-      ) as PromiseRejectedResult | undefined;
+      const firstError = [
+        paymentResult,
+        walletResult,
+        ledgerResult,
+        ownerResult,
+      ].find((result) => result.status === "rejected") as
+        | PromiseRejectedResult
+        | undefined;
 
       if (firstError) {
-        setErrorMessage(firstError.reason instanceof Error ? firstError.reason.message : "Sebagian data top up gagal dimuat.");
+        setErrorMessage(
+          firstError.reason instanceof Error
+            ? firstError.reason.message
+            : "Sebagian data top up gagal dimuat.",
+        );
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Gagal mengambil data top up.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Gagal mengambil data top up.",
+      );
     } finally {
       setLoading(false);
     }
@@ -408,9 +498,17 @@ export default function WalletsPage() {
   }, [debouncedSearch, channelFilter, paidFrom, paidTo, reloadKey]);
 
   const summary = useMemo(() => {
-    const totalTopUp = payments.reduce((total, item) => total + Number(item.amount || 0), 0);
-    const totalWalletBalance = wallets.reduce((total, item) => total + Number(item.balance || 0), 0);
-    const paidPayments = payments.filter((item) => (item.status || "").toUpperCase() === "PAID");
+    const totalTopUp = payments.reduce(
+      (total, item) => total + Number(item.amount || 0),
+      0,
+    );
+    const totalWalletBalance = wallets.reduce(
+      (total, item) => total + Number(item.balance || 0),
+      0,
+    );
+    const paidPayments = payments.filter(
+      (item) => (item.status || "").toUpperCase() === "PAID",
+    );
 
     return {
       totalTopUp,
@@ -480,7 +578,7 @@ export default function WalletsPage() {
     setIsWalletActionOpen(true);
   };
 
-  const handleCreateWalletAction = async (event: React.FormEvent) => {
+  const handleCreateWalletAction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!isAdmin) {
@@ -498,7 +596,11 @@ export default function WalletsPage() {
       return;
     }
 
-    if (!walletActionForm.sourceReference && !walletActionForm.externalReference && !walletActionForm.idempotencyKey) {
+    if (
+      !walletActionForm.sourceReference &&
+      !walletActionForm.externalReference &&
+      !walletActionForm.idempotencyKey
+    ) {
       alert("Source reference, external reference, atau idempotency key wajib diisi.");
       return;
     }
@@ -512,7 +614,10 @@ export default function WalletsPage() {
           body: JSON.stringify({
             amount: toDecimalString(walletActionForm.amount),
             payment_channel: walletActionForm.paymentChannel,
-            external_reference: walletActionForm.externalReference || walletActionForm.sourceReference || undefined,
+            external_reference:
+              walletActionForm.externalReference ||
+              walletActionForm.sourceReference ||
+              undefined,
             idempotency_key:
               walletActionForm.idempotencyKey ||
               `topup-${walletActionForm.ownerId}-${Date.now()}`,
@@ -527,7 +632,10 @@ export default function WalletsPage() {
           method: "POST",
           body: JSON.stringify({
             amount: toDecimalString(walletActionForm.amount),
-            source_reference: walletActionForm.sourceReference || walletActionForm.externalReference || undefined,
+            source_reference:
+              walletActionForm.sourceReference ||
+              walletActionForm.externalReference ||
+              undefined,
             idempotency_key:
               walletActionForm.idempotencyKey ||
               `debit-${walletActionForm.ownerId}-${Date.now()}`,
@@ -543,7 +651,10 @@ export default function WalletsPage() {
           body: JSON.stringify({
             amount: toDecimalString(walletActionForm.amount),
             direction: walletActionForm.direction,
-            source_reference: walletActionForm.sourceReference || walletActionForm.externalReference || undefined,
+            source_reference:
+              walletActionForm.sourceReference ||
+              walletActionForm.externalReference ||
+              undefined,
             idempotency_key:
               walletActionForm.idempotencyKey ||
               `adjustment-${walletActionForm.ownerId}-${Date.now()}`,
@@ -558,7 +669,10 @@ export default function WalletsPage() {
           method: "POST",
           body: JSON.stringify({
             amount: toDecimalString(walletActionForm.amount),
-            source_reference: walletActionForm.sourceReference || walletActionForm.externalReference || undefined,
+            source_reference:
+              walletActionForm.sourceReference ||
+              walletActionForm.externalReference ||
+              undefined,
             idempotency_key:
               walletActionForm.idempotencyKey ||
               `refund-${walletActionForm.ownerId}-${Date.now()}`,
@@ -572,7 +686,11 @@ export default function WalletsPage() {
       setWalletActionForm(getEmptyWalletActionForm());
       setReloadKey((prev) => prev + 1);
     } catch (error) {
-      alert(error instanceof Error ? error.message : `Gagal menyimpan ${walletActionLabel[walletActionType]}.`);
+      alert(
+        error instanceof Error
+          ? error.message
+          : `Gagal menyimpan ${walletActionLabel[walletActionType]}.`,
+      );
     } finally {
       setLoading(false);
     }
@@ -582,16 +700,23 @@ export default function WalletsPage() {
     setLoading(true);
 
     try {
-      const response = await authFetch<PaymentDetailResponse | PaymentItem>(`/wallet-payments/${payment.id}`);
+      const response = await authFetch<PaymentDetailResponse | PaymentItem>(
+        `/wallet-payments/${payment.id}`,
+      );
       const data = response.data as PaymentDetailResponse | PaymentItem | undefined;
-      const detail = data && "payment" in data ? data : { payment: data as PaymentItem };
+      const detail =
+        data && "payment" in data ? data : { payment: data as PaymentItem };
 
       setSelectedPaymentDetail(detail);
       setSelectedWalletDetail(null);
       setSelectedOwnerLedger([]);
       setDetailTitle(`Detail Payment ${payment.code || payment.id}`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Gagal mengambil detail payment.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Gagal mengambil detail payment.",
+      );
     } finally {
       setLoading(false);
     }
@@ -616,132 +741,152 @@ export default function WalletsPage() {
       ]);
 
       const walletData = walletResponse.data as WalletDetailResponse | undefined;
-      const detailWallet = walletData && "wallet" in walletData ? walletData.wallet : walletData as WalletItem;
+      const detailWallet =
+        walletData && "wallet" in walletData
+          ? walletData.wallet
+          : (walletData as WalletItem);
 
       setSelectedWalletDetail(detailWallet || wallet);
       setSelectedOwnerLedger(normalizeList<LedgerItem>(ledgerResponse.data));
       setSelectedPaymentDetail(null);
-      setDetailTitle(`Detail Wallet ${wallet.account_code || wallet.code || wallet.id}`);
+      setDetailTitle(
+        `Detail Wallet ${wallet.account_code || wallet.code || wallet.id}`,
+      );
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Gagal mengambil detail wallet.");
+      alert(
+        error instanceof Error ? error.message : "Gagal mengambil detail wallet.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  const closeDetailModal = () => {
+    setSelectedPaymentDetail(null);
+    setSelectedWalletDetail(null);
+    setSelectedOwnerLedger([]);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
               <span>Menu</span>
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={3}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
               <span className="text-[#C92C1E]">Topup</span>
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen Topup</h1>
+
+            <h1 className="text-2xl font-black tracking-tight text-gray-900">
+              Manajemen Topup
+            </h1>
+
             <p className="mt-1 text-sm text-gray-500">
-              Kelola saldo wallet owner, top up, debit, adjustment, refund, payment, dan ledger aplikasi Piposmart.
+              Kelola saldo wallet owner, top up, debit, adjustment, refund,
+              payment, dan ledger aplikasi Piposmart.
             </p>
           </div>
 
-            {isMounted && isAdmin && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWalletActionType("topup");
-                    setWalletActionForm(getEmptyWalletActionForm());
-                    setIsWalletActionOpen(true);
-                  }}
-                  className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]"
-                  title="Tambah top up"
-                >
-                  + Top Up
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWalletActionType("debit");
-                    setWalletActionForm(getEmptyWalletActionForm());
-                    setIsWalletActionOpen(true);
-                  }}
-                  className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-xs font-black text-[#C92C1E] shadow-sm transition hover:bg-red-100"
-                  title="Tambah debit"
-                >
-                  + Debit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWalletActionType("adjustment");
-                    setWalletActionForm(getEmptyWalletActionForm());
-                    setIsWalletActionOpen(true);
-                  }}
-                  className="rounded-2xl border border-red-100 bg-white px-5 py-3 text-xs font-black text-[#C92C1E] shadow-sm transition hover:bg-red-50"
-                  title="Tambah adjustment"
-                >
-                  + Adjustment
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWalletActionType("refund");
-                    setWalletActionForm(getEmptyWalletActionForm());
-                    setIsWalletActionOpen(true);
-                  }}
-                  className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-xs font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
-                  title="Tambah refund"
-                >
-                  + Refund
-                </button>
-              </div>
-            )}
+          {isMounted && isAdmin && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenWalletAction("topup")}
+                className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]"
+              >
+                + Top Up
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenWalletAction("debit")}
+                className="rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-xs font-black text-[#C92C1E] shadow-sm transition hover:bg-red-100"
+              >
+                + Debit
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenWalletAction("adjustment")}
+                className="rounded-2xl border border-red-100 bg-white px-5 py-3 text-xs font-black text-[#C92C1E] shadow-sm transition hover:bg-red-50"
+              >
+                + Adjustment
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenWalletAction("refund")}
+                className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-xs font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
+              >
+                + Refund
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
           <div className="relative z-10">
-            <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Revenue Top Up</p>
-            <h2 className="text-3xl font-black">{formatRupiah(summary.totalTopUp)}</h2>
-            <p className="mt-1 text-xs font-medium text-red-100/80">Berdasarkan paid_at</p>
-          </div>
-          <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 2v8m0 0v2m0-2c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
-          <div className="relative z-10">
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Payment PAID</p>
-            <h2 className="text-3xl font-black text-gray-900">{summary.paidCount}</h2>
-            <p className="mt-1 text-xs font-medium text-gray-400">Dari {summary.totalPayments} payment</p>
-          </div>
-          <div className="absolute top-0 right-0 p-5">
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </span>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
+              Revenue Top Up
+            </p>
+            <h2 className="text-3xl font-black">
+              {formatRupiah(summary.totalTopUp)}
+            </h2>
+            <p className="mt-1 text-xs font-medium text-red-100/80">
+              Berdasarkan paid_at
+            </p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
-          <div className="relative z-10">
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total Saldo Wallet</p>
-            <h2 className="text-3xl font-black text-gray-900">{formatRupiah(summary.totalWalletBalance)}</h2>
-            <p className="mt-1 text-xs font-medium text-gray-400">Saldo aktif owner</p>
-          </div>
+        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
+            Payment PAID
+          </p>
+          <h2 className="text-3xl font-black text-gray-900">
+            {summary.paidCount}
+          </h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">
+            Dari {summary.totalPayments} payment
+          </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
-          <div className="relative z-10">
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total Ledger</p>
-            <h2 className="text-3xl font-black text-[#C92C1E]">{summary.totalLedger}</h2>
-            <p className="mt-1 text-xs font-medium text-gray-400">Credit, debit, adjustment, refund</p>
-          </div>
+        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
+            Total Saldo Wallet
+          </p>
+          <h2 className="text-3xl font-black text-gray-900">
+            {formatRupiah(summary.totalWalletBalance)}
+          </h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">
+            Saldo aktif owner
+          </p>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
+            Total Ledger
+          </p>
+          <h2 className="text-3xl font-black text-[#C92C1E]">
+            {summary.totalLedger}
+          </h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">
+            Credit, debit, adjustment, refund
+          </p>
         </div>
       </div>
 
@@ -768,31 +913,36 @@ export default function WalletsPage() {
         </div>
       </div>
 
-      <section className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
+      <section className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
           <div>
-            <h2 className="text-sm font-black text-gray-900">Filter Data Wallets</h2>
+            <h2 className="text-sm font-black text-gray-900">
+              Filter Data Wallets
+            </h2>
             <p className="mt-1 text-xs font-medium text-gray-400">
-              Pencarian, channel, dan tanggal otomatis diterapkan tanpa tombol terapkan.
+              Pencarian, channel, dan tanggal otomatis diterapkan tanpa tombol
+              terapkan.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 w-full lg:w-auto items-center">
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Cari payment / owner..."
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] min-w-[200px] text-gray-700"
+              className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
             />
 
             <select
               value={channelFilter}
               onChange={(event) => setChannelFilter(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
             >
               <option value="Semua">Semua Channel</option>
               {channelOptions.map((item) => (
-                <option key={item} value={item}>{item}</option>
+                <option key={item} value={item}>
+                  {item}
+                </option>
               ))}
             </select>
 
@@ -800,14 +950,14 @@ export default function WalletsPage() {
               type="date"
               value={paidFrom}
               onChange={(event) => setPaidFrom(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
             />
 
             <input
               type="date"
               value={paidTo}
               onChange={(event) => setPaidTo(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] text-gray-700"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
             />
           </div>
         </div>
@@ -820,14 +970,15 @@ export default function WalletsPage() {
           )}
 
           <p className="text-[11px] font-bold text-gray-400">
-            Klik tombol detail atau baris data untuk membuka detail. Tombol mutasi tetap khusus Admin.
+            Klik tombol detail atau baris data untuk membuka detail. Tombol mutasi
+            tetap khusus Admin.
           </p>
         </div>
 
         {activeTab === "payments" && (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
-              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4 font-black">Payment</th>
                   <th className="px-4 py-4 font-black">Owner</th>
@@ -838,6 +989,7 @@ export default function WalletsPage() {
                   <th className="px-4 py-4 text-center font-black">Aksi</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-100 bg-white">
                 {payments.length === 0 ? (
                   <tr>
@@ -851,7 +1003,6 @@ export default function WalletsPage() {
                       key={payment.id}
                       onClick={() => handleOpenPaymentDetail(payment)}
                       className="cursor-pointer transition-colors hover:bg-gray-50"
-                      title="Klik baris untuk melihat detail payment"
                     >
                       <td className="px-4 py-4 align-top">
                         <Link
@@ -865,24 +1016,34 @@ export default function WalletsPage() {
                           {payment.external_reference || "-"}
                         </p>
                       </td>
+
                       <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">{getOwnerName(payment.owner)}</p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">{getOwnerCode(payment.owner)}</p>
+                        <p className="font-black text-gray-900">
+                          {getOwnerName(payment.owner)}
+                        </p>
+                        <p className="mt-1 text-[11px] font-bold text-gray-400">
+                          {getOwnerCode(payment.owner)}
+                        </p>
                       </td>
+
                       <td className="px-4 py-4 align-top font-medium text-gray-600">
                         {payment.payment_channel || payment.channel || "-"}
                       </td>
+
                       <td className="px-4 py-4 align-top">
-                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
                           {payment.status || "-"}
                         </span>
                       </td>
+
                       <td className="px-4 py-4 align-top font-medium text-gray-600">
                         {formatTanggal(payment.paid_at || payment.created_at)}
                       </td>
+
                       <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
                         {formatRupiah(payment.amount)}
                       </td>
+
                       <td
                         className="px-4 py-4 text-center align-top"
                         onMouseDown={(event) => event.stopPropagation()}
@@ -890,23 +1051,9 @@ export default function WalletsPage() {
                         <Link
                           href={`/menu/wallets/payments/${payment.id}`}
                           onClick={(event) => event.stopPropagation()}
-                          className="inline-flex rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                          title="Lihat Detail Top Up"
+                          className="inline-flex rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
                         >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                            />
-                          </svg>
+                          Detail
                         </Link>
                       </td>
                     </tr>
@@ -920,16 +1067,19 @@ export default function WalletsPage() {
         {activeTab === "wallets" && (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
-              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4 font-black">Wallet</th>
                   <th className="px-4 py-4 font-black">Owner</th>
                   <th className="px-4 py-4 font-black">Status</th>
                   <th className="px-4 py-4 text-right font-black">Balance</th>
-                  <th className="px-4 py-4 text-right font-black">Ledger Balance</th>
+                  <th className="px-4 py-4 text-right font-black">
+                    Ledger Balance
+                  </th>
                   <th className="px-4 py-4 text-center font-black">Mutasi</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-100 bg-white">
                 {wallets.length === 0 ? (
                   <tr>
@@ -943,27 +1093,38 @@ export default function WalletsPage() {
                       key={wallet.id}
                       onClick={() => handleOpenWalletDetail(wallet)}
                       className="cursor-pointer transition-colors hover:bg-gray-50"
-                      title="Klik baris untuk melihat detail wallet"
                     >
                       <td className="px-4 py-4 align-top font-black text-gray-900">
                         {wallet.account_code || wallet.code || `WALLET-${wallet.id}`}
                       </td>
+
                       <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">{getOwnerName(wallet.owner)}</p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">{getOwnerCode(wallet.owner)}</p>
+                        <p className="font-black text-gray-900">
+                          {getOwnerName(wallet.owner)}
+                        </p>
+                        <p className="mt-1 text-[11px] font-bold text-gray-400">
+                          {getOwnerCode(wallet.owner)}
+                        </p>
                       </td>
+
                       <td className="px-4 py-4 align-top">
-                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
                           {wallet.status || "-"}
                         </span>
                       </td>
+
                       <td className="px-4 py-4 text-right align-top font-black text-gray-900">
                         {formatRupiah(wallet.balance)}
                       </td>
+
                       <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
                         {formatRupiah(wallet.ledger_balance)}
                       </td>
-                      <td className="px-4 py-4 text-center align-top" onMouseDown={(event) => event.stopPropagation()}>
+
+                      <td
+                        className="px-4 py-4 text-center align-top"
+                        onMouseDown={(event) => event.stopPropagation()}
+                      >
                         <div className="flex flex-wrap justify-center gap-2">
                           {isMounted && isAdmin && (
                             <>
@@ -971,40 +1132,42 @@ export default function WalletsPage() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  handleOpenWalletAction("debit", String(wallet.owner?.id || wallet.owner_id || ""));
+                                  handleOpenWalletAction(
+                                    "debit",
+                                    String(wallet.owner?.id || wallet.owner_id || ""),
+                                  );
                                 }}
-                                className="rounded-lg bg-red-50 p-2 text-[#C92C1E] transition-colors hover:bg-red-100"
-                                title="Debit"
+                                className="rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E] transition-colors hover:bg-red-100"
                               >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                                </svg>
+                                Debit
                               </button>
+
                               <button
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  handleOpenWalletAction("adjustment", String(wallet.owner?.id || wallet.owner_id || ""));
+                                  handleOpenWalletAction(
+                                    "adjustment",
+                                    String(wallet.owner?.id || wallet.owner_id || ""),
+                                  );
                                 }}
-                                className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
-                                title="Adjustment"
+                                className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
                               >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
+                                Adjustment
                               </button>
+
                               <button
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  handleOpenWalletAction("refund", String(wallet.owner?.id || wallet.owner_id || ""));
+                                  handleOpenWalletAction(
+                                    "refund",
+                                    String(wallet.owner?.id || wallet.owner_id || ""),
+                                  );
                                 }}
-                                className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                                title="Refund"
+                                className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-black text-gray-500 transition-colors hover:bg-gray-100"
                               >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
+                                Refund
                               </button>
                             </>
                           )}
@@ -1021,7 +1184,7 @@ export default function WalletsPage() {
         {activeTab === "ledger" && (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
-              <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
+              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4 font-black">Ledger</th>
                   <th className="px-4 py-4 font-black">Owner</th>
@@ -1031,6 +1194,7 @@ export default function WalletsPage() {
                   <th className="px-4 py-4 text-right font-black">Amount</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-100 bg-white">
                 {ledgers.length === 0 ? (
                   <tr>
@@ -1042,24 +1206,37 @@ export default function WalletsPage() {
                   ledgers.map((ledger) => (
                     <tr key={ledger.id} className="transition-colors hover:bg-gray-50">
                       <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">{ledger.code || `TRX-${ledger.id}`}</p>
+                        <p className="font-black text-gray-900">
+                          {ledger.code || `TRX-${ledger.id}`}
+                        </p>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">
                           {ledger.source_reference || ledger.external_reference || "-"}
                         </p>
                       </td>
+
                       <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">{getOwnerName(ledger.owner)}</p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">{getOwnerCode(ledger.owner)}</p>
+                        <p className="font-black text-gray-900">
+                          {getOwnerName(ledger.owner)}
+                        </p>
+                        <p className="mt-1 text-[11px] font-bold text-gray-400">
+                          {getOwnerCode(ledger.owner)}
+                        </p>
                       </td>
-                      <td className="px-4 py-4 align-top font-medium text-gray-600">{ledger.transaction_type || "-"}</td>
+
+                      <td className="px-4 py-4 align-top font-medium text-gray-600">
+                        {ledger.transaction_type || "-"}
+                      </td>
+
                       <td className="px-4 py-4 align-top">
-                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
                           {ledger.direction || "-"}
                         </span>
                       </td>
+
                       <td className="px-4 py-4 align-top font-medium text-gray-600">
                         {formatTanggal(ledger.occurred_at || ledger.created_at)}
                       </td>
+
                       <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
                         {formatRupiah(ledger.amount)}
                       </td>
@@ -1072,331 +1249,414 @@ export default function WalletsPage() {
         )}
       </section>
 
-      {isWalletActionOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-          <div className="my-6 w-full max-w-2xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <div className="bg-[#C92C1E] p-5 text-white">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-black">{walletActionLabel[walletActionType]}</h2>
-                  <p className="mt-1 text-xs font-medium text-white/80">
-                    {getWalletActionDescription(walletActionType)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsWalletActionOpen(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-lg font-black"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
+      <ModalShell
+        open={isWalletActionOpen}
+        title={walletActionLabel[walletActionType]}
+        subtitle={getWalletActionDescription(walletActionType)}
+        onClose={() => setIsWalletActionOpen(false)}
+      >
+        <form
+          onSubmit={handleCreateWalletAction}
+          autoComplete="off"
+          className="space-y-5"
+        >
+          <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+              Owner
+            </p>
 
-            <form onSubmit={handleCreateWalletAction} className="space-y-4 p-5">
-              <label className="block space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                  Owner
+            <div className="mt-4">
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Pilih Owner
                 </span>
+
                 <select
                   value={walletActionForm.ownerId}
-                  onChange={(event) => setWalletActionForm((prev) => ({ ...prev, ownerId: event.target.value }))}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
+                  onChange={(event) =>
+                    setWalletActionForm((prev) => ({
+                      ...prev,
+                      ownerId: event.target.value,
+                    }))
+                  }
+                  className={selectClass}
                 >
                   <option value="">Pilih Owner</option>
+
                   {ownerOptions.map((owner) => (
                     <option key={owner.ownerId} value={owner.ownerId}>
-                      {owner.ownerCode} — {owner.ownerName} — saldo {formatRupiah(owner.balance)}
+                      {owner.ownerCode} — {owner.ownerName} — saldo{" "}
+                      {formatRupiah(owner.balance)}
                     </option>
                   ))}
                 </select>
               </label>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <label className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                    Nominal
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+              Detail Mutasi
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nominal
+                </span>
+
+                <input
+                  value={formatNumberInput(walletActionForm.amount)}
+                  onChange={(event) =>
+                    setWalletActionForm((prev) => ({
+                      ...prev,
+                      amount: parseRupiahInput(event.target.value),
+                    }))
+                  }
+                  placeholder="Contoh: 1.000.000"
+                  className={inputClass}
+                />
+              </label>
+
+              {walletActionType === "topup" && (
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Channel
                   </span>
-                  <input
-                    value={formatNumberInput(walletActionForm.amount)}
-                    onChange={(event) =>
-                      setWalletActionForm((prev) => ({ ...prev, amount: parseRupiahInput(event.target.value) }))
-                    }
-                    placeholder="Contoh: 1.000.000"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                  />
-                </label>
 
-                {walletActionType === "topup" && (
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                      Channel
-                    </span>
-                    <select
-                      value={walletActionForm.paymentChannel}
-                      onChange={(event) =>
-                        setWalletActionForm((prev) => ({ ...prev, paymentChannel: event.target.value }))
-                      }
-                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                    >
-                      <option value="MANUAL">MANUAL</option>
-                      <option value="MIDTRANS">MIDTRANS</option>
-                      <option value="BANK_TRANSFER">BANK_TRANSFER</option>
-                      <option value="QRIS">QRIS</option>
-                      <option value="VA">VA</option>
-                    </select>
-                  </label>
-                )}
-
-                {walletActionType === "adjustment" && (
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                      Direction
-                    </span>
-                    <select
-                      value={walletActionForm.direction}
-                      onChange={(event) =>
-                        setWalletActionForm((prev) => ({ ...prev, direction: event.target.value as "CREDIT" | "DEBIT" }))
-                      }
-                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                    >
-                      <option value="CREDIT">CREDIT</option>
-                      <option value="DEBIT">DEBIT</option>
-                    </select>
-                  </label>
-                )}
-
-                <label className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                    Source / External Reference
-                  </span>
-                  <input
-                    value={walletActionForm.sourceReference || walletActionForm.externalReference}
-                    onChange={(event) =>
-                      setWalletActionForm((prev) => ({ ...prev, sourceReference: event.target.value, externalReference: event.target.value }))
-                    }
-                    placeholder="Contoh: MANUAL-WALLET-001"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                  />
-                </label>
-
-                <label className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                    Idempotency Key
-                  </span>
-                  <input
-                    value={walletActionForm.idempotencyKey}
-                    onChange={(event) =>
-                      setWalletActionForm((prev) => ({ ...prev, idempotencyKey: event.target.value }))
-                    }
-                    placeholder="Boleh kosong jika reference unik"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                  />
-                </label>
-
-                <label className="space-y-1 md:col-span-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                    {walletActionType === "topup" ? "Paid At" : "Occurred At"}
-                  </span>
-                  <input
-                    type="datetime-local"
-                    value={walletActionType === "topup" ? walletActionForm.paidAt : walletActionForm.occurredAt}
+                  <select
+                    value={walletActionForm.paymentChannel}
                     onChange={(event) =>
                       setWalletActionForm((prev) => ({
                         ...prev,
-                        paidAt: walletActionType === "topup" ? event.target.value : prev.paidAt,
-                        occurredAt: walletActionType !== "topup" ? event.target.value : prev.occurredAt,
+                        paymentChannel: event.target.value,
                       }))
                     }
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                  />
+                    className={selectClass}
+                  >
+                    <option value="MANUAL">MANUAL</option>
+                    <option value="MIDTRANS">MIDTRANS</option>
+                    <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+                    <option value="QRIS">QRIS</option>
+                    <option value="VA">VA</option>
+                  </select>
                 </label>
+              )}
 
-                <label className="space-y-1 md:col-span-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                    Catatan
+              {walletActionType === "adjustment" && (
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Direction
                   </span>
-                  <textarea
-                    value={walletActionForm.note}
+
+                  <select
+                    value={walletActionForm.direction}
                     onChange={(event) =>
-                      setWalletActionForm((prev) => ({ ...prev, note: event.target.value }))
+                      setWalletActionForm((prev) => ({
+                        ...prev,
+                        direction: event.target.value as "CREDIT" | "DEBIT",
+                      }))
                     }
-                    rows={3}
-                    placeholder={`Catatan ${walletActionLabel[walletActionType]}`}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"
-                  />
+                    className={selectClass}
+                  >
+                    <option value="CREDIT">CREDIT</option>
+                    <option value="DEBIT">DEBIT</option>
+                  </select>
                 </label>
-              </div>
+              )}
 
-              <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-[#C92C1E]">
-                Mutasi wallet hanya boleh dilakukan Admin. Debit, adjustment DEBIT, dan refund akan ditolak backend jika saldo tidak cukup.
-              </div>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Source / External Reference
+                </span>
 
-              <div className="flex flex-col-reverse gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsWalletActionOpen(false)}
-                  className="rounded-2xl border border-gray-200 px-5 py-3 text-xs font-black text-gray-500 transition hover:bg-gray-50"
-                >
-                  Batal
-                </button>
+                <input
+                  value={
+                    walletActionForm.sourceReference ||
+                    walletActionForm.externalReference
+                  }
+                  onChange={(event) =>
+                    setWalletActionForm((prev) => ({
+                      ...prev,
+                      sourceReference: event.target.value,
+                      externalReference: event.target.value,
+                    }))
+                  }
+                  placeholder="Contoh: MANUAL-WALLET-001"
+                  className={inputClass}
+                />
+              </label>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {loading ? "Menyimpan..." : `Simpan ${walletActionLabel[walletActionType]}`}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Idempotency Key
+                </span>
 
-      {(selectedPaymentDetail || selectedWalletDetail) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-          <div className="my-6 w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 bg-[#C92C1E] p-5 text-white">
-              <div>
-                <h2 className="text-xl font-black">{detailTitle}</h2>
-                <p className="mt-1 text-xs font-medium text-white/80">
-                  Detail data dari endpoint Sprint 09.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPaymentDetail(null);
-                  setSelectedWalletDetail(null);
-                  setSelectedOwnerLedger([]);
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-lg font-black"
-              >
-                ×
-              </button>
+                <input
+                  value={walletActionForm.idempotencyKey}
+                  onChange={(event) =>
+                    setWalletActionForm((prev) => ({
+                      ...prev,
+                      idempotencyKey: event.target.value,
+                    }))
+                  }
+                  placeholder="Boleh kosong jika reference unik"
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  {walletActionType === "topup" ? "Paid At" : "Occurred At"}
+                </span>
+
+                <input
+                  type="datetime-local"
+                  value={
+                    walletActionType === "topup"
+                      ? walletActionForm.paidAt
+                      : walletActionForm.occurredAt
+                  }
+                  onChange={(event) =>
+                    setWalletActionForm((prev) => ({
+                      ...prev,
+                      paidAt:
+                        walletActionType === "topup"
+                          ? event.target.value
+                          : prev.paidAt,
+                      occurredAt:
+                        walletActionType !== "topup"
+                          ? event.target.value
+                          : prev.occurredAt,
+                    }))
+                  }
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Catatan
+                </span>
+
+                <textarea
+                  value={walletActionForm.note}
+                  onChange={(event) =>
+                    setWalletActionForm((prev) => ({
+                      ...prev,
+                      note: event.target.value,
+                    }))
+                  }
+                  rows={3}
+                  placeholder={`Catatan ${walletActionLabel[walletActionType]}`}
+                  className={textareaClass}
+                />
+              </label>
             </div>
+          </div>
 
-            <div className="space-y-4 p-5">
-              {selectedPaymentDetail?.payment && (
-                <div className="rounded-2xl border border-gray-200 p-4">
-                  <h3 className="text-sm font-black text-gray-900">Payment</h3>
-                  <div className="mt-3 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
-                    <InfoItem label="Kode" value={selectedPaymentDetail.payment.code || `PAY-${selectedPaymentDetail.payment.id}`} />
-                    <InfoItem label="Owner" value={`${getOwnerCode(selectedPaymentDetail.payment.owner)} — ${getOwnerName(selectedPaymentDetail.payment.owner)}`} />
-                    <InfoItem label="Channel" value={selectedPaymentDetail.payment.payment_channel || selectedPaymentDetail.payment.channel || "-"} />
-                    <InfoItem label="Status Pembayaran" value={selectedPaymentDetail.payment.status || "-"} />
-                    <InfoItem label="Paid At" value={formatTanggal(selectedPaymentDetail.payment.paid_at || selectedPaymentDetail.payment.created_at)} />
-                    <InfoItem label="Amount" value={formatRupiah(selectedPaymentDetail.payment.amount)} />
-                  </div>
-                </div>
-              )}
+          <div className="rounded-2xl border border-dashed border-red-100 bg-red-50/70 px-4 py-3 text-xs font-bold leading-5 text-[#C92C1E]">
+            Mutasi wallet hanya boleh dilakukan Admin. Debit, adjustment DEBIT,
+            dan refund akan ditolak backend jika saldo tidak cukup.
+          </div>
 
-              {selectedWalletDetail && (
-                <div className="rounded-2xl border border-gray-200 p-4">
-                  <h3 className="text-sm font-black text-gray-900">Wallet</h3>
-                  <div className="mt-3 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
-                    <InfoItem label="Account Code" value={selectedWalletDetail.account_code || selectedWalletDetail.code || `WALLET-${selectedWalletDetail.id}`} />
-                    <InfoItem label="Owner" value={`${getOwnerCode(selectedWalletDetail.owner)} — ${getOwnerName(selectedWalletDetail.owner)}`} />
-                    <InfoItem label="Status" value={selectedWalletDetail.status || "-"} />
-                    <InfoItem label="Balance" value={formatRupiah(selectedWalletDetail.balance)} />
-                    <InfoItem label="Ledger Balance" value={formatRupiah(selectedWalletDetail.ledger_balance)} />
-                    <InfoItem label="Currency" value={selectedWalletDetail.currency || "IDR"} />
-                  </div>
-                </div>
-              )}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsWalletActionOpen(false)}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+            >
+              Batal
+            </button>
 
-              {selectedOwnerLedger.length > 0 && (
-                <div className="rounded-2xl border border-gray-200 p-4">
-                  <h3 className="text-sm font-black text-gray-900">Owner Ledger</h3>
-                  <div className="mt-3 max-h-80 space-y-3 overflow-y-auto pr-1">
-                    {selectedOwnerLedger.map((item) => {
-                      const isCredit = (item.direction || item.transaction_type || "").toUpperCase() === "CREDIT";
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {loading
+                ? "Menyimpan..."
+                : `Simpan ${walletActionLabel[walletActionType]}`}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
 
-                      return (
-                        <div
-                          key={item.id}
-                          className="rounded-2xl border border-gray-100 bg-gray-50 p-4"
-                        >
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div className="min-w-0">
-                              <p className="break-words text-xs font-black text-gray-900">
-                                {item.code || `TRX-${item.id}`}
-                              </p>
-                              <p className="mt-1 text-[11px] font-bold text-gray-400">
-                                {formatTanggal(item.occurred_at || item.created_at)}
-                              </p>
-                            </div>
+      <ModalShell
+        open={Boolean(selectedPaymentDetail || selectedWalletDetail)}
+        title={detailTitle || "Detail Wallet"}
+        subtitle="Detail payment, wallet, dan ledger mengikuti tampilan popup Komisi."
+        maxWidth="max-w-3xl"
+        onClose={closeDetailModal}
+      >
+        <div className="space-y-5">
+          {selectedPaymentDetail?.payment && (
+            <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+                Payment
+              </p>
 
-                            <div className="flex flex-wrap gap-2">
-                              <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-black text-gray-600">
-                                {item.transaction_type || "-"}
-                              </span>
-                              <span
-                                className={`rounded-full border px-3 py-1 text-[10px] font-black ${
-                                  isCredit
-                                    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                    : "border-red-100 bg-red-50 text-[#C92C1E]"
-                                }`}
-                              >
-                                {item.direction || "-"}
-                              </span>
-                            </div>
-                          </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
+                <InfoItem
+                  label="Kode"
+                  value={
+                    selectedPaymentDetail.payment.code ||
+                    `PAY-${selectedPaymentDetail.payment.id}`
+                  }
+                />
+                <InfoItem
+                  label="Owner"
+                  value={`${getOwnerCode(
+                    selectedPaymentDetail.payment.owner,
+                  )} — ${getOwnerName(selectedPaymentDetail.payment.owner)}`}
+                />
+                <InfoItem
+                  label="Channel"
+                  value={
+                    selectedPaymentDetail.payment.payment_channel ||
+                    selectedPaymentDetail.payment.channel ||
+                    "-"
+                  }
+                />
+                <InfoItem
+                  label="Status Pembayaran"
+                  value={selectedPaymentDetail.payment.status || "-"}
+                />
+                <InfoItem
+                  label="Paid At"
+                  value={formatTanggal(
+                    selectedPaymentDetail.payment.paid_at ||
+                      selectedPaymentDetail.payment.created_at,
+                  )}
+                />
+                <InfoItem
+                  label="Amount"
+                  value={formatRupiah(selectedPaymentDetail.payment.amount)}
+                />
+              </div>
+            </div>
+          )}
 
-                          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
-                              <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                                Amount
-                              </p>
-                              <p className={`mt-1 text-sm font-black ${isCredit ? "text-emerald-700" : "text-[#C92C1E]"}`}>
-                                {formatRupiah(item.amount)}
-                              </p>
-                            </div>
+          {selectedWalletDetail && (
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+                Wallet
+              </p>
 
-                            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
-                              <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                                Balance After
-                              </p>
-                              <p className="mt-1 text-sm font-black text-gray-900">
-                                {formatRupiah(item.balance_after)}
-                              </p>
-                            </div>
-                          </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
+                <InfoItem
+                  label="Account Code"
+                  value={
+                    selectedWalletDetail.account_code ||
+                    selectedWalletDetail.code ||
+                    `WALLET-${selectedWalletDetail.id}`
+                  }
+                />
+                <InfoItem
+                  label="Owner"
+                  value={`${getOwnerCode(
+                    selectedWalletDetail.owner,
+                  )} — ${getOwnerName(selectedWalletDetail.owner)}`}
+                />
+                <InfoItem label="Status" value={selectedWalletDetail.status || "-"} />
+                <InfoItem
+                  label="Balance"
+                  value={formatRupiah(selectedWalletDetail.balance)}
+                />
+                <InfoItem
+                  label="Ledger Balance"
+                  value={formatRupiah(selectedWalletDetail.ledger_balance)}
+                />
+                <InfoItem
+                  label="Currency"
+                  value={selectedWalletDetail.currency || "IDR"}
+                />
+              </div>
+            </div>
+          )}
+
+          {selectedOwnerLedger.length > 0 && (
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+                Owner Ledger
+              </p>
+
+              <div className="mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
+                {selectedOwnerLedger.map((item) => {
+                  const isCredit =
+                    (item.direction || item.transaction_type || "").toUpperCase() ===
+                    "CREDIT";
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <p className="break-words text-xs font-black text-gray-900">
+                            {item.code || `TRX-${item.id}`}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {formatTanggal(item.occurred_at || item.created_at)}
+                          </p>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
-              <div className="flex justify-end border-t border-gray-100 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPaymentDetail(null);
-                    setSelectedWalletDetail(null);
-                    setSelectedOwnerLedger([]);
-                  }}
-                  className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white transition hover:bg-[#A82216]"
-                >
-                  Tutup
-                </button>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-black text-gray-600">
+                            {item.transaction_type || "-"}
+                          </span>
+
+                          <span
+                            className={`rounded-full border px-3 py-1 text-[10px] font-black ${
+                              isCredit
+                                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                : "border-red-100 bg-red-50 text-[#C92C1E]"
+                            }`}
+                          >
+                            {item.direction || "-"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <InfoItem label="Amount" value={formatRupiah(item.amount)} />
+                        <InfoItem
+                          label="Balance After"
+                          value={formatRupiah(item.balance_after)}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
+          )}
+
+          <div className="flex justify-end border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={closeDetailModal}
+              className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700"
+            >
+              Tutup
+            </button>
           </div>
         </div>
-      )}
+      </ModalShell>
     </div>
   );
 }
 
-
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-      <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="mt-1 break-words text-xs font-black text-gray-900">{value}</p>
+    <div className="rounded-2xl border border-gray-100 bg-[#FAFAFA] px-4 py-3">
+      <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-xs font-black text-gray-900">
+        {value}
+      </p>
     </div>
   );
 }
