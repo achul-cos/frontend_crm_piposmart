@@ -34,6 +34,8 @@ type ActionButtonsProps<T extends ActionItem> = {
   onDelete: (item: T) => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  /** Sembunyikan tombol Call & Chat. Set false untuk Admin dan Supervisor. */
+  canCall?: boolean;
 };
 
 type EditProfileModalProps<T extends EditProfileItem> = {
@@ -688,17 +690,20 @@ export default function ActionButtons<T extends ActionItem>({
   onDelete,
   canEdit = true,
   canDelete = true,
+  canCall = true,
 }: ActionButtonsProps<T>) {
   return (
     <div className="flex items-center justify-center gap-3">
-      <button
-        type="button"
-        onClick={() => onCall(item)}
-        className="text-gray-600 transition hover:scale-110 hover:text-green-600"
-        title="Call via WhatsApp"
-      >
-        <CallIcon className="h-5 w-5" />
-      </button>
+      {canCall && (
+        <button
+          type="button"
+          onClick={() => onCall(item)}
+          className="text-gray-600 transition hover:scale-110 hover:text-green-600"
+          title="Call via WhatsApp"
+        >
+          <CallIcon className="h-5 w-5" />
+        </button>
+      )}
 
       {canEdit && (
         <button

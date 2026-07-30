@@ -444,6 +444,19 @@ export default function DataKelolaanPage() {
   const [correctionStatusText, setCorrectionStatusText] = useState("");
   // Ref untuk menyimpan timer polling — agar bisa dibatalkan kapanpun
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref untuk combobox input PIC — dipakai menghitung posisi dropdown fixed
+  const picSearchRef = useRef<HTMLInputElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const openDropdownWithPosition = () => {
+    if (picSearchRef.current) {
+      const rect = picSearchRef.current.closest('[data-combobox]')?.getBoundingClientRect()
+        ?? picSearchRef.current.getBoundingClientRect();
+      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    setBulkPicDropdownOpen(true);
+  };
+
 
   // Batalkan polling otomatis saat komponen unmount
   useEffect(() => {
@@ -519,6 +532,9 @@ export default function DataKelolaanPage() {
   const [bulkPicModalOpen, setBulkPicModalOpen] = useState(false);
   const [bulkSelectedPic, setBulkSelectedPic] = useState("");
   const [bulkActionReason, setBulkActionReason] = useState("");
+  const [bulkPicSearch, setBulkPicSearch] = useState("");
+  const [bulkPicDropdownOpen, setBulkPicDropdownOpen] = useState(false);
+
 
   const [loggedInUser, setLoggedInUser] = useState("Satria");
   const [loggedInRole, setLoggedInRole] = useState("Developer");
@@ -1143,6 +1159,8 @@ export default function DataKelolaanPage() {
 
     setBulkSelectedPic("");
     setBulkActionReason("");
+    setBulkPicSearch("");
+    setBulkPicDropdownOpen(false);
     setBulkPicModalOpen(true);
   };
 
@@ -1150,6 +1168,9 @@ export default function DataKelolaanPage() {
     setBulkPicModalOpen(false);
     setBulkSelectedPic("");
     setBulkActionReason("");
+    setBulkPicSearch("");
+    setBulkPicDropdownOpen(false);
+    setDropdownRect(null);
   };
 
   const handleSaveBulkPic = async (event: React.FormEvent) => {
@@ -2328,6 +2349,7 @@ export default function DataKelolaanPage() {
                               onDelete={handleHapusSatuData}
                               canEdit={isAdminState}
                               canDelete={isAdminState}
+                              canCall={isSalesState}
                             />
                           </div>
                         </td>
@@ -2409,7 +2431,7 @@ export default function DataKelolaanPage() {
       {/* MODAL EDIT PIC DATA TERPILIH */}
       {bulkPicModalOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 p-3 sm:p-6">
-          <div className="mx-auto my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+        <div className="mx-auto my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-visible rounded-3xl border border-gray-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b p-5">
               <div>
                 <h2 className="text-lg font-black text-gray-900">
@@ -2431,7 +2453,7 @@ export default function DataKelolaanPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveBulkPic} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+            <form onSubmit={handleSaveBulkPic} className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
               <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4">
                 {isSalesState ? (
                   <>
@@ -2460,19 +2482,132 @@ export default function DataKelolaanPage() {
                       {isAdminState ? "PIC Supervisor Baru" : "PIC Sales Baru"}
                     </label>
 
-                    <select
-                      value={bulkSelectedPic}
-                      onChange={(event) => setBulkSelectedPic(event.target.value)}
-                      required
-                      className="w-full cursor-pointer rounded-xl border border-red-100 bg-white p-3 text-xs font-black text-gray-700 outline-none focus:border-[#C92C1E]"
-                    >
-                      <option value="">{isAdminState ? "Pilih Supervisor" : "Pilih Sales"}</option>
-                      {(isAdminState ? supervisorList : salesList).map((pic) => (
-                        <option key={`${pic.id}-${pic.name}`} value={pic.name}>
-                          {pic.name}
-                        </option>
-                      ))}
-                    </select>
+                    {/* Search + Dropdown Combobox */}
+                    <div className="relative">
+                      {/* Input search + selected display */}
+                      <div
+                        data-combobox
+                        className={`flex items-center gap-2 rounded-xl border bg-white px-4 py-3 transition-all ${
+                          bulkPicDropdownOpen
+                            ? "border-[#C92C1E] ring-2 ring-[#C92C1E]/20"
+                            : "border-red-100 hover:border-red-300"
+                        }`}
+                      >
+                        <svg className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input
+                          ref={picSearchRef}
+                          type="text"
+                          value={bulkPicSearch}
+                          onChange={(e) => {
+                            setBulkPicSearch(e.target.value);
+                            openDropdownWithPosition();
+                            if (bulkSelectedPic && !e.target.value.toLowerCase().includes(bulkSelectedPic.toLowerCase())) {
+                              setBulkSelectedPic("");
+                            }
+                          }}
+                          onFocus={openDropdownWithPosition}
+                          placeholder={bulkSelectedPic || (isAdminState ? "Cari supervisor..." : "Cari sales...")}
+                          className="flex-1 bg-transparent text-sm font-bold text-gray-700 outline-none placeholder:font-medium placeholder:text-gray-400"
+                        />
+                        {bulkSelectedPic && (
+                          <button
+                            type="button"
+                            onClick={() => { setBulkSelectedPic(""); setBulkPicSearch(""); }}
+                            className="flex-shrink-0 rounded-full p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                            title="Hapus pilihan"
+                          >
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (bulkPicDropdownOpen) {
+                              setBulkPicDropdownOpen(false);
+                            } else {
+                              openDropdownWithPosition();
+                            }
+                          }}
+                          className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+                        >
+                          <svg
+                            className={`h-3.5 w-3.5 transition-transform ${bulkPicDropdownOpen ? "rotate-180" : ""}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Dropdown list */}
+                      {bulkPicDropdownOpen && (() => {
+                        const sourceList = isAdminState ? supervisorList : salesList;
+                        const filtered = sourceList.filter(p =>
+                          p.name.toLowerCase().includes(bulkPicSearch.toLowerCase())
+                        );
+                        return dropdownRect ? (
+                          <div
+                            className="fixed z-[9999] max-h-56 overflow-y-auto p-1.5 rounded-xl border border-gray-200 bg-white shadow-2xl [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400"
+                            style={{
+                              top: dropdownRect.top,
+                              left: dropdownRect.left,
+                              width: dropdownRect.width,
+                            }}
+                          >
+                            {filtered.length === 0 ? (
+                              <div className="px-4 py-3 text-center text-xs font-medium text-gray-400">
+                                Tidak ada {isAdminState ? "supervisor" : "sales"} ditemukan
+                              </div>
+                            ) : (
+                              filtered.map((pic) => (
+                                <button
+                                  key={`${pic.id}-${pic.name}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setBulkSelectedPic(pic.name);
+                                    setBulkPicSearch(pic.name);
+                                    setBulkPicDropdownOpen(false);
+                                  }}
+                                  className={`flex w-full items-center gap-3 px-3 py-2 rounded-lg text-left text-xs transition-colors hover:bg-red-50 ${
+                                    bulkSelectedPic === pic.name
+                                      ? "bg-red-50 font-black text-[#C92C1E]"
+                                      : "font-bold text-gray-700"
+                                  }`}
+                                >
+                                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-black text-gray-600">
+                                    {pic.name.charAt(0).toUpperCase()}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate">{pic.name}</div>
+                                    {pic.code && <div className="text-[10px] font-medium text-gray-400">{pic.code}</div>}
+                                  </div>
+                                  {bulkSelectedPic === pic.name && (
+                                    <svg className="ml-auto h-3.5 w-3.5 flex-shrink-0 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        ) : null;
+                      })()}
+
+                      {/* Overlay tutup dropdown saat klik luar */}
+                      {bulkPicDropdownOpen && (
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setBulkPicDropdownOpen(false)}
+                        />
+                      )}
+                    </div>
+
+                    {/* Hidden input agar form validation required bisa bekerja */}
+                    <input type="text" required value={bulkSelectedPic} readOnly className="sr-only" tabIndex={-1} />
 
                     <p className="mt-2 text-[11px] font-medium text-gray-400">
                       Setelah disimpan, semua data yang dicentang akan berubah ke PIC yang dipilih.
@@ -2481,18 +2616,18 @@ export default function DataKelolaanPage() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 border-t pt-4">
+              <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4 sm:px-6">
                 <button
                   type="button"
                   onClick={closeBulkPicModal}
-                  className="rounded-xl border px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-50"
+                  className="rounded-xl border border-gray-200 px-5 py-2.5 text-xs font-bold text-gray-500 hover:bg-gray-50"
                 >
                   Batal
                 </button>
 
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#C92C1E] px-5 py-2 text-xs font-extrabold text-white shadow-sm hover:bg-[#A82216]"
+                  className="rounded-xl bg-[#C92C1E] px-6 py-2.5 text-xs font-extrabold text-white shadow-sm hover:bg-[#A82216] disabled:opacity-60"
                 >
                   {isSalesState ? "Lepas Lead" : "Simpan PIC"}
                 </button>
@@ -2506,7 +2641,13 @@ export default function DataKelolaanPage() {
         open={editModalOpen}
         item={editingItem}
         errors={profileValidationErrors}
-        listPic={combinedPicList.map(p => p.name)}
+        listPic={
+          isAdminState
+            ? supervisorList.map(p => p.name)
+            : isSupervisorState
+            ? salesList.map(p => p.name)
+            : combinedPicList.map(p => p.name)
+        }
         onClose={closeEditModal}
         onSubmit={handleSaveEditModal}
         onChangeField={updateEditingField}
