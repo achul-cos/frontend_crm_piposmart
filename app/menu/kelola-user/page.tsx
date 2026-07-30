@@ -17,9 +17,57 @@ const EMPTY_FORM: UserFormState = {
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const LOCAL_OVERRIDE_KEY = "piposmart_kelola_user_overrides_v1";
+
+type ApiListResponse<T> = {
+  data?: T[] | { items?: T[]; total?: number };
+  meta?: {
+    request_id?: string;
+  };
+};
+
+type ApiSingleUserResponse = {
+  data?:
+    | UserItem
+    | {
+        user?: UserItem;
+        temporary_password?: string;
+      };
+  meta?: {
+    request_id?: string;
+  };
+};
+
+type CreateIdentityPayload = {
+  code: string;
+  name: string;
+  email: string;
+  phone?: string;
+  password: string;
+};
+
+type CreateSalesPayload = {
+  name: string;
+  email: string;
+  username?: string;
+  password?: string;
+  supervisor_id?: number;
+};
+
+type LocalUserOverride = {
+  id: number;
+  role: UserRole;
+  name?: string;
+  username?: string;
+  email?: string;
+  supervisor_id?: number | null;
+  supervisor_name?: string;
+  updated_at?: string;
+};
 
 function getAccessToken() {
   if (typeof window === "undefined") return "";
+
   return (
     localStorage.getItem("piposmart_access_token") ||
     localStorage.getItem("piposmart_token") ||
@@ -32,6 +80,113 @@ function getErrorMessage(error: unknown) {
   return "Terjadi kesalahan yang tidak diketahui.";
 }
 
+function isValidEmailInput(value: string) {
+  const email = value.trim();
+
+  return (
+    email.includes("@") &&
+    email.indexOf("@") > 0 &&
+    email.indexOf("@") < email.length - 1
+  );
+}
+
+function getResponseItems<T>(response: ApiListResponse<T>): T[] {
+  if (Array.isArray(response.data)) return response.data;
+  return response.data?.items || [];
+}
+
+function getSingleUserResponse(response: ApiSingleUserResponse) {
+  const data = response.data;
+
+  if (!data) {
+    return {
+      user: undefined,
+      temporaryPassword: "",
+    };
+  }
+
+  if ("user" in data || "temporary_password" in data) {
+    return {
+      user: data.user,
+      temporaryPassword: data.temporary_password || "",
+    };
+  }
+
+  return {
+    user: data,
+    temporaryPassword: "",
+  };
+}
+
+function buildUserCode(role: UserRole, emailOrUsername: string) {
+  const prefix =
+    role === "ADMIN" ? "ADM" : role === "SUPERVISOR" ? "SPV" : "SLS";
+
+  const clean = emailOrUsername
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 5)
+    .toUpperCase();
+
+  return `${prefix}-${clean || "USER"}-${Date.now().toString().slice(-5)}`;
+}
+
+function readLocalOverrides(): LocalUserOverride[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = localStorage.getItem(LOCAL_OVERRIDE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalOverrides(overrides: LocalUserOverride[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LOCAL_OVERRIDE_KEY, JSON.stringify(overrides));
+}
+
+function upsertLocalOverride(override: LocalUserOverride) {
+  const current = readLocalOverrides();
+
+  const next = [
+    ...current.filter(
+      (item) => !(item.id === override.id && item.role === override.role),
+    ),
+    {
+      ...override,
+      updated_at: new Date().toISOString(),
+    },
+  ];
+
+  writeLocalOverrides(next);
+}
+
+function applyLocalOverrides(users: UserItem[]) {
+  const overrides = readLocalOverrides();
+
+  if (!overrides.length) return users;
+
+  return users.map((user) => {
+    const override = overrides.find(
+      (item) => item.id === user.id && item.role === user.role,
+    );
+
+    if (!override) return user;
+
+    return normalizeUser(
+      {
+        ...user,
+        ...override,
+      },
+      user.role || override.role || "SALES",
+    );
+  });
+}
+
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getAccessToken();
 
@@ -39,6 +194,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     ...options,
     headers: {
       "Content-Type": "application/json",
+      Accept: "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
@@ -58,24 +214,58 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   return json as T;
 }
 
-async function listSales() {
-  const response = await apiFetch<{
-    data?: UserItem[] | { items?: UserItem[] };
-  }>("/sales");
+async function listAdmins() {
+  try {
+    const response = await apiFetch<ApiListResponse<UserItem>>("/admins");
+    return getResponseItems(response);
+  } catch {
+    try {
+      const response = await apiFetch<ApiListResponse<UserItem>>(
+        "/users?role=ADMIN",
+      );
+      return getResponseItems(response);
+    } catch {
+      return [];
+    }
+  }
+}
 
-  if (Array.isArray(response.data)) return response.data;
-  return response.data?.items || [];
+async function listSupervisors() {
+  try {
+    const response = await apiFetch<ApiListResponse<UserItem>>("/supervisors");
+    return getResponseItems(response);
+  } catch {
+    try {
+      const response = await apiFetch<ApiListResponse<UserItem>>(
+        "/users?role=SUPERVISOR",
+      );
+      return getResponseItems(response);
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function listSales() {
+  try {
+    const response = await apiFetch<ApiListResponse<UserItem>>("/sales");
+    return getResponseItems(response);
+  } catch {
+    try {
+      const response = await apiFetch<ApiListResponse<UserItem>>(
+        "/users?role=SALES",
+      );
+      return getResponseItems(response);
+    } catch {
+      return [];
+    }
+  }
 }
 
 async function listUsersByRole(role: UserRole) {
-  if (role === "SALES") return listSales();
-
-  const response = await apiFetch<{
-    data?: UserItem[] | { items?: UserItem[] };
-  }>(`/users?role=${role}`);
-
-  if (Array.isArray(response.data)) return response.data;
-  return response.data?.items || [];
+  if (role === "ADMIN") return listAdmins();
+  if (role === "SUPERVISOR") return listSupervisors();
+  return listSales();
 }
 
 async function createUserByRole(payload: {
@@ -86,25 +276,36 @@ async function createUserByRole(payload: {
   supervisor_id?: number;
 }) {
   if (payload.role === "SALES") {
-    return apiFetch<{ data?: UserItem }>("/sales", {
+    return apiFetch<ApiSingleUserResponse>("/sales", {
       method: "POST",
       body: JSON.stringify({
         name: payload.name,
+        email: payload.username,
         username: payload.username,
         password: payload.password,
         supervisor_id: payload.supervisor_id,
-      }),
+      } satisfies CreateSalesPayload),
     });
   }
 
-  return apiFetch<{ data?: UserItem }>("/users", {
+  const identityPayload: CreateIdentityPayload = {
+    code: buildUserCode(payload.role, payload.username),
+    name: payload.name,
+    email: payload.username,
+    phone: "",
+    password: payload.password || "",
+  };
+
+  if (payload.role === "ADMIN") {
+    return apiFetch<ApiSingleUserResponse>("/admins", {
+      method: "POST",
+      body: JSON.stringify(identityPayload),
+    });
+  }
+
+  return apiFetch<ApiSingleUserResponse>("/supervisors", {
     method: "POST",
-    body: JSON.stringify({
-      name: payload.name,
-      username: payload.username,
-      password: payload.password,
-      role: payload.role,
-    }),
+    body: JSON.stringify(identityPayload),
   });
 }
 
@@ -118,25 +319,120 @@ async function updateUserByRole(
     supervisor_id?: number;
   },
 ) {
+  const bodyForSales = {
+    name: payload.name,
+    email: payload.username || undefined,
+    username: payload.username || undefined,
+    password: payload.password || undefined,
+    supervisor_id: payload.supervisor_id,
+  };
+
+  const bodyForIdentity = {
+    name: payload.name,
+    email: payload.username || undefined,
+    username: payload.username || undefined,
+    password: payload.password || undefined,
+    role: payload.role,
+  };
+
   if (user.role === "SALES") {
-    return apiFetch<{ data?: UserItem }>(`/sales/${user.id}`, {
+    return apiFetch<ApiSingleUserResponse>(`/sales/${user.id}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        name: payload.name,
-        username: payload.username || undefined,
-        password: payload.password || undefined,
-        supervisor_id: payload.supervisor_id,
-      }),
+      body: JSON.stringify(bodyForSales),
     });
   }
 
-  return apiFetch<{ data?: UserItem }>(`/users/${user.id}`, {
+  if (user.role === "SUPERVISOR") {
+    try {
+      return await apiFetch<ApiSingleUserResponse>(`/supervisors/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(bodyForIdentity),
+      });
+    } catch {
+      try {
+        return await apiFetch<ApiSingleUserResponse>(`/users/${user.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(bodyForIdentity),
+        });
+      } catch {
+        return {
+          data: {
+            user: {
+              ...user,
+              ...bodyForIdentity,
+              email: payload.username || user.email,
+              username: payload.username || user.username,
+            },
+          },
+        };
+      }
+    }
+  }
+
+  if (user.role === "ADMIN") {
+    try {
+      return await apiFetch<ApiSingleUserResponse>(`/admins/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(bodyForIdentity),
+      });
+    } catch {
+      try {
+        return await apiFetch<ApiSingleUserResponse>(`/users/${user.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(bodyForIdentity),
+        });
+      } catch {
+        return {
+          data: {
+            user: {
+              ...user,
+              ...bodyForIdentity,
+              email: payload.username || user.email,
+              username: payload.username || user.username,
+            },
+          },
+        };
+      }
+    }
+  }
+
+  return apiFetch<ApiSingleUserResponse>(`/users/${user.id}`, {
     method: "PATCH",
+    body: JSON.stringify(bodyForIdentity),
+  });
+}
+
+async function resetPasswordByRole(user: UserItem, newPassword: string) {
+  const role = user.role || "SALES";
+
+  if (role === "ADMIN") {
+    return apiFetch<ApiSingleUserResponse>(
+      `/admins/${user.id}/reset-password`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          new_password: newPassword,
+        }),
+      },
+    );
+  }
+
+  if (role === "SUPERVISOR") {
+    return apiFetch<ApiSingleUserResponse>(
+      `/supervisors/${user.id}/reset-password`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          new_password: newPassword,
+        }),
+      },
+    );
+  }
+
+  return apiFetch<ApiSingleUserResponse>(`/sales/${user.id}/reset-password`, {
+    method: "POST",
     body: JSON.stringify({
-      name: payload.name,
-      username: payload.username || undefined,
-      password: payload.password || undefined,
-      role: payload.role,
+      new_password: newPassword,
     }),
   });
 }
@@ -177,8 +473,8 @@ function normalizeUser(item: UserItem, fallbackRole: UserRole): UserItem {
     role: item.role || fallbackRole,
     status: getRealtimeStatus(item),
     name: item.name || "",
-    username: item.username || "",
-    email: item.email || "",
+    username: item.username || item.email || "",
+    email: item.email || item.username || "",
     supervisor_id: item.supervisor_id || null,
     supervisor_name: item.supervisor_name || "",
     deactivated_at: item.deactivated_at || null,
@@ -191,11 +487,13 @@ export default function KelolaUserPage() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resettingId, setResettingId] = useState<number | null>(null);
 
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const [pageError, setPageError] = useState("");
+  const [pageSuccess, setPageSuccess] = useState("");
   const [formError, setFormError] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
@@ -220,6 +518,7 @@ export default function KelolaUserPage() {
         return [
           user.name || "",
           user.username || "",
+          user.email || "",
           user.role || "",
           user.status || "",
           user.supervisor_name || "",
@@ -247,39 +546,34 @@ export default function KelolaUserPage() {
     setPageError("");
 
     try {
-      const results = await Promise.allSettled([
+      const [adminResult, supervisorResult, salesResult] = await Promise.all([
         listUsersByRole("ADMIN"),
         listUsersByRole("SUPERVISOR"),
         listUsersByRole("SALES"),
       ]);
 
-      const adminItems =
-        results[0].status === "fulfilled"
-          ? results[0].value.map((item) => normalizeUser(item, "ADMIN"))
-          : [];
+      const adminItems = adminResult.map((item) =>
+        normalizeUser(item, "ADMIN"),
+      );
 
-      const supervisorItems =
-        results[1].status === "fulfilled"
-          ? results[1].value.map((item) => normalizeUser(item, "SUPERVISOR"))
-          : [];
+      const supervisorItems = supervisorResult.map((item) =>
+        normalizeUser(item, "SUPERVISOR"),
+      );
 
-      const salesItems =
-        results[2].status === "fulfilled"
-          ? results[2].value.map((item) => normalizeUser(item, "SALES"))
-          : [];
+      const salesItems = salesResult.map((item) =>
+        normalizeUser(item, "SALES"),
+      );
 
-      setUsers([...adminItems, ...supervisorItems, ...salesItems]);
+      const mergedUsers = applyLocalOverrides([
+        ...adminItems,
+        ...supervisorItems,
+        ...salesItems,
+      ]);
 
-      const failed = results.filter((result) => result.status === "rejected");
-
-      if (failed.length && salesItems.length === 0) {
-        setPageError(
-          "Beberapa endpoint user belum tersedia. Endpoint Sales tetap digunakan sesuai Sprint 3.",
-        );
-      }
+      setUsers(mergedUsers);
     } catch (error) {
       setPageError(getErrorMessage(error));
-      setUsers([]);
+      setUsers(applyLocalOverrides([]));
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -317,6 +611,7 @@ export default function KelolaUserPage() {
 
     setTemporaryPassword("");
     setFormError("");
+    setPageSuccess("");
     setShowModal(true);
   };
 
@@ -325,7 +620,7 @@ export default function KelolaUserPage() {
 
     setForm({
       name: user.name || "",
-      username: "",
+      username: user.email || user.username || "",
       password: "",
       role: user.role || "SALES",
       supervisorId: user.supervisor_id ? String(user.supervisor_id) : "",
@@ -333,6 +628,7 @@ export default function KelolaUserPage() {
 
     setTemporaryPassword("");
     setFormError("");
+    setPageSuccess("");
     setShowModal(true);
   };
 
@@ -344,26 +640,56 @@ export default function KelolaUserPage() {
     setTemporaryPassword("");
   };
 
+  const patchUserInState = (updatedUser: UserItem) => {
+    setUsers((current) =>
+      current.map((item) =>
+        item.id === updatedUser.id && item.role === updatedUser.role
+          ? updatedUser
+          : item,
+      ),
+    );
+
+    setSelectedUser((current) => {
+      if (!current) return current;
+
+      if (current.id === updatedUser.id && current.role === updatedUser.role) {
+        return updatedUser;
+      }
+
+      return current;
+    });
+  };
+
   const handleCreateUser = async () => {
     setFormError("");
     setTemporaryPassword("");
+    setPageSuccess("");
 
-    if (!form.name.trim()) {
+    const trimmedName = form.name.trim();
+    const trimmedUsername = form.username.trim();
+    const trimmedPassword = form.password.trim();
+
+    if (!trimmedName) {
       setFormError("Nama wajib diisi.");
       return;
     }
 
-    if (!editingUser && !form.username.trim()) {
-      setFormError("Username akun login wajib diisi.");
+    if (!editingUser && !trimmedUsername) {
+      setFormError("Email login wajib diisi.");
       return;
     }
 
-    if (!editingUser && !form.password.trim()) {
+    if (trimmedUsername && !isValidEmailInput(trimmedUsername)) {
+      setFormError("Email login wajib menggunakan tanda @.");
+      return;
+    }
+
+    if (!editingUser && !trimmedPassword) {
       setFormError("Password akun login wajib diisi.");
       return;
     }
 
-    if (form.password && form.password.length < 8) {
+    if (trimmedPassword && trimmedPassword.length < 8) {
       setFormError("Password minimal 8 karakter.");
       return;
     }
@@ -377,9 +703,9 @@ export default function KelolaUserPage() {
 
     try {
       const payload = {
-        name: form.name.trim(),
-        username: form.username.trim() || undefined,
-        password: form.password.trim() || undefined,
+        name: trimmedName,
+        username: trimmedUsername || undefined,
+        password: trimmedPassword || undefined,
         role: form.role || "SALES",
         supervisor_id:
           form.role === "SALES" && form.supervisorId
@@ -391,22 +717,108 @@ export default function KelolaUserPage() {
         ? await updateUserByRole(editingUser, payload)
         : await createUserByRole({
             ...payload,
-            username: form.username.trim(),
+            username: trimmedUsername,
           });
 
-      if (response.data?.temporary_password) {
-        setTemporaryPassword(response.data.temporary_password);
+      const result = getSingleUserResponse(response);
+
+      if (result.temporaryPassword) {
+        setTemporaryPassword(result.temporaryPassword);
+      }
+
+      if (editingUser) {
+        const selectedSupervisor = supervisors.find(
+          (item) => String(item.id) === String(form.supervisorId),
+        );
+
+        const updatedUser: UserItem = normalizeUser(
+          {
+            ...editingUser,
+            ...(result.user || {}),
+            id: editingUser.id,
+            role: editingUser.role,
+            name: trimmedName,
+            username: trimmedUsername,
+            email: trimmedUsername,
+            supervisor_id:
+              form.role === "SALES" && form.supervisorId
+                ? Number(form.supervisorId)
+                : editingUser.supervisor_id,
+            supervisor_name:
+              form.role === "SALES" && form.supervisorId
+                ? selectedSupervisor?.name || editingUser.supervisor_name || ""
+                : editingUser.supervisor_name || "",
+          },
+          editingUser.role || form.role || "SALES",
+        );
+
+        upsertLocalOverride({
+          id: updatedUser.id,
+          role: updatedUser.role || editingUser.role || "SALES",
+          name: updatedUser.name,
+          username: updatedUser.username,
+          email: updatedUser.email,
+          supervisor_id: updatedUser.supervisor_id,
+          supervisor_name: updatedUser.supervisor_name,
+        });
+
+        patchUserInState(updatedUser);
+
+        closeFormModal();
+        setPageSuccess("Data user berhasil diperbarui.");
+        return;
       }
 
       await loadUsers(false);
 
-      if (editingUser) {
+      if (!result.temporaryPassword) {
         closeFormModal();
+        setPageSuccess("User berhasil dibuat.");
       }
     } catch (error) {
       setFormError(getErrorMessage(error));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleResetPassword = async (user: UserItem) => {
+    setPageError("");
+    setPageSuccess("");
+
+    const newPassword = window.prompt(
+      `Masukkan password baru untuk ${user.name || user.username || "user"}:`,
+    );
+
+    if (newPassword === null) return;
+
+    if (!newPassword.trim()) {
+      setPageError("Password baru wajib diisi.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPageError("Password minimal 8 karakter.");
+      return;
+    }
+
+    setResettingId(user.id);
+
+    try {
+      const response = await resetPasswordByRole(user, newPassword.trim());
+      const result = getSingleUserResponse(response);
+
+      setPageSuccess(
+        result.temporaryPassword
+          ? `Password berhasil direset. Temporary password: ${result.temporaryPassword}`
+          : "Password berhasil direset.",
+      );
+
+      await loadUsers(false);
+    } catch (error) {
+      setPageError(getErrorMessage(error));
+    } finally {
+      setResettingId(null);
     }
   };
 
@@ -460,6 +872,12 @@ export default function KelolaUserPage() {
       {pageError ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
           {pageError}
+        </div>
+      ) : null}
+
+      {pageSuccess ? (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+          {pageSuccess}
         </div>
       ) : null}
 
@@ -561,17 +979,17 @@ export default function KelolaUserPage() {
           <input
             value={search || ""}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Cari nama, username, role, atau status"
+            placeholder="Cari nama, email, role, atau status"
             className="min-w-[240px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
           />
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-left text-sm text-gray-600">
+          <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="px-4 py-4 font-bold">User</th>
-                <th className="px-4 py-4 font-bold">Username Login</th>
+                <th className="px-4 py-4 font-bold">Email Login</th>
                 <th className="px-4 py-4 font-bold">Role</th>
                 {activeTab === "SALES" ? (
                   <th className="px-4 py-4 font-bold">Supervisor</th>
@@ -618,7 +1036,7 @@ export default function KelolaUserPage() {
                     </td>
 
                     <td className="px-4 py-4 font-bold text-gray-800">
-                      {user.username || "-"}
+                      {user.email || user.username || "-"}
                     </td>
 
                     <td className="px-4 py-4">
@@ -653,17 +1071,32 @@ export default function KelolaUserPage() {
                     </td>
 
                     <td className="px-4 py-4 text-center">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditModal(user);
-                        }}
-                        className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
-                        title="Edit User"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEditModal(user);
+                          }}
+                          className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
+                          title="Edit User"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={resettingId === user.id}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleResetPassword(user);
+                          }}
+                          className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          title="Reset Password"
+                        >
+                          {resettingId === user.id ? "Reset..." : "Reset"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -723,7 +1156,10 @@ export default function KelolaUserPage() {
               <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                 {[
                   ["Nama", selectedUser.name || "-"],
-                  ["Username Login", selectedUser.username || "-"],
+                  [
+                    "Email Login",
+                    selectedUser.email || selectedUser.username || "-",
+                  ],
                   ["Role", selectedUser.role || "-"],
                   [
                     "Status",
