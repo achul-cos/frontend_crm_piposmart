@@ -743,11 +743,18 @@ export default function MitraSalesPage() {
                       href={`/menu/mitra-sales/detail?id=${partner.id}`}
                       className="rounded-lg bg-blue-50 px-3 py-2 text-center text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
                     >
-                      Detail
+                      Detail & PIC
                     </Link>
 
                     {tableMode === "ACTIVE_PARTNERS" ? (
                       <>
+                        <Link
+                          href={`/menu/mitra-sales/detail?id=${partner.id}&tab=referral`}
+                          className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-black text-[#C92C1E] transition-colors hover:bg-red-100"
+                        >
+                          + Lead Afiliasi
+                        </Link>
+
                         <button
                           type="button"
                           onClick={() => openEditPartnerModal(partner)}

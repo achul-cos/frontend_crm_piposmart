@@ -1,15 +1,197 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import TargetFormModal, {
-  type KpiDefinitionItem,
-  type TargetFormMode,
-  type TargetFormState,
-  type KpiJobItem,
-  type KpiRankingItem,
-  type SalesTargetItem,
-} from "./form/page";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+
+export type TargetFormMode = "TARGET_BULK" | "KPI_DEFINITION" | "RECOMPUTE";
+
+export interface TargetFormState {
+  mode: TargetFormMode;
+  periodYear: number;
+  periodMonth: number;
+  metricCode: string;
+  targetValue: string;
+  weight: string;
+  thresholdAchieved: string;
+  thresholdNear: string;
+}
+
+export interface KpiDefinitionItem {
+  id: number;
+  metric_code?: string;
+  weight?: string;
+  threshold_achieved?: string;
+  threshold_near?: string;
+  is_active?: boolean;
+}
+
+export interface KpiJobItem {
+  id?: number;
+  status?: string;
+  attempts?: number;
+  max_attempts?: number;
+}
+
+export interface KpiRankingItem {
+  id?: number;
+  sales_id?: number;
+  sales_name?: string;
+  sales_code?: string;
+  name?: string;
+  rank_position?: number;
+  total_score?: string;
+  classification?: string;
+  period_year?: number;
+  period_month?: number;
+}
+
+export interface SalesTargetItem {
+  id?: number;
+  sales_id?: number;
+  sales_name?: string;
+  metric_code?: string;
+  target_value?: string;
+  period_month?: number;
+  period_year?: number;
+}
+
+function TargetFormModal({
+  open,
+  mode,
+  form,
+  formError,
+  saving,
+  setForm,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  mode: TargetFormMode;
+  form: TargetFormState;
+  formError: string;
+  saving: boolean;
+  setForm: React.Dispatch<React.SetStateAction<TargetFormState>>;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h3 className="text-lg font-black text-slate-900">
+          {mode === "TARGET_BULK"
+            ? "Bulk Target Sales"
+            : mode === "KPI_DEFINITION"
+            ? "KPI Definition"
+            : "Recompute KPI"}
+        </h3>
+        {formError ? (
+          <div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">
+            {formError}
+          </div>
+        ) : null}
+
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="text-xs font-bold text-slate-500">Tahun Periode</label>
+            <input
+              type="number"
+              value={form.periodYear}
+              onChange={(e) => setForm((prev) => ({ ...prev, periodYear: Number(e.target.value) }))}
+              className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-500">Bulan Periode (1-12)</label>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={form.periodMonth}
+              onChange={(e) => setForm((prev) => ({ ...prev, periodMonth: Number(e.target.value) }))}
+              className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+            />
+          </div>
+
+          {mode === "TARGET_BULK" || mode === "KPI_DEFINITION" ? (
+            <div>
+              <label className="text-xs font-bold text-slate-500">Metric Code</label>
+              <input
+                type="text"
+                value={form.metricCode}
+                onChange={(e) => setForm((prev) => ({ ...prev, metricCode: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+              />
+            </div>
+          ) : null}
+
+          {mode === "TARGET_BULK" ? (
+            <div>
+              <label className="text-xs font-bold text-slate-500">Target Value</label>
+              <input
+                type="text"
+                value={form.targetValue}
+                onChange={(e) => setForm((prev) => ({ ...prev, targetValue: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+              />
+            </div>
+          ) : null}
+
+          {mode === "KPI_DEFINITION" ? (
+            <>
+              <div>
+                <label className="text-xs font-bold text-slate-500">Weight (%)</label>
+                <input
+                  type="text"
+                  value={form.weight}
+                  onChange={(e) => setForm((prev) => ({ ...prev, weight: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">Threshold Achieved</label>
+                <input
+                  type="text"
+                  value={form.thresholdAchieved}
+                  onChange={(e) => setForm((prev) => ({ ...prev, thresholdAchieved: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">Threshold Near</label>
+                <input
+                  type="text"
+                  value={form.thresholdNear}
+                  onChange={(e) => setForm((prev) => ({ ...prev, thresholdNear: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                />
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={saving}
+            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {saving ? "Memproses..." : "Simpan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 

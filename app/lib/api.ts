@@ -2775,5 +2775,149 @@ export async function queryAnalyticsDiagram(
   return data.data;
 }
 
+export interface UpdateUserProfilePayload {
+  name?: string;
+  email?: string;
+}
+
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
+export async function updateUserProfile(payload: UpdateUserProfilePayload): Promise<UserResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<UserResponse>>(res);
+  return data.data;
+}
+
+export async function changeUserPassword(payload: ChangePasswordPayload): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/change-password`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<{ status: string }>>(res);
+  return data.data;
+}
+
+// ─── Discussion / Bantuan Forum API ───────────────────────────────────────
+
+export interface BackendDiscussionReply {
+  id: number;
+  thread_id: number;
+  author_id: number;
+  authorName: string;
+  authorRole: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface BackendDiscussionThread {
+  id: number;
+  channel: string;
+  title: string;
+  author_id: number;
+  authorName: string;
+  authorRole: string;
+  content: string;
+  tags: string[];
+  likes: number;
+  isLiked: boolean;
+  solved?: boolean;
+  createdAt: string;
+  replies: BackendDiscussionReply[];
+}
+
+export interface CreateDiscussionThreadPayload {
+  channel: string;
+  title: string;
+  content: string;
+  tags?: string[];
+}
+
+export interface CreateDiscussionReplyPayload {
+  content: string;
+}
+
+export async function fetchDiscussionThreads(channel?: string, query?: string): Promise<BackendDiscussionThread[]> {
+  const params = new URLSearchParams();
+  if (channel && channel !== "all") params.set("channel", channel);
+  if (query) params.set("query", query);
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/discussions/threads?${params.toString()}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BackendDiscussionThread[]>>(res);
+  return data.data || [];
+}
+
+export async function createDiscussionThread(payload: CreateDiscussionThreadPayload): Promise<BackendDiscussionThread> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/discussions/threads`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BackendDiscussionThread>>(res);
+  return data.data;
+}
+
+export async function toggleDiscussionLike(threadId: number): Promise<{ isLiked: boolean; likes: number }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/discussions/threads/${threadId}/like`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<{ isLiked: boolean; likes: number }>>(res);
+  return data.data;
+}
+
+export async function deleteDiscussionThread(threadId: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/discussions/threads/${threadId}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  await handleResponse(res);
+}
+
+export async function addDiscussionReply(threadId: number, payload: CreateDiscussionReplyPayload): Promise<BackendDiscussionReply> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/discussions/threads/${threadId}/replies`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<BackendDiscussionReply>>(res);
+  return data.data;
+}
+
+export async function deleteDiscussionReply(replyId: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/discussions/replies/${replyId}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  await handleResponse(res);
+}
+
+
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AnalyticsTab from "./AnalyticsTab";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -300,6 +301,7 @@ async function cancelPayout(partnerId: number, payoutId: number) {
 }
 
 export default function KomisiPage() {
+  const [activeTab, setActiveTab] = useState<"OPERATIONS" | "ANALYTICS">("OPERATIONS");
   const [partners, setPartners] = useState<Partner[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(
     null,
@@ -657,19 +659,50 @@ export default function KomisiPage() {
             </button>
           </div>
         </div>
+
+        {/* Sub Menu / Tab Selection */}
+        <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-100 p-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab("OPERATIONS")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+              activeTab === "OPERATIONS"
+                ? "bg-[#C92C1E] text-white shadow-sm"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            <span>Daftar Komisi & Payout</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("ANALYTICS")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+              activeTab === "ANALYTICS"
+                ? "bg-[#C92C1E] text-white shadow-sm"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            <span>Analitik & Health Komisi</span>
+          </button>
+        </div>
       </div>
 
-      {pageError ? (
-        <div className="min-w-0 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
-          {pageError}
-        </div>
-      ) : null}
+      {activeTab === "ANALYTICS" ? (
+        <AnalyticsTab />
+      ) : (
+        <>
+          {pageError ? (
+            <div className="min-w-0 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+              {pageError}
+            </div>
+          ) : null}
 
-      {pageSuccess ? (
-        <div className="min-w-0 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-          {pageSuccess}
-        </div>
-      ) : null}
+          {pageSuccess ? (
+            <div className="min-w-0 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+              {pageSuccess}
+            </div>
+          ) : null}
 
       <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
@@ -1151,6 +1184,8 @@ export default function KomisiPage() {
           </div>
         </div>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

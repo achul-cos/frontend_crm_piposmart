@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import SalesFormModal, {
   type SalesFormState,
@@ -442,6 +443,34 @@ export default function SalesPage() {
             Sales Nonaktif
           </p>
           <h2 className="text-3xl font-black text-gray-900">{inactiveSales}</h2>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4 rounded-2xl border border-red-100 bg-[linear-gradient(135deg,#fff_0%,#fff7f5_100%)] p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-[10px] font-black uppercase text-[#C92C1E]">
+            Mitra Sales & Lead Afiliasi
+          </span>
+          <h3 className="mt-2 text-lg font-black text-gray-900">
+            Kelola Mitra & Tambah Lead Afiliasi
+          </h3>
+          <p className="mt-1 text-xs font-medium text-gray-500">
+            Sales dapat mengatur mitra yang dinaungi, menugaskan PIC, dan mereferensikan Lead berafiliasi dengan Mitra.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/menu/mitra-sales"
+            className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white shadow-sm transition-all hover:bg-red-700"
+          >
+            Kelola Mitra Sales →
+          </Link>
+          <Link
+            href="/menu/lead/form"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-black text-gray-700 shadow-xs transition-all hover:bg-gray-50 hover:text-[#C92C1E]"
+          >
+            + Tambah Lead Baru
+          </Link>
         </div>
       </div>
 
