@@ -22,26 +22,10 @@ const sections: Sprint14g1Section[] = [
     ],
   },
   {
-    id: "commission-health",
-    title: "Komisi, Payout, dan Historical Integrity",
-    description:
-      "Membantu membaca beban komisi, aging unpaid, paket atau tipe mitra yang paling memicu komisi, serta memastikan snapshot komisi historis tetap statis.",
-    diagrams: [
-      { module: "commissions", key: "commission-earned-trend" },
-      { module: "commissions", key: "paid-vs-unpaid" },
-      { module: "commissions", key: "commission-aging" },
-      { module: "commissions", key: "commission-by-partner-type" },
-      { module: "commissions", key: "commission-by-package" },
-      { module: "commissions", key: "payout-waterfall" },
-      { module: "commissions", key: "rule-history-timeline" },
-      { module: "commissions", key: "snapshot-vs-current" },
-    ],
-  },
-  {
     id: "audit-governance",
     title: "Audit, Governance, dan Stabilitas Operasional",
     description:
-      "Menampilkan aktivitas perubahan data, pola restore/delete, dan frekuensi error backend yang persisted agar pengelolaan mitra dan komisi lebih terkontrol.",
+      "Menampilkan aktivitas perubahan data, pola restore/delete, dan frekuensi error backend yang persisted agar pengelolaan mitra lebih terkontrol.",
     diagrams: [
       { module: "audit", key: "log-volume-by-module" },
       { module: "audit", key: "actor-activity-chart" },
@@ -55,8 +39,8 @@ export default function PartnerAnalyticsTab() {
   return (
     <Sprint14g1Board
       heroLabel="Analytics Mitra"
-      title="Analitik Partner, Komisi, dan Governance"
-      description="Dashboard ini menggabungkan analitik pertumbuhan mitra, kualitas referral, health komisi, payout, dan governance audit agar tim bisa membaca performa channel partner secara lebih menyeluruh."
+      title="Analitik Partner dan Governance"
+      description="Dashboard ini menggabungkan analitik pertumbuhan mitra, kualitas referral, dan governance audit agar tim bisa membaca performa channel partner secara lebih menyeluruh."
       sections={sections}
     />
   );

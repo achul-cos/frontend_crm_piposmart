@@ -6,7 +6,7 @@ import KelolaUserFormModal, {
   type UserItem,
   type UserRole,
   type UserStatus,
-} from "./form/page";
+} from "./KelolaUserFormModal";
 
 const EMPTY_FORM: UserFormState = {
   name: "",
@@ -105,10 +105,11 @@ function getSingleUserResponse(response: ApiSingleUserResponse) {
     };
   }
 
-  if ("user" in data || "temporary_password" in data) {
+  const container = data as { user?: UserItem; temporary_password?: string };
+  if ("user" in container || "temporary_password" in container) {
     return {
-      user: data.user,
-      temporaryPassword: data.temporary_password || "",
+      user: container.user,
+      temporaryPassword: container.temporary_password || "",
     };
   }
 
@@ -759,7 +760,7 @@ export default function KelolaUserPage() {
           username: updatedUser.username,
           email: updatedUser.email,
           supervisor_id: updatedUser.supervisor_id,
-          supervisor_name: updatedUser.supervisor_name,
+          supervisor_name: updatedUser.supervisor_name || undefined,
         });
 
         patchUserInState(updatedUser);
@@ -769,12 +770,28 @@ export default function KelolaUserPage() {
         return;
       }
 
-      await loadUsers(false);
-
-      if (!result.temporaryPassword) {
-        closeFormModal();
-        setPageSuccess("User berhasil dibuat.");
+      const newUserObj = result.user as UserItem | undefined;
+      if (newUserObj) {
+        const selectedSupervisor = supervisors.find(
+          (item) => String(item.id) === String(form.supervisorId),
+        );
+        upsertLocalOverride({
+          id: newUserObj.id,
+          role: newUserObj.role || form.role || "SALES",
+          name: trimmedName,
+          username: trimmedUsername,
+          email: trimmedUsername,
+          supervisor_id: form.role === "SALES" && form.supervisorId ? Number(form.supervisorId) : undefined,
+          supervisor_name: form.role === "SALES" && selectedSupervisor ? selectedSupervisor.name : undefined,
+        });
       }
+
+      await loadUsers(false);
+      closeFormModal();
+      const usedPassword = trimmedPassword || result.temporaryPassword || "password_yang_diisi";
+      setPageSuccess(
+        `Akun ${trimmedName} (${trimmedUsername}) role ${form.role || "SALES"} berhasil dibuat! Silakan login menggunakan Email/Username: ${trimmedUsername} dan Password: ${usedPassword}`,
+      );
     } catch (error) {
       setFormError(getErrorMessage(error));
     } finally {
