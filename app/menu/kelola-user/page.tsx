@@ -6,7 +6,7 @@ import KelolaUserFormModal, {
   type UserItem,
   type UserRole,
   type UserStatus,
-} from "./form/page";
+} from "./KelolaUserFormModal";
 
 const EMPTY_FORM: UserFormState = {
   name: "",

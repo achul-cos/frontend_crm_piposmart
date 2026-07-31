@@ -6,7 +6,7 @@ import SalesFormModal, {
   type SalesFormState,
   type SalesItem,
   type SalesStatus,
-} from "./form/page";
+} from "./SalesFormModal";
 import AnalyticsTab from "./AnalyticsTab";
 
 const EMPTY_FORM: SalesFormState = {

@@ -12,7 +12,9 @@ import {
   type PartnerItem,
   type PartnerTypeItem,
 } from "@/app/lib/api";
-import MitraSalesFormModal, { type PartnerFormState } from "./form/page";
+import MitraSalesFormModal, {
+  type PartnerFormState,
+} from "./MitraSalesFormModal";
 import AnalyticsTab from "./AnalyticsTab";
 
 type TableMode =
