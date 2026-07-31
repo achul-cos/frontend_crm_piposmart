@@ -458,7 +458,7 @@ function PartnerDetailPageInner() {
                 commissionRules.map((rule) => (
                   <div key={rule.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-black text-slate-900">{rule.package_name || "Semua Paket"}</p>
+                      <p className="text-sm font-black text-slate-900">{rule.plan_name || "Semua Plan"}</p>
                       <span className="rounded-full border border-red-100 bg-white px-3 py-1 text-[10px] font-black text-[#C92C1E]">{rule.mode}</span>
                     </div>
                     <p className="mt-2 text-[11px] font-bold text-slate-400">Berlaku {formatDateOnly(rule.effective_from)} sampai {formatDateOnly(rule.effective_to)}</p>

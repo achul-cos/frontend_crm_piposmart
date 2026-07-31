@@ -14,6 +14,7 @@ import {
   getActivePartnerAssignment,
   getLeads,
   getPartner,
+  getPartnerActivity,
   getProfile,
   getSalesList,
   listPartnerAssignments,
@@ -25,6 +26,7 @@ import {
   syncPartnerCommissions,
   updatePartner,
   type BackendLead,
+  type PartnerActivityStatus,
   type PartnerAssignmentItem,
   type PartnerCommissionItem,
   type PartnerCommissionRuleItem,
@@ -207,6 +209,13 @@ function MitraSalesDetailPageInner() {
   const [referralDate, setReferralDate] = useState("");
   const [referralNote, setReferralNote] = useState("");
 
+  // Sprint 15a — status keaktifan bulanan: sudah/belum PIC sales memasukkan
+  // data referral lead untuk mitra ini pada bulan yang dipilih.
+  const [activityMonth, setActivityMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [activityStatus, setActivityStatus] = useState<PartnerActivityStatus | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState("");
+
   const isSales = currentRole === "SALES";
   const isAdmin = currentRole === "" || currentRole === "ADMIN";
   const canManage = isAdmin || currentRole === "SUPERVISOR" || isSales;
@@ -270,6 +279,26 @@ function MitraSalesDetailPageInner() {
   useEffect(() => {
     void reload();
   }, [partnerId]);
+
+  useEffect(() => {
+    if (!partnerId || Number.isNaN(partnerId)) return;
+    let cancelled = false;
+    setActivityLoading(true);
+    setActivityError("");
+    getPartnerActivity(partnerId, activityMonth)
+      .then((result) => {
+        if (!cancelled) setActivityStatus(result);
+      })
+      .catch((error) => {
+        if (!cancelled) setActivityError(getErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [partnerId, activityMonth]);
 
   const handleAssignPic = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -428,6 +457,38 @@ function MitraSalesDetailPageInner() {
           <MetricCard label="Komisi Dasar" value={formatFlatCommission(partner.partner_type)} hint="Rate komisi fallback default." accent />
           <MetricCard label="PIC Aktif" value={activeAssignment?.user_name || "Belum ada PIC"} hint={activeAssignment ? humanizeRole(activeAssignment.user_role) : "Penanggung jawab mitra."} />
           <MetricCard label="Lead Berafiliasi" value={referrals.length} hint="Jumlah Lead yang berafiliasi dengan Mitra." />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Status Keaktifan Bulanan" subtitle="Apakah PIC Sales sudah memasukkan data referral lead untuk mitra ini pada bulan terpilih.">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <label className="flex items-center gap-3">
+            <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">Bulan</span>
+            <input
+              type="month"
+              value={activityMonth}
+              onChange={(event) => setActivityMonth(event.target.value)}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-[#C92C1E]"
+            />
+          </label>
+
+          {activityLoading ? (
+            <span className="text-xs font-bold text-slate-400">Memuat status...</span>
+          ) : activityError ? (
+            <span className="text-xs font-bold text-red-600">{activityError}</span>
+          ) : activityStatus ? (
+            <span
+              className={`w-max rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wide ${
+                activityStatus.status === "TELAH_MEMBERIKAN_REFERAL"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-700"
+              }`}
+            >
+              {activityStatus.status === "TELAH_MEMBERIKAN_REFERAL"
+                ? "Telah Memberikan Referal"
+                : "Belum Memberikan Referal"}
+            </span>
+          ) : null}
         </div>
       </SectionCard>
 

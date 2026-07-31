@@ -1050,7 +1050,7 @@ export default function DataKelolaanPage() {
         
         await createLeadClosing(customerId, {
           plan_id: planId,
-          promotion_id: rawPayload.salesPayload.promotionId ?? undefined,
+          promotion_ids: rawPayload.salesPayload.promotionIds ?? undefined,
           discount_amount: String(rawPayload.salesPayload.discount || 0),
           unique_transfer_code: rawPayload.salesPayload.transferCode || 0,
           closed_at: new Date(rawPayload.callTime).toISOString(),

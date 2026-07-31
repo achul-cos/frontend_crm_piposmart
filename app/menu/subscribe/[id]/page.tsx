@@ -357,8 +357,24 @@ export default function SubscriptionDetailPage({ params }: { params: Promise<{ i
             <FieldBox label="Order ID" value={order?.id ?? subscription.order?.id ?? "-"} />
             <FieldBox label="Kode Order" value={order?.code || subscription.order?.code || "-"} />
             <FieldBox label="Plan" value={subscription.plan?.name || order?.plan?.name || "-"} />
-            <FieldBox label="Promotion">
-              {order?.promotion?.id ? (
+            <FieldBox label="Promotion" span={Boolean(order?.promotions && order.promotions.length > 1)}>
+              {order?.promotions && order.promotions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {order.promotions.map((promotion) =>
+                    promotion.id ? (
+                      <Link
+                        key={promotion.id}
+                        href={`/menu/paket-langganan/promotions/${promotion.id}`}
+                        className="text-[#C92C1E] hover:underline"
+                      >
+                        {promotion.name || promotion.code || `PROMO-${promotion.id}`}
+                      </Link>
+                    ) : (
+                      <span key={promotion.code}>{promotion.name || promotion.code}</span>
+                    ),
+                  )}
+                </div>
+              ) : order?.promotion?.id ? (
                 <Link
                   href={`/menu/paket-langganan/promotions/${order.promotion.id}`}
                   className="text-[#C92C1E] hover:underline"
@@ -380,6 +396,13 @@ export default function SubscriptionDetailPage({ params }: { params: Promise<{ i
             <FieldBox label="Base Price" value={formatRupiah(order?.base_price)} />
             <FieldBox label="Additional Charge" value={formatRupiah(order?.additional_charge)} />
             <FieldBox label="Final Amount" value={formatRupiah(order?.final_amount)} />
+            {order?.balance_shortfall_amount && (
+              <FieldBox label="Balance Shortfall" span>
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">
+                  Order melebihi saldo owner sebesar {formatRupiah(order.balance_shortfall_amount)}
+                </span>
+              </FieldBox>
+            )}
             <FieldBox label="External Reference" value={order?.external_reference || "-"} />
             <FieldBox label="Closing Ref" value={order?.closing?.code || order?.closing?.id || "-"} />
             <FieldBox label="Catatan Order" value={order?.note || "-"} span />

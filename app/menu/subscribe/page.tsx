@@ -10,6 +10,7 @@ import {
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTab from "./AnalyticsTab";
+import { getEligiblePromotions, type CatalogPromotion } from "@/app/lib/api";
 
 type ApiMeta = {
   page?: number;
@@ -57,6 +58,14 @@ type SubscriptionOrderItem = {
     code?: string;
     name?: string;
   };
+  // Sprint 15a — order bisa memakai lebih dari satu promotion sekaligus;
+  // `promotion` singular dipertahankan untuk kompatibilitas data lama.
+  promotions?: {
+    id?: number;
+    code?: string;
+    name?: string;
+  }[];
+  balance_shortfall_amount?: string | null;
   wallet_transaction_id?: number;
   tenure_months?: number;
   duration_days?: number;
@@ -148,13 +157,16 @@ type CreateOrderForm = {
   purchasedAt: string;
   subscriptionStartDate: string;
   note: string;
+  promotionIds: number[];
 };
 
 type ReconcileForm = {
   orderId: string;
-  action: "CONFIRM" | "REJECT";
+  action: "CONFIRM" | "REJECT" | "PARTIAL_CONFIRM";
   closingId: string;
   note: string;
+  adminFinalAmount: string;
+  adminTenureMonths: string;
 };
 
 const inputClass =
@@ -186,6 +198,7 @@ const emptyCreateOrderForm: CreateOrderForm = {
   purchasedAt: getTodayDatetimeLocal(),
   subscriptionStartDate: getTodayDate(),
   note: "",
+  promotionIds: [],
 };
 
 const emptyReconcileForm: ReconcileForm = {
@@ -193,6 +206,8 @@ const emptyReconcileForm: ReconcileForm = {
   action: "CONFIRM",
   closingId: "",
   note: "",
+  adminFinalAmount: "",
+  adminTenureMonths: "",
 };
 
 const formatRupiah = (value: string | number | undefined) => {
@@ -257,7 +272,11 @@ const normalizeList = <T,>(payload: unknown): T[] => {
 const getStatusClass = (status?: string) => {
   const normalized = String(status || "").toUpperCase();
 
-  if (["ACTIVE", "PAID", "CONFIRMED", "RECONCILED"].includes(normalized)) {
+  if (
+    ["ACTIVE", "PAID", "CONFIRMED", "RECONCILED", "PARTIAL_CONFIRM"].includes(
+      normalized,
+    )
+  ) {
     return "border-green-100 bg-green-50 text-green-700";
   }
 
@@ -372,6 +391,40 @@ export default function SubscriptionPage() {
     useState<CreateOrderForm>(emptyCreateOrderForm);
   const [reconcileForm, setReconcileForm] =
     useState<ReconcileForm>(emptyReconcileForm);
+
+  // Sprint 15a — daftar promotion yang eligible untuk plan yang dipilih di form create order.
+  const [eligiblePromotions, setEligiblePromotions] = useState<
+    CatalogPromotion[]
+  >([]);
+  const [eligiblePromotionsLoading, setEligiblePromotionsLoading] =
+    useState(false);
+
+  useEffect(() => {
+    const planIdNumber = Number(createForm.planId);
+
+    if (!createForm.planId || Number.isNaN(planIdNumber)) {
+      setEligiblePromotions([]);
+      return;
+    }
+
+    let cancelled = false;
+    setEligiblePromotionsLoading(true);
+
+    getEligiblePromotions(planIdNumber)
+      .then((result) => {
+        if (!cancelled) setEligiblePromotions(result);
+      })
+      .catch(() => {
+        if (!cancelled) setEligiblePromotions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setEligiblePromotionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [createForm.planId]);
 
   const [selectedOrderDetail, setSelectedOrderDetail] =
     useState<SubscriptionOrderDetailResponse | null>(null);
@@ -725,11 +778,15 @@ export default function SubscriptionPage() {
           purchased_at: toIsoFromDatetimeLocal(createForm.purchasedAt),
           subscription_start_date: createForm.subscriptionStartDate,
           note: createForm.note || undefined,
+          promotion_ids: createForm.promotionIds.length
+            ? createForm.promotionIds
+            : undefined,
         }),
       });
 
       setIsCreateOpen(false);
       setCreateForm(emptyCreateOrderForm);
+      setEligiblePromotions([]);
       setReloadKey((prev) => prev + 1);
     } catch (error) {
       alert(
@@ -748,6 +805,8 @@ export default function SubscriptionPage() {
       action: "CONFIRM",
       closingId: order.closing?.id ? String(order.closing.id) : "",
       note: "",
+      adminFinalAmount: "",
+      adminTenureMonths: "",
     });
     setIsReconcileOpen(true);
   };
@@ -770,6 +829,11 @@ export default function SubscriptionPage() {
       return;
     }
 
+    if (reconcileForm.action === "PARTIAL_CONFIRM" && !reconcileForm.adminFinalAmount) {
+      alert("Admin Final Amount wajib diisi untuk partial confirm reconciliation.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -781,6 +845,14 @@ export default function SubscriptionPage() {
             ? Number(reconcileForm.closingId)
             : undefined,
           note: reconcileForm.note || undefined,
+          admin_final_amount:
+            reconcileForm.action === "PARTIAL_CONFIRM"
+              ? reconcileForm.adminFinalAmount
+              : undefined,
+          admin_tenure_months:
+            reconcileForm.action === "PARTIAL_CONFIRM" && reconcileForm.adminTenureMonths
+              ? Number(reconcileForm.adminTenureMonths)
+              : undefined,
         }),
       });
 
@@ -1496,7 +1568,27 @@ export default function SubscriptionPage() {
                     String(selectedOrderDetail.order.closing?.id || "-")
                   }
                 />
+                <InfoItem
+                  label="Promotion"
+                  value={
+                    selectedOrderDetail.order.promotions &&
+                    selectedOrderDetail.order.promotions.length > 0
+                      ? selectedOrderDetail.order.promotions
+                          .map((promotion) => promotion.name || promotion.code)
+                          .join(", ")
+                      : selectedOrderDetail.order.promotion?.name ||
+                        selectedOrderDetail.order.promotion?.code ||
+                        "-"
+                  }
+                />
               </div>
+
+              {selectedOrderDetail.order.balance_shortfall_amount && (
+                <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-black text-amber-700">
+                  Order melebihi saldo owner sebesar{" "}
+                  {formatRupiah(selectedOrderDetail.order.balance_shortfall_amount)}
+                </p>
+              )}
             </div>
           )}
 
@@ -1731,6 +1823,57 @@ export default function SubscriptionPage() {
                 </p>
               </label>
 
+              <div className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Promotion (opsional, bisa lebih dari satu)
+                </span>
+
+                {!createForm.planId ? (
+                  <p className="text-[11px] font-bold text-gray-400">
+                    Isi Plan ID terlebih dahulu untuk melihat promotion yang eligible.
+                  </p>
+                ) : eligiblePromotionsLoading ? (
+                  <p className="text-[11px] font-bold text-gray-400">
+                    Memuat promotion...
+                  </p>
+                ) : eligiblePromotions.length === 0 ? (
+                  <p className="text-[11px] font-bold text-gray-400">
+                    Tidak ada promotion eligible untuk plan ini.
+                  </p>
+                ) : (
+                  <div className="space-y-2 rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3">
+                    {eligiblePromotions.map((promotion) => (
+                      <label
+                        key={promotion.id}
+                        className="flex items-start gap-3"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={createForm.promotionIds.includes(promotion.id)}
+                          onChange={(event) =>
+                            setCreateForm((prev) => ({
+                              ...prev,
+                              promotionIds: event.target.checked
+                                ? [...prev.promotionIds, promotion.id]
+                                : prev.promotionIds.filter(
+                                    (id) => id !== promotion.id,
+                                  ),
+                            }))
+                          }
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        />
+                        <span className="text-xs font-bold text-gray-700">
+                          {promotion.name || promotion.code}
+                          {promotion.charge_type
+                            ? ` (${promotion.charge_type})`
+                            : ""}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <label className="space-y-2">
                 <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                   Closing ID
@@ -1905,6 +2048,7 @@ export default function SubscriptionPage() {
                 >
                   <option value="CONFIRM">CONFIRM</option>
                   <option value="REJECT">REJECT</option>
+                  <option value="PARTIAL_CONFIRM">PARTIAL_CONFIRM</option>
                 </select>
               </label>
 
@@ -1925,6 +2069,51 @@ export default function SubscriptionPage() {
                   className={inputClass}
                 />
               </label>
+
+              {reconcileForm.action === "PARTIAL_CONFIRM" && (
+                <>
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Admin Final Amount
+                    </span>
+
+                    <input
+                      value={reconcileForm.adminFinalAmount}
+                      onChange={(event) =>
+                        setReconcileForm((prev) => ({
+                          ...prev,
+                          adminFinalAmount: event.target.value.replace(
+                            /[^0-9.]/g,
+                            "",
+                          ),
+                        }))
+                      }
+                      placeholder="Wajib untuk PARTIAL_CONFIRM"
+                      className={inputClass}
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Admin Tenure Months (opsional)
+                    </span>
+
+                    <input
+                      value={reconcileForm.adminTenureMonths}
+                      onChange={(event) =>
+                        setReconcileForm((prev) => ({
+                          ...prev,
+                          adminTenureMonths: event.target.value.replace(
+                            /\D/g,
+                            "",
+                          ),
+                        }))
+                      }
+                      className={inputClass}
+                    />
+                  </label>
+                </>
+              )}
 
               <label className="space-y-2 md:col-span-2">
                 <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">

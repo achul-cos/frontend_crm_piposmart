@@ -12,6 +12,10 @@ export type PartnerFormState = {
   address: string;
   bankAccount: string;
   status: "ACTIVE" | "INACTIVE";
+  // Sprint 15a — Sales bisa langsung jadi PIC mitra yang dia buat sendiri
+  // (TUPOKSI referral lead & aktivitas mitra ada di Sales). Hanya relevan
+  // saat create; partner yang di-edit sudah punya PIC-nya sendiri.
+  selfAssignPic: boolean;
 };
 
 const inputClass =
@@ -212,6 +216,30 @@ export default function MitraSalesFormModal({
                   <option value="INACTIVE">INACTIVE</option>
                 </select>
               </label>
+
+              {!editingPartner ? (
+                <label className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.selfAssignPic}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        selfAssignPic: event.target.checked,
+                      }))
+                    }
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                  />
+                  <span>
+                    <span className="block text-sm font-black text-slate-900">
+                      Jadikan saya PIC mitra ini
+                    </span>
+                    <span className="block text-[11px] font-medium text-slate-500">
+                      Anda langsung tercatat sebagai PIC begitu mitra ini dibuat.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
             </div>
           </div>
 

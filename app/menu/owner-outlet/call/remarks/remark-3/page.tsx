@@ -9,7 +9,8 @@ import type { CatalogPackage, CatalogPlan, CatalogPromotion } from "@/app/lib/ap
 export type Remark3SalesPayload = {
   packageType: string;    // display: package code/name (for UI)
   planId?: number;        // backend plan ID
-  promotionId?: number;   // backend promotion ID
+  // Sprint 15a — closing bisa memakai lebih dari satu promotion sekaligus.
+  promotionIds?: number[]; // backend promotion IDs
   promoIndex?: number;    // legacy fallback index
   durationMonth?: number; // legacy
   transferCode: number;
@@ -187,7 +188,7 @@ function Remark3SalesSection({
                     if (useBackend) {
                       // Find first plan for this package
                       const firstPlan = backendPlans.find(pl => pl.package?.id === Number(item.value)) || backendPlans[0];
-                      onChange({ ...value, packageType: item.value, planId: firstPlan?.id, promotionId: undefined });
+                      onChange({ ...value, packageType: item.value, planId: firstPlan?.id, promotionIds: undefined });
                     } else {
                       onChange({ ...value, packageType: item.value, promoIndex: 0 });
                     }
@@ -220,7 +221,7 @@ function Remark3SalesSection({
               value={value.planId || ""}
               onChange={(event) => {
                 const planId = Number(event.target.value);
-                onChange({ ...value, planId, promotionId: undefined });
+                onChange({ ...value, planId, promotionIds: undefined });
               }}
               className="h-11 w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-4 text-sm font-black text-gray-800 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-1 focus:ring-[#C92C1E]"
             >
@@ -252,23 +253,35 @@ function Remark3SalesSection({
           {useBackend && backendPromotions.length > 0 && (
             <div className="mt-3">
               <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-gray-500">
-                2b. Pilih Promo (Opsional)
+                2b. Pilih Promo (Opsional, bisa lebih dari satu)
               </label>
-              <select
-                value={value.promotionId || ""}
-                onChange={(event) => {
-                  const v = event.target.value;
-                  onChange({ ...value, promotionId: v ? Number(v) : undefined });
-                }}
-                className="h-11 w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-4 text-sm font-black text-gray-800 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-1 focus:ring-[#C92C1E]"
-              >
-                <option value="">-- Tanpa Promo --</option>
-                {backendPromotions.map((promo) => (
-                  <option key={promo.id} value={promo.id}>
-                    {promo.name}
-                  </option>
-                ))}
-              </select>
+              <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50/50 p-3">
+                {backendPromotions.map((promo) => {
+                  const checked = (value.promotionIds || []).includes(promo.id);
+                  return (
+                    <label key={promo.id} className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          const current = value.promotionIds || [];
+                          const next = event.target.checked
+                            ? [...current, promo.id]
+                            : current.filter((id) => id !== promo.id);
+                          onChange({
+                            ...value,
+                            promotionIds: next.length ? next : undefined,
+                          });
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                      />
+                      <span className="text-sm font-black text-gray-800">
+                        {promo.name}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

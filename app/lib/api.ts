@@ -155,6 +155,60 @@ export async function fetchOwnerDetail(
   return responseData;
 }
 
+// Sprint 15a — GET /owners/:id/overview: wallet balance rolled up at the Owner
+// level (an owner has exactly one wallet shared across all its outlets),
+// plus lifetime transfer/topup/spent totals and derived status badges.
+export interface OwnerOverviewBalance {
+  wallet: {
+    id: number;
+    account_code: string;
+    currency: string;
+    balance: string;
+    ledger_balance: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  };
+  total_transferred: string;
+  total_topup: string;
+  total_spent: string;
+}
+
+export interface OwnerOverviewStatus {
+  age_status: "NEW" | "OLD";
+  subscription_status: "BERLANGGANAN" | "NOT_SUBSCRIBE";
+  subscribed_outlet_count: number;
+  outlet_count: number;
+}
+
+export interface OwnerOverview {
+  id: number;
+  code: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  brand_name?: string;
+  province?: string;
+  city?: string;
+  address?: string;
+  status: string;
+  balance: OwnerOverviewBalance;
+  owner_status: OwnerOverviewStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getOwnerOverview(ownerId: number): Promise<OwnerOverview> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/overview`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<OwnerOverview>>(res);
+  return data.data;
+}
+
 export async function fetchOwnerOutlets(
   ownerId: number,
 ): Promise<BackendOutlet[]> {
@@ -396,6 +450,11 @@ export interface CreateInteractionRequest {
 export interface CreateClosingRequest {
   plan_id: number;
   promotion_id?: number | null;
+  // Sprint 15a — closing bisa memakai lebih dari satu promotion sekaligus
+  // (semua harus eligible untuk plan_id yang sama, atau seluruh request
+  // ditolak). Kirim promotion_ids kalau form pakai multi-select; promotion_id
+  // tetap didukung backend untuk kompatibilitas single-promotion lama.
+  promotion_ids?: number[];
   discount_amount: string;
   unique_transfer_code?: number;
   closed_at?: string;
@@ -1524,6 +1583,10 @@ export interface CreatePartnerPayload {
   address?: string;
   bank_account?: string;
   status?: "ACTIVE" | "INACTIVE";
+  // Sprint 15a — TUPOKSI referral lead & aktivitas mitra ada di Sales, jadi
+  // Sales bisa langsung jadi PIC mitra yang dia buat sendiri (atomic saat create),
+  // tanpa perlu Supervisor assign terpisah lewat assignPartnerPic.
+  self_assign_pic?: boolean;
 }
 
 export interface UpdatePartnerPayload {
@@ -1741,6 +1804,32 @@ export async function releasePartnerPic(partnerId: number): Promise<void> {
   await handleResponse(res);
 }
 
+// Sprint 15a — status keaktifan bulanan mitra: apakah PIC sales sudah
+// memasukkan data referral lead untuk mitra ini pada bulan tsb.
+export interface PartnerActivityStatus {
+  partner_id: number;
+  month: string; // YYYY-MM
+  status: "BELUM_MEMBERIKAN_REFERAL" | "TELAH_MEMBERIKAN_REFERAL";
+}
+
+export async function getPartnerActivity(
+  partnerId: number,
+  month?: string,
+): Promise<PartnerActivityStatus> {
+  const qs = buildQueryString({ month });
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/partners/${partnerId}/activity${qs}`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    },
+  );
+
+  const data = await handleResponse<ApiEnvelope<PartnerActivityStatus>>(res);
+  return data.data;
+}
+
 export async function listPartnerInteractions(
   partnerId: number,
   params: PartnerInteractionListParams = {},
@@ -1836,9 +1925,11 @@ export interface PartnerCommissionTierItem {
 export interface PartnerCommissionRuleItem {
   id: number;
   partner_type_id: number;
-  package_id?: number | null;
-  package_code?: string | null;
-  package_name?: string | null;
+  // Sprint 15a — commission direscope dari package ke plan (beda tenor plan
+  // pada package yang sama boleh punya komisi beda, mis. Business 12 vs 24 bulan).
+  plan_id?: number | null;
+  plan_code?: string | null;
+  plan_name?: string | null;
   mode: PartnerCommissionRuleMode;
   value?: string | null;
   effective_from: string;
@@ -1856,7 +1947,7 @@ export interface PartnerCommissionRuleListData {
 }
 
 export interface CreatePartnerCommissionRulePayload {
-  package_id?: number;
+  plan_id?: number;
   mode: PartnerCommissionRuleMode;
   value?: string;
   effective_from: string;
@@ -1871,7 +1962,7 @@ export interface CreatePartnerCommissionRulePayload {
 }
 
 export interface PartnerCommissionRuleListParams {
-  package_id?: number;
+  plan_id?: number;
   active_only?: boolean;
 }
 
@@ -1975,7 +2066,7 @@ export async function listPartnerTypeCommissionRules(
   params: PartnerCommissionRuleListParams = {},
 ): Promise<PartnerCommissionRuleListData> {
   const qs = buildQueryString({
-    package_id: params.package_id,
+    plan_id: params.plan_id,
     active_only: params.active_only === undefined ? undefined : String(params.active_only),
   });
 
@@ -2082,17 +2173,6 @@ export interface OutletOwnerBrief {
   message?: string;
 }
 
-export interface OutletWalletBrief {
-  id: number;
-  account_code: string;
-  currency: string;
-  balance: string;
-  ledger_balance: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface OutletSubscriptionSummary {
   total_subscriptions: number;
   active_subscriptions: number;
@@ -2105,7 +2185,6 @@ export interface OutletSubscriptionSummary {
 export interface OutletOverviewItem {
   id: number;
   owner: OutletOwnerBrief;
-  wallet: OutletWalletBrief;
   code: string;
   name: string;
   phone?: string;
@@ -2231,7 +2310,6 @@ export async function listOutletSubscriptionStatuses(
 export interface OutletDetail {
   id: number;
   owner: OutletOwnerBrief;
-  wallet: OutletWalletBrief;
   code: string;
   name: string;
   phone?: string;
@@ -2441,6 +2519,17 @@ export interface WalletAccountItem {
   status?: string;
 }
 
+// Sprint 15a — status is now a real lifecycle: PENDING (menunggu transfer,
+// belum masuk balance) -> ACCEPTED (balance credit) | REJECTED | EXPIRED
+// (24 jam sesi PENDING lewat, auto oleh worker). "PAID" (nilai lama) tidak
+// lagi dipakai backend, tapi dibiarkan di union untuk data historis lama.
+export type WalletPaymentStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "EXPIRED"
+  | "PAID";
+
 export interface WalletPaymentItem {
   id: number;
   owner_id?: number;
@@ -2452,8 +2541,12 @@ export interface WalletPaymentItem {
   external_reference?: string;
   amount?: string;
   currency?: string;
-  status?: string;
+  status?: WalletPaymentStatus;
   paid_at?: string;
+  session_expires_at?: string;
+  transfer_date_override?: string;
+  effective_transfer_date?: string;
+  unique_code?: string;
   created_at?: string;
   note?: string;
 }
@@ -2517,6 +2610,188 @@ export async function getWalletPaymentDetail(
   };
 }
 
+// Sprint 15a — Top Up lifecycle actions. Accept credits the wallet (unique_code
+// records a manual-transfer residual like Rp 123 on top of a round Rp 34.000
+// request — never counted as revenue, just recorded); Reject leaves the
+// balance untouched (a PENDING top-up never touched it in the first place).
+export interface AcceptTopupPayload {
+  unique_code?: string;
+  transfer_date_override?: string;
+}
+
+export async function acceptTopup(
+  paymentId: number,
+  payload: AcceptTopupPayload = {},
+): Promise<WalletPaymentDetailData> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/wallet-payments/${paymentId}/accept`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<WalletPaymentDetailData>>(res);
+  return data.data;
+}
+
+export async function rejectTopup(
+  paymentId: number,
+  payload: { note?: string } = {},
+): Promise<WalletPaymentItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/wallet-payments/${paymentId}/reject`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<WalletPaymentItem>>(res);
+  return data.data;
+}
+
+// Admin can correct the transfer date from the payment proof/receipt
+// independently of accept — e.g. owner transferred yesterday but the system
+// recorded the top-up in real time today.
+export async function setTransferDateOverride(
+  paymentId: number,
+  transferDate: string,
+): Promise<WalletPaymentItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/wallet-payments/${paymentId}/transfer-date`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ transfer_date: transferDate }),
+  });
+
+  const data = await handleResponse<ApiEnvelope<WalletPaymentItem>>(res);
+  return data.data;
+}
+
+// Sprint 15a — Transfer module (baru): bukti transfer bank dari owner ke
+// perusahaan, dicocokkan (suggest/confirm) ke Top Up yang PENDING.
+export interface TransferOwnerRef {
+  id: number;
+  code?: string;
+  name?: string;
+}
+
+export type TransferMatchStatus =
+  | "UNMATCHED"
+  | "SUGGESTED"
+  | "MATCHED"
+  | "REJECTED_MATCH";
+
+export interface TransferItem {
+  id: number;
+  owner: TransferOwnerRef;
+  amount: string;
+  transfer_date: string;
+  proof_url?: string;
+  note?: string;
+  matched_wallet_payment_id?: number;
+  match_status: TransferMatchStatus;
+  source: "MANUAL_ENTRY" | "ADMIN_DASHBOARD";
+  external_reference?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransferListData {
+  items: TransferItem[];
+  pagination: ApiPagination;
+}
+
+export interface CreateTransferPayload {
+  amount: string;
+  transfer_date: string;
+  proof_url?: string;
+  note?: string;
+  external_reference?: string;
+}
+
+export interface TransferMatchSuggestion {
+  transfer: TransferItem;
+  wallet_payment_id: number;
+  wallet_payment_code: string;
+  wallet_payment_amount: string;
+  unique_code?: string;
+  amount_mismatch: boolean;
+}
+
+export async function createTransfer(
+  ownerId: number,
+  payload: CreateTransferPayload,
+): Promise<TransferItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/transfers`, {
+    method: "POST",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<TransferItem>>(res);
+  return data.data;
+}
+
+export async function listOwnerTransfers(
+  ownerId: number,
+  params: { match_status?: TransferMatchStatus; page?: number; limit?: number; all?: boolean } = {},
+): Promise<TransferListData> {
+  const { all, ...rest } = params;
+  const qs = buildQueryString({ ...rest, all: all ? "true" : undefined });
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/transfers${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<TransferListData>>(res);
+  return data.data;
+}
+
+export async function getTransferSuggestions(
+  ownerId: number,
+): Promise<TransferMatchSuggestion[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/transfers/suggestions`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<{ items: TransferMatchSuggestion[] }>>(res);
+  return data.data.items;
+}
+
+export async function confirmTransferMatch(
+  transferId: number,
+  payload: { wallet_payment_id: number; unique_code?: string },
+): Promise<TransferItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/transfers/${transferId}/confirm-match`, {
+    method: "POST",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<TransferItem>>(res);
+  return data.data;
+}
+
+export async function rejectTransferMatch(
+  transferId: number,
+  payload: { note?: string } = {},
+): Promise<TransferItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/transfers/${transferId}/reject-match`, {
+    method: "POST",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await handleResponse<ApiEnvelope<TransferItem>>(res);
+  return data.data;
+}
+
 export interface SubscriptionItem {
   id: number;
   code: string;
@@ -2541,6 +2816,10 @@ export interface SubscriptionOrderDetailItem {
   closing?: { id?: number; code?: string };
   plan?: { id?: number; code?: string; name?: string };
   promotion?: { id?: number; code?: string; name?: string };
+  // Sprint 15a — order bisa memakai lebih dari satu promotion sekaligus;
+  // `promotion` singular dipertahankan untuk kompatibilitas data lama.
+  promotions?: { id?: number; code?: string; name?: string }[];
+  balance_shortfall_amount?: string | null;
   wallet_transaction_id?: number;
   tenure_months?: number;
   duration_days?: number;

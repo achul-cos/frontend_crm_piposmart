@@ -59,7 +59,8 @@ type TypeFormState = {
 };
 
 type RuleFormState = {
-  packageId: string;
+  // Sprint 15a — commission rule scoped langsung ke plan (bukan package lagi).
+  planId: string;
   mode: "PERCENTAGE" | "FIXED" | "TIER";
   value: string;
   effectiveFrom: string;
@@ -106,7 +107,7 @@ const EMPTY_TYPE_FORM: TypeFormState = {
 
 function createEmptyRuleForm(): RuleFormState {
   return {
-    packageId: "",
+    planId: "",
     mode: "PERCENTAGE",
     value: "",
     effectiveFrom: "",
@@ -436,13 +437,10 @@ export default function KelolaanMitraPage() {
     );
   }, [partnerTypes, typeSearch]);
 
-  const selectedPackagePlans = useMemo(() => {
-    if (!ruleForm.packageId) return plans;
-
-    return plans.filter(
-      (plan) => plan.package?.id === Number(ruleForm.packageId),
-    );
-  }, [plans, ruleForm.packageId]);
+  const selectedRulePlan = useMemo(() => {
+    if (!ruleForm.planId) return null;
+    return plans.find((plan) => plan.id === Number(ruleForm.planId)) || null;
+  }, [plans, ruleForm.planId]);
 
   const loadTypeDetail = async (typeId: number) => {
     setLoadingTypeDetail(true);
@@ -764,8 +762,8 @@ export default function KelolaanMitraPage() {
 
     try {
       await createPartnerTypeCommissionRule(typeId, {
-        package_id: ruleForm.packageId
-          ? Number(ruleForm.packageId)
+        plan_id: ruleForm.planId
+          ? Number(ruleForm.planId)
           : undefined,
         mode: ruleForm.mode,
         value: ruleForm.mode === "TIER" ? undefined : ruleForm.value.trim(),
@@ -1591,43 +1589,42 @@ export default function KelolaanMitraPage() {
 
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                  Rule Komisi per Paket
+                  Rule Komisi per Plan
                 </p>
                 <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
-                  Backend terbaru mendukung rule spesifik per paket dengan mode
-                  persentase, fixed, atau tier bertingkat.
+                  Backend terbaru mendukung rule spesifik per plan (paket + tenor)
+                  dengan mode persentase, fixed, atau tier bertingkat.
                 </p>
               </div>
 
               <label className="block space-y-2">
                 <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                  Paket
+                  Plan
                 </span>
                 <select
-                  value={ruleForm.packageId}
+                  value={ruleForm.planId}
                   onChange={(event) =>
                     setRuleForm((current) => ({
                       ...current,
-                      packageId: event.target.value,
+                      planId: event.target.value,
                     }))
                   }
                   className={selectClass}
                 >
-                  <option value="">Semua Paket</option>
-                  {packages.map((item) => (
+                  <option value="">Semua Plan</option>
+                  {plans.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name}
+                      {item.package?.name ? `${item.package.name} — ` : ""}
+                      {item.name} ({item.tenure_months} bln)
                     </option>
                   ))}
                 </select>
               </label>
 
               <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">
-                {selectedPackagePlans.length === 0
-                  ? "Belum ada plan aktif untuk paket ini atau rule berlaku untuk semua paket."
-                  : `Plan aktif terkait paket ini: ${selectedPackagePlans
-                      .map((plan) => `${plan.name} (${plan.tenure_months} bln)`)
-                      .join(", ")}`}
+                {!selectedRulePlan
+                  ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)."
+                  : `Plan terpilih: ${selectedRulePlan.name} — harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedRulePlan.price || 0))}`}
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1897,7 +1894,7 @@ export default function KelolaanMitraPage() {
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-black text-slate-900">
-                              {rule.package_name || "Semua Paket"}
+                              {rule.plan_name || "Semua Plan"}
                             </p>
 
                             <span

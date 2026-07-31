@@ -338,7 +338,7 @@ export default function MitraSalesJenisMitraDetailPage({
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div>
                         <p className="font-black text-gray-900">
-                          {rule.package_name || "Semua Paket"}
+                          {rule.plan_name || "Semua Plan"}
                         </p>
                         <p className="mt-1 text-xs font-bold text-gray-400">
                           Rule #{rule.id}

@@ -40,7 +40,9 @@ type TierDraft = {
 };
 
 type RuleFormState = {
-  packageId: string;
+  // Sprint 15a — commission rule scoped langsung ke plan (bukan package lagi),
+  // karena beda tenor plan pada package yang sama bisa punya komisi beda.
+  planId: string;
   mode: "PERCENTAGE" | "FIXED" | "TIER";
   value: string;
   effectiveFrom: string;
@@ -57,7 +59,7 @@ const EMPTY_TYPE_FORM: TypeFormState = {
 };
 
 const EMPTY_RULE_FORM: RuleFormState = {
-  packageId: "",
+  planId: "",
   mode: "PERCENTAGE",
   value: "",
   effectiveFrom: "",
@@ -116,10 +118,10 @@ export default function JenisMitraPage() {
 
   const canManage = currentRole === "" || currentRole === "ADMIN" || currentRole === "SUPERVISOR";
 
-  const selectedPackagePlans = useMemo(() => {
-    if (!ruleForm.packageId) return plans;
-    return plans.filter((plan) => plan.package?.id === Number(ruleForm.packageId));
-  }, [plans, ruleForm.packageId]);
+  const selectedPlan = useMemo(() => {
+    if (!ruleForm.planId) return null;
+    return plans.find((plan) => plan.id === Number(ruleForm.planId)) || null;
+  }, [plans, ruleForm.planId]);
 
   const filteredPartnerTypes = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -319,7 +321,7 @@ export default function JenisMitraPage() {
     setSavingRule(true);
     try {
       await createPartnerTypeCommissionRule(selectedTypeId, {
-        package_id: ruleForm.packageId ? Number(ruleForm.packageId) : undefined,
+        plan_id: ruleForm.planId ? Number(ruleForm.planId) : undefined,
         mode: ruleForm.mode,
         value: ruleForm.mode === "TIER" ? undefined : ruleForm.value.trim(),
         effective_from: new Date(ruleForm.effectiveFrom).toISOString(),
@@ -550,7 +552,7 @@ export default function JenisMitraPage() {
             </div>
             {ruleFormError ? <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{ruleFormError}</div> : null}
             {ruleFormSuccess ? <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{ruleFormSuccess}</div> : null}
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"><select value={ruleForm.packageId} onChange={(event) => setRuleForm((current) => ({ ...current, packageId: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Semua Paket</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select value={ruleForm.mode} onChange={(event) => setRuleForm((current) => ({ ...current, mode: event.target.value as "PERCENTAGE" | "FIXED" | "TIER" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option><option value="TIER">TIER</option></select>{ruleForm.mode === "TIER" ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">Mode TIER memakai daftar bracket di bawah.</div> : <input value={ruleForm.value} onChange={(event) => setRuleForm((current) => ({ ...current, value: event.target.value }))} placeholder={ruleForm.mode === "PERCENTAGE" ? "Contoh: 7.5" : "Contoh: 250000"} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />}<input type="datetime-local" value={ruleForm.effectiveFrom} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><input type="datetime-local" value={ruleForm.effectiveTo} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveTo: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">{selectedPackagePlans.length === 0 ? "Belum ada plan aktif untuk paket ini atau rule berlaku untuk semua paket." : `Plan aktif terkait paket ini: ${selectedPackagePlans.map((plan) => `${plan.name} (${plan.tenure_months} bln)`).join(", ")}`}</div></div>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"><select value={ruleForm.planId} onChange={(event) => setRuleForm((current) => ({ ...current, planId: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Semua Plan</option>{plans.map((item) => <option key={item.id} value={item.id}>{item.package?.name ? `${item.package.name} — ` : ""}{item.name} ({item.tenure_months} bln)</option>)}</select><select value={ruleForm.mode} onChange={(event) => setRuleForm((current) => ({ ...current, mode: event.target.value as "PERCENTAGE" | "FIXED" | "TIER" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option><option value="TIER">TIER</option></select>{ruleForm.mode === "TIER" ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">Mode TIER memakai daftar bracket di bawah.</div> : <input value={ruleForm.value} onChange={(event) => setRuleForm((current) => ({ ...current, value: event.target.value }))} placeholder={ruleForm.mode === "PERCENTAGE" ? "Contoh: 7.5" : "Contoh: 250000"} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />}<input type="datetime-local" value={ruleForm.effectiveFrom} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><input type="datetime-local" value={ruleForm.effectiveTo} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveTo: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">{!selectedPlan ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)." : `Plan terpilih: ${selectedPlan.name} — harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedPlan.price || 0))}`}</div></div>
             {ruleForm.mode === "TIER" ? <div className="mt-4 space-y-3">{ruleForm.tiers.map((tier, index) => <div key={index} className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-5"><input type="number" min={1} value={tier.min_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, min_closings: Number(event.target.value) || 1 } : item) }))} placeholder="Min closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><input value={tier.max_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, max_closings: event.target.value } : item) }))} placeholder="Max closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><select value={tier.mode} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, mode: event.target.value as "PERCENTAGE" | "FIXED" } : item) }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option></select><input value={tier.value} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, value: event.target.value } : item) }))} placeholder="Nilai komisi tier" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: current.tiers.filter((_, tierIndex) => tierIndex !== index).map((item, itemIndex) => ({ ...item, tier_order: itemIndex + 1 })) }))} disabled={ruleForm.tiers.length === 1} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">Hapus Tier</button></div>)}<button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: [...current.tiers, { tier_order: current.tiers.length + 1, min_closings: current.tiers.length + 1, max_closings: "", mode: "PERCENTAGE", value: "" }] }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 transition hover:bg-gray-50">+ Tambah Tier</button></div> : null}
             <div className="mt-4 flex justify-end"><button type="submit" disabled={!canManage || savingRule || !selectedTypeId} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingRule ? "Menyimpan Rule..." : "Simpan Commission Rule"}</button></div>
           </form>
@@ -583,7 +585,7 @@ export default function JenisMitraPage() {
                   ) : (
                     commissionRules.map((rule) => (
                       <tr key={rule.id}>
-                        <td className="px-4 py-4 text-sm font-black text-gray-900">{rule.package_name || "Semua Paket"}</td>
+                        <td className="px-4 py-4 text-sm font-black text-gray-900">{rule.plan_name || "Semua Plan"}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.mode}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.value || (rule.tiers && rule.tiers.length > 0 ? `${rule.tiers.length} tier` : "-")}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{formatDateTime(rule.effective_from)} - {formatDateTime(rule.effective_to)}</td>
@@ -598,7 +600,7 @@ export default function JenisMitraPage() {
             <div className="mt-4 space-y-2">
               {commissionRules.filter((rule) => rule.tiers && rule.tiers.length > 0).map((rule) => (
                 <div key={`tier-${rule.id}`} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-sm font-black text-gray-900">Tier rule #{rule.id} - {rule.package_name || "Semua Paket"}</p>
+                  <p className="text-sm font-black text-gray-900">Tier rule #{rule.id} - {rule.plan_name || "Semua Plan"}</p>
                   <div className="mt-3 space-y-2">
                     {rule.tiers?.map((tier) => (
                       <div key={tier.id} className="rounded-2xl border border-white bg-white px-4 py-3 text-xs font-bold text-gray-600">

@@ -10,6 +10,15 @@ import {
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTab from "./AnalyticsTab";
+import {
+  createTransfer,
+  listOwnerTransfers,
+  getTransferSuggestions,
+  confirmTransferMatch,
+  rejectTransferMatch,
+  type TransferItem,
+  type TransferMatchSuggestion,
+} from "@/app/lib/api";
 
 type ApiMeta = {
   page?: number;
@@ -47,6 +56,12 @@ type WalletItem = {
   status?: string;
 };
 
+// Sprint 15a — status jadi lifecycle nyata: PENDING (menunggu transfer,
+// belum masuk balance) -> ACCEPTED (balance credit) | REJECTED | EXPIRED
+// (24 jam sesi PENDING lewat, auto oleh worker). "PAID" (nilai lama) tidak
+// lagi dipakai backend, dibiarkan untuk data historis lama.
+type PaymentStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "PAID";
+
 type PaymentItem = {
   id: number;
   owner_id?: number;
@@ -58,11 +73,31 @@ type PaymentItem = {
   external_reference?: string;
   amount?: string;
   currency?: string;
-  status?: string;
+  status?: PaymentStatus;
   paid_at?: string;
+  session_expires_at?: string;
+  transfer_date_override?: string;
+  effective_transfer_date?: string;
+  unique_code?: string;
   created_at?: string;
   note?: string;
 };
+
+function getPaymentStatusBadgeClass(status?: string): string {
+  switch (status) {
+    case "ACCEPTED":
+    case "PAID":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "PENDING":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "REJECTED":
+      return "border-red-200 bg-red-50 text-red-700";
+    case "EXPIRED":
+      return "border-gray-200 bg-gray-100 text-gray-500";
+    default:
+      return "border-gray-200 bg-gray-100 text-gray-500";
+  }
+}
 
 type LedgerItem = {
   id: number;
@@ -304,7 +339,7 @@ export default function WalletsPage() {
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [ledgers, setLedgers] = useState<LedgerItem[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "payments" | "wallets" | "ledger" | "analytics"
+    "payments" | "wallets" | "ledger" | "analytics" | "transfer"
   >("payments");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -327,6 +362,40 @@ export default function WalletsPage() {
   const [selectedOwnerLedger, setSelectedOwnerLedger] = useState<LedgerItem[]>(
     [],
   );
+
+  // Sprint 15a — modal Accept/Reject/Koreksi Tanggal Transfer untuk Top Up.
+  const [topupActionModal, setTopupActionModal] = useState<{
+    payment: PaymentItem;
+    mode: "accept" | "reject" | "transfer_date";
+  } | null>(null);
+  const [topupActionForm, setTopupActionForm] = useState({
+    uniqueCode: "",
+    transferDateOverride: "",
+    note: "",
+  });
+  const [topupActionSaving, setTopupActionSaving] = useState(false);
+  const [topupActionError, setTopupActionError] = useState("");
+
+  // Sprint 15a — tab Transfer: bukti transfer bank owner dicocokkan ke Top Up PENDING.
+  const [transferOwnerId, setTransferOwnerId] = useState("");
+  const [transferItems, setTransferItems] = useState<TransferItem[]>([]);
+  const [transferSuggestions, setTransferSuggestions] = useState<
+    TransferMatchSuggestion[]
+  >([]);
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferError, setTransferError] = useState("");
+  const [isCreateTransferOpen, setIsCreateTransferOpen] = useState(false);
+  const [createTransferForm, setCreateTransferForm] = useState({
+    amount: "",
+    transferDate: "",
+    proofUrl: "",
+    note: "",
+  });
+  const [creatingTransfer, setCreatingTransfer] = useState(false);
+  const [createTransferError, setCreateTransferError] = useState("");
+  const [matchActionLoadingId, setMatchActionLoadingId] = useState<
+    number | null
+  >(null);
   const [detailTitle, setDetailTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -497,6 +566,137 @@ export default function WalletsPage() {
     loadTopUpData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, channelFilter, paidFrom, paidTo, reloadKey]);
+
+  const loadTransferData = async (ownerId: string) => {
+    if (!ownerId) {
+      setTransferItems([]);
+      setTransferSuggestions([]);
+      return;
+    }
+
+    setTransferLoading(true);
+    setTransferError("");
+
+    try {
+      const [listResult, suggestionResult] = await Promise.allSettled([
+        listOwnerTransfers(Number(ownerId), { all: true }),
+        getTransferSuggestions(Number(ownerId)),
+      ]);
+
+      if (listResult.status === "fulfilled") {
+        setTransferItems(listResult.value.items || []);
+      } else {
+        setTransferItems([]);
+      }
+
+      if (suggestionResult.status === "fulfilled") {
+        setTransferSuggestions(suggestionResult.value || []);
+      } else {
+        setTransferSuggestions([]);
+      }
+
+      const firstError = [listResult, suggestionResult].find(
+        (result) => result.status === "rejected",
+      ) as PromiseRejectedResult | undefined;
+
+      if (firstError) {
+        setTransferError(
+          firstError.reason instanceof Error
+            ? firstError.reason.message
+            : "Sebagian data transfer gagal dimuat.",
+        );
+      }
+    } catch (error) {
+      setTransferError(
+        error instanceof Error ? error.message : "Gagal mengambil data transfer.",
+      );
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "transfer") {
+      loadTransferData(transferOwnerId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, transferOwnerId]);
+
+  const handleCreateTransferSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!transferOwnerId) {
+      setCreateTransferError("Pilih owner terlebih dahulu.");
+      return;
+    }
+
+    if (!createTransferForm.amount || !createTransferForm.transferDate) {
+      setCreateTransferError("Nominal dan tanggal transfer wajib diisi.");
+      return;
+    }
+
+    setCreatingTransfer(true);
+    setCreateTransferError("");
+
+    try {
+      await createTransfer(Number(transferOwnerId), {
+        amount: createTransferForm.amount,
+        transfer_date: new Date(createTransferForm.transferDate).toISOString(),
+        proof_url: createTransferForm.proofUrl || undefined,
+        note: createTransferForm.note || undefined,
+      });
+
+      setIsCreateTransferOpen(false);
+      setCreateTransferForm({
+        amount: "",
+        transferDate: "",
+        proofUrl: "",
+        note: "",
+      });
+      await loadTransferData(transferOwnerId);
+    } catch (error) {
+      setCreateTransferError(
+        error instanceof Error ? error.message : "Gagal membuat transfer.",
+      );
+    } finally {
+      setCreatingTransfer(false);
+    }
+  };
+
+  const handleConfirmMatch = async (suggestion: TransferMatchSuggestion) => {
+    setMatchActionLoadingId(suggestion.transfer.id);
+    setTransferError("");
+
+    try {
+      await confirmTransferMatch(suggestion.transfer.id, {
+        wallet_payment_id: suggestion.wallet_payment_id,
+        unique_code: suggestion.unique_code,
+      });
+      await loadTransferData(transferOwnerId);
+    } catch (error) {
+      setTransferError(
+        error instanceof Error ? error.message : "Gagal mengonfirmasi kecocokan transfer.",
+      );
+    } finally {
+      setMatchActionLoadingId(null);
+    }
+  };
+
+  const handleRejectMatch = async (suggestion: TransferMatchSuggestion) => {
+    setMatchActionLoadingId(suggestion.transfer.id);
+    setTransferError("");
+
+    try {
+      await rejectTransferMatch(suggestion.transfer.id);
+      await loadTransferData(transferOwnerId);
+    } catch (error) {
+      setTransferError(
+        error instanceof Error ? error.message : "Gagal menolak kecocokan transfer.",
+      );
+    } finally {
+      setMatchActionLoadingId(null);
+    }
+  };
 
   const summary = useMemo(() => {
     const totalTopUp = payments.reduce(
@@ -723,6 +923,76 @@ export default function WalletsPage() {
     }
   };
 
+  const openTopupAction = (
+    payment: PaymentItem,
+    mode: "accept" | "reject" | "transfer_date",
+  ) => {
+    setTopupActionModal({ payment, mode });
+    setTopupActionForm({
+      uniqueCode: payment.unique_code || "",
+      transferDateOverride: "",
+      note: "",
+    });
+    setTopupActionError("");
+  };
+
+  const closeTopupAction = () => {
+    setTopupActionModal(null);
+    setTopupActionError("");
+  };
+
+  const handleTopupActionSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!topupActionModal) return;
+
+    setTopupActionSaving(true);
+    setTopupActionError("");
+
+    try {
+      const { payment, mode } = topupActionModal;
+
+      if (mode === "accept") {
+        await authFetch(`/wallet-payments/${payment.id}/accept`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            unique_code: topupActionForm.uniqueCode || undefined,
+            transfer_date_override: topupActionForm.transferDateOverride
+              ? toIsoFromDatetimeLocal(topupActionForm.transferDateOverride)
+              : undefined,
+          }),
+        });
+      } else if (mode === "reject") {
+        await authFetch(`/wallet-payments/${payment.id}/reject`, {
+          method: "PATCH",
+          body: JSON.stringify({ note: topupActionForm.note || undefined }),
+        });
+      } else {
+        if (!topupActionForm.transferDateOverride) {
+          setTopupActionError("Tanggal transfer wajib diisi.");
+          setTopupActionSaving(false);
+          return;
+        }
+        await authFetch(`/wallet-payments/${payment.id}/transfer-date`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            transfer_date: toIsoFromDatetimeLocal(
+              topupActionForm.transferDateOverride,
+            ),
+          }),
+        });
+      }
+
+      closeTopupAction();
+      setReloadKey((prev) => prev + 1);
+    } catch (error) {
+      setTopupActionError(
+        error instanceof Error ? error.message : "Gagal memproses top up.",
+      );
+    } finally {
+      setTopupActionSaving(false);
+    }
+  };
+
   const handleOpenWalletDetail = async (wallet: WalletItem) => {
     const ownerId = wallet.owner?.id || wallet.owner_id;
 
@@ -897,6 +1167,7 @@ export default function WalletsPage() {
             { key: "payments", label: "Riwayat Top Up" },
             { key: "wallets", label: "Saldo Wallet" },
             { key: "ledger", label: "Ledger" },
+            { key: "transfer", label: "Transfer" },
             { key: "analytics", label: "Analitik" },
           ].map((item) => (
             <button
@@ -1036,9 +1307,16 @@ export default function WalletsPage() {
                       </td>
 
                       <td className="px-4 py-4 align-top">
-                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getPaymentStatusBadgeClass(payment.status)}`}
+                        >
                           {payment.status || "-"}
                         </span>
+                        {payment.status === "PENDING" && payment.session_expires_at ? (
+                          <p className="mt-1 text-[10px] font-bold text-amber-600">
+                            Exp: {formatTanggal(payment.session_expires_at)}
+                          </p>
+                        ) : null}
                       </td>
 
                       <td className="px-4 py-4 align-top font-medium text-gray-600">
@@ -1053,13 +1331,51 @@ export default function WalletsPage() {
                         className="px-4 py-4 text-center align-top"
                         onMouseDown={(event) => event.stopPropagation()}
                       >
-                        <Link
-                          href={`/menu/wallets/payments/${payment.id}`}
-                          onClick={(event) => event.stopPropagation()}
-                          className="inline-flex rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                        >
-                          Detail
-                        </Link>
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                          <Link
+                            href={`/menu/wallets/payments/${payment.id}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                          >
+                            Detail
+                          </Link>
+                          {payment.status === "PENDING" && isAdmin ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openTopupAction(payment, "accept");
+                                }}
+                                className="inline-flex rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100"
+                              >
+                                Terima
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openTopupAction(payment, "reject");
+                                }}
+                                className="inline-flex rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition-colors hover:bg-red-100"
+                              >
+                                Tolak
+                              </button>
+                            </>
+                          ) : null}
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openTopupAction(payment, "transfer_date");
+                              }}
+                              className="inline-flex rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:bg-gray-200"
+                            >
+                              Koreksi Tanggal
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1252,8 +1568,291 @@ export default function WalletsPage() {
             </table>
           </div>
         )}
+
+        {activeTab === "transfer" && (
+          <div className="mt-4 space-y-6">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+                  Owner
+                </label>
+                <select
+                  value={transferOwnerId}
+                  onChange={(event) => setTransferOwnerId(event.target.value)}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
+                >
+                  <option value="">Pilih owner...</option>
+                  {owners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {getOwnerName(owner)} ({getOwnerCode(owner)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {isMounted && isAdmin && (
+                <button
+                  type="button"
+                  disabled={!transferOwnerId}
+                  onClick={() => {
+                    setCreateTransferError("");
+                    setIsCreateTransferOpen(true);
+                  }}
+                  className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  + Catat Transfer
+                </button>
+              )}
+            </div>
+
+            {transferError && (
+              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+                {transferError}
+              </p>
+            )}
+
+            {!transferOwnerId ? (
+              <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm font-bold text-gray-500">
+                Pilih owner untuk melihat riwayat transfer dan saran kecocokan.
+              </p>
+            ) : transferLoading ? (
+              <p className="px-4 py-6 text-center text-sm font-bold text-gray-500">
+                Memuat data transfer...
+              </p>
+            ) : (
+              <>
+                <div>
+                  <h3 className="mb-3 text-sm font-black text-gray-900">
+                    Saran Kecocokan
+                  </h3>
+                  {transferSuggestions.length === 0 ? (
+                    <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
+                      Tidak ada saran kecocokan untuk owner ini.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {transferSuggestions.map((suggestion) => (
+                        <div
+                          key={`${suggestion.transfer.id}-${suggestion.wallet_payment_id}`}
+                          className={`rounded-2xl border p-4 ${
+                            suggestion.amount_mismatch
+                              ? "border-red-300 bg-red-50"
+                              : "border-gray-200 bg-white"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-black text-gray-900">
+                                Transfer {formatRupiah(suggestion.transfer.amount)} →{" "}
+                                {suggestion.wallet_payment_code} (
+                                {formatRupiah(suggestion.wallet_payment_amount)})
+                              </p>
+                              <p className="mt-1 text-[11px] font-bold text-gray-400">
+                                Tanggal transfer: {formatTanggal(suggestion.transfer.transfer_date)}
+                                {suggestion.unique_code
+                                  ? ` · Kode unik: ${suggestion.unique_code}`
+                                  : ""}
+                              </p>
+                              {suggestion.amount_mismatch && (
+                                <span className="mt-2 inline-flex rounded-full border border-red-300 bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-red-700">
+                                  Nominal Tidak Cocok — Periksa Manual
+                                </span>
+                              )}
+                            </div>
+
+                            {isMounted && isAdmin && (
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  disabled={matchActionLoadingId === suggestion.transfer.id}
+                                  onClick={() => handleConfirmMatch(suggestion)}
+                                  className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                >
+                                  Confirm Match
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={matchActionLoadingId === suggestion.transfer.id}
+                                  onClick={() => handleRejectMatch(suggestion)}
+                                  className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:bg-gray-200 disabled:opacity-50"
+                                >
+                                  Reject Match
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="overflow-x-auto">
+                  <h3 className="mb-3 text-sm font-black text-gray-900">
+                    Riwayat Transfer
+                  </h3>
+                  <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
+                    <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+                      <tr>
+                        <th className="px-4 py-4 font-black">Tanggal Transfer</th>
+                        <th className="px-4 py-4 text-right font-black">Nominal</th>
+                        <th className="px-4 py-4 font-black">Status</th>
+                        <th className="px-4 py-4 font-black">Sumber</th>
+                        <th className="px-4 py-4 font-black">Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {transferItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                            Belum ada transfer tercatat.
+                          </td>
+                        </tr>
+                      ) : (
+                        transferItems.map((transfer) => (
+                          <tr key={transfer.id} className="transition-colors hover:bg-gray-50">
+                            <td className="px-4 py-4 align-top font-medium text-gray-600">
+                              {formatTanggal(transfer.transfer_date)}
+                            </td>
+                            <td className="px-4 py-4 text-right align-top font-black text-gray-900">
+                              {formatRupiah(transfer.amount)}
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <span
+                                className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${
+                                  transfer.match_status === "MATCHED"
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : transfer.match_status === "SUGGESTED"
+                                      ? "border-amber-200 bg-amber-50 text-amber-700"
+                                      : transfer.match_status === "REJECTED_MATCH"
+                                        ? "border-red-200 bg-red-50 text-red-700"
+                                        : "border-gray-200 bg-gray-100 text-gray-500"
+                                }`}
+                              >
+                                {transfer.match_status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 align-top font-medium text-gray-600">
+                              {transfer.source}
+                            </td>
+                            <td className="px-4 py-4 align-top font-medium text-gray-600">
+                              {transfer.note || "-"}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </section>
       )}
+
+      <ModalShell
+        open={isCreateTransferOpen}
+        title="Catat Transfer Baru"
+        subtitle="Input bukti transfer bank owner untuk dicocokkan dengan Top Up PENDING."
+        onClose={() => setIsCreateTransferOpen(false)}
+      >
+        <form onSubmit={handleCreateTransferSubmit} className="space-y-4">
+          {createTransferError && (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+              {createTransferError}
+            </p>
+          )}
+
+          <div>
+            <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+              Nominal
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={createTransferForm.amount}
+              onChange={(event) =>
+                setCreateTransferForm((current) => ({
+                  ...current,
+                  amount: event.target.value,
+                }))
+              }
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+              Tanggal Transfer
+            </label>
+            <input
+              type="datetime-local"
+              value={createTransferForm.transferDate}
+              onChange={(event) =>
+                setCreateTransferForm((current) => ({
+                  ...current,
+                  transferDate: event.target.value,
+                }))
+              }
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+              URL Bukti Transfer (opsional)
+            </label>
+            <input
+              type="text"
+              value={createTransferForm.proofUrl}
+              onChange={(event) =>
+                setCreateTransferForm((current) => ({
+                  ...current,
+                  proofUrl: event.target.value,
+                }))
+              }
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+              Catatan (opsional)
+            </label>
+            <textarea
+              value={createTransferForm.note}
+              onChange={(event) =>
+                setCreateTransferForm((current) => ({
+                  ...current,
+                  note: event.target.value,
+                }))
+              }
+              rows={3}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsCreateTransferOpen(false)}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-black text-gray-500 transition hover:bg-gray-50"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={creatingTransfer}
+              className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white transition hover:bg-[#A82216] disabled:opacity-50"
+            >
+              {creatingTransfer ? "Menyimpan..." : "Simpan"}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
 
       <ModalShell
         open={isWalletActionOpen}
@@ -1539,6 +2138,28 @@ export default function WalletsPage() {
                   label="Amount"
                   value={formatRupiah(selectedPaymentDetail.payment.amount)}
                 />
+                {selectedPaymentDetail.payment.unique_code ? (
+                  <InfoItem
+                    label="Kode Unik"
+                    value={selectedPaymentDetail.payment.unique_code}
+                  />
+                ) : null}
+                {selectedPaymentDetail.payment.session_expires_at ? (
+                  <InfoItem
+                    label="Sesi Kadaluarsa"
+                    value={formatTanggal(
+                      selectedPaymentDetail.payment.session_expires_at,
+                    )}
+                  />
+                ) : null}
+                {selectedPaymentDetail.payment.effective_transfer_date ? (
+                  <InfoItem
+                    label="Tanggal Transfer Efektif"
+                    value={formatTanggal(
+                      selectedPaymentDetail.payment.effective_transfer_date,
+                    )}
+                  />
+                ) : null}
               </div>
             </div>
           )}
@@ -1649,6 +2270,134 @@ export default function WalletsPage() {
             </button>
           </div>
         </div>
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(topupActionModal)}
+        title={
+          topupActionModal?.mode === "accept"
+            ? "Terima Top Up"
+            : topupActionModal?.mode === "reject"
+              ? "Tolak Top Up"
+              : "Koreksi Tanggal Transfer"
+        }
+        subtitle={
+          topupActionModal?.mode === "accept"
+            ? "Balance owner akan bertambah sebesar nominal top up yang diminta (nominal genap), selisih dicatat sebagai kode unik."
+            : topupActionModal?.mode === "reject"
+              ? "Top up PENDING tidak pernah menyentuh balance, jadi menolak tidak butuh pembalikan apapun."
+              : "Ubah tanggal transfer efektif berdasarkan bukti/struk, terpisah dari kapan sistem mencatat top up."
+        }
+        maxWidth="max-w-lg"
+        onClose={closeTopupAction}
+      >
+        {topupActionModal ? (
+          <form onSubmit={handleTopupActionSubmit} className="space-y-4">
+            {topupActionError ? (
+              <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+                {topupActionError}
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-gray-100 bg-[#FAFAFA] px-4 py-3 text-xs font-bold text-gray-500">
+              {topupActionModal.payment.code || `PAY-${topupActionModal.payment.id}`} —{" "}
+              {formatRupiah(topupActionModal.payment.amount)}
+            </div>
+
+            {topupActionModal.mode === "accept" ? (
+              <>
+                <label className="block space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                    Kode Unik (opsional)
+                  </span>
+                  <input
+                    value={topupActionForm.uniqueCode}
+                    onChange={(event) =>
+                      setTopupActionForm((current) => ({
+                        ...current,
+                        uniqueCode: event.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: 123 (selisih transfer manual)"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                    Tanggal Transfer (opsional, dari bukti/struk)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={topupActionForm.transferDateOverride}
+                    onChange={(event) =>
+                      setTopupActionForm((current) => ({
+                        ...current,
+                        transferDateOverride: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {topupActionModal.mode === "reject" ? (
+              <label className="block space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                  Catatan (opsional)
+                </span>
+                <textarea
+                  value={topupActionForm.note}
+                  onChange={(event) =>
+                    setTopupActionForm((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }))
+                  }
+                  rows={3}
+                  placeholder="Alasan penolakan"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                />
+              </label>
+            ) : null}
+
+            {topupActionModal.mode === "transfer_date" ? (
+              <label className="block space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                  Tanggal Transfer (wajib)
+                </span>
+                <input
+                  type="datetime-local"
+                  value={topupActionForm.transferDateOverride}
+                  onChange={(event) =>
+                    setTopupActionForm((current) => ({
+                      ...current,
+                      transferDateOverride: event.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                />
+              </label>
+            ) : null}
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeTopupAction}
+                className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={topupActionSaving}
+                className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {topupActionSaving ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
+          </form>
+        ) : null}
       </ModalShell>
     </div>
   );

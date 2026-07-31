@@ -34,6 +34,7 @@ const EMPTY_PARTNER_FORM: PartnerFormState = {
   address: "",
   bankAccount: "",
   status: "ACTIVE",
+  selfAssignPic: false,
 };
 
 function getErrorMessage(error: unknown) {
@@ -254,6 +255,7 @@ export default function MitraSalesPage() {
       address: partner.address || "",
       bankAccount: "",
       status: partner.status || "ACTIVE",
+      selfAssignPic: false,
     });
 
     setPartnerFormError("");
@@ -319,6 +321,7 @@ export default function MitraSalesPage() {
           address: partnerForm.address.trim() || undefined,
           bank_account: partnerForm.bankAccount.trim() || undefined,
           status: partnerForm.status,
+          self_assign_pic: partnerForm.selfAssignPic || undefined,
         });
 
         setPageSuccess("Mitra berhasil ditambahkan.");
