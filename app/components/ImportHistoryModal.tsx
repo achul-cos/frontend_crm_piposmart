@@ -60,7 +60,7 @@ export default function ImportHistoryModal({ isOpen, onClose, onResume, profile 
     setIsLoading(true);
     try {
       const resp = await getImportBatches({ profile, limit: 20 });
-      setBatches(resp.items || []);
+      setBatches(resp?.items || []);
     } catch (err) {
       console.error("Gagal memuat riwayat import", err);
     } finally {
