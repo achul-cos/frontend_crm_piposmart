@@ -13,6 +13,7 @@ import {
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import OwnerOverviewCard from "../OwnerOverviewCard";
 
 export default function OwnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   usePageTitle("Detail Owner");
@@ -241,6 +242,9 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           </div>
+
+          {/* Sprint 15a: Owner Overview — saldo & status murni milik Owner */}
+          <OwnerOverviewCard ownerId={ownerId} />
 
           {/* Level 2: Informasi Dasar */}
           <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">

@@ -298,14 +298,12 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
 
   const activeRules = useMemo(() => rules.filter((rule) => rule.active), [rules]);
   const tierRules = useMemo(() => rules.filter((rule) => rule.mode === "TIER"), [rules]);
-  const scopedPackageIds = useMemo(
-    () => new Set(rules.map((rule) => rule.package_id).filter((value): value is number => typeof value === "number")),
+  // Sprint 15a — commission rule sekarang scoped langsung ke plan_id (bukan
+  // package_id), jadi tidak perlu lagi lookup 2-hop package->plan.
+  const scopedPlanIds = useMemo(
+    () => new Set(rules.map((rule) => rule.plan_id).filter((value): value is number => typeof value === "number")),
     [rules],
   );
-  const relatedPlansCount = useMemo(() => {
-    if (scopedPackageIds.size === 0) return plans.length;
-    return plans.filter((plan) => plan.package?.id && scopedPackageIds.has(plan.package.id)).length;
-  }, [plans, scopedPackageIds]);
 
   return (
     <div className="space-y-6">
@@ -382,9 +380,9 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
               description={`${activeRules.length} aktif • ${tierRules.length} tier • ${rules.length - activeRules.length} nonaktif`}
             />
             <SummaryCard
-              title="Cakupan Paket / Plan"
-              value={scopedPackageIds.size === 0 ? "Semua Paket" : scopedPackageIds.size}
-              description={`${packages.length} paket master tersedia • ${relatedPlansCount} plan terkait`}
+              title="Cakupan Plan"
+              value={scopedPlanIds.size === 0 ? "Semua Plan" : scopedPlanIds.size}
+              description={`${plans.length} plan master tersedia`}
             />
           </div>
 
@@ -411,20 +409,20 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
             subtitle="Ringkasan apakah komisi berlaku global atau spesifik paket"
             icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 7.5 12 4l9 3.5M4.5 10.5l7.5 3 7.5-3M4.5 14.25l7.5 3 7.5-3" />}
           >
-            <FieldBox label="Paket Dengan Rule" value={scopedPackageIds.size === 0 ? "Semua Paket / belum ada scope spesifik" : scopedPackageIds.size} />
-            <FieldBox label="Plan Terkait" value={relatedPlansCount} />
+            <FieldBox label="Plan Dengan Rule" value={scopedPlanIds.size === 0 ? "Semua Plan / belum ada scope spesifik" : scopedPlanIds.size} />
+            <FieldBox label="Jumlah Plan Master" value={plans.length} />
             <FieldBox label="Jumlah Paket Master" value={packages.length} />
             <FieldBox label="Jumlah Tier Bracket" value={tierRules.reduce((sum, rule) => sum + (rule.tiers?.length || 0), 0)} />
             <FieldBox
-              label="Paket Yang Ter-cover Rule"
+              label="Plan Yang Ter-cover Rule"
               span
               value={
-                scopedPackageIds.size === 0
-                  ? "Rule yang ada saat ini berlaku untuk semua paket atau belum dibatasi pada paket tertentu."
-                  : packages
-                      .filter((item) => scopedPackageIds.has(item.id))
+                scopedPlanIds.size === 0
+                  ? "Rule yang ada saat ini berlaku untuk semua plan atau belum dibatasi pada plan tertentu."
+                  : plans
+                      .filter((item) => scopedPlanIds.has(item.id))
                       .map((item) => `${item.code} - ${item.name}`)
-                      .join(", ") || "Belum ada paket terdeteksi."
+                      .join(", ") || "Belum ada plan terdeteksi."
               }
             />
           </InfoSection>
@@ -445,7 +443,7 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <Badge value={formatLabel(rule.mode)} className={getModeBadgeClass(rule.mode)} />
                           <Badge value={rule.active ? "Active" : "Inactive"} className={getStatusBadgeClass(rule.active)} />
-                          <Badge value={rule.package_name || "Semua Paket"} className="bg-gray-50 text-gray-600 border border-gray-200" />
+                          <Badge value={rule.plan_name || "Semua Plan"} className="bg-gray-50 text-gray-600 border border-gray-200" />
                         </div>
                         <p className="text-sm font-bold text-gray-900">
                           {formatCommission(rule.mode, rule.value)}
@@ -461,7 +459,7 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                       <FieldBox label="Rule ID" value={rule.id} />
-                      <FieldBox label="Package Scope" value={rule.package_code || rule.package_name || "Semua Paket"} />
+                      <FieldBox label="Plan Scope" value={rule.plan_code || rule.plan_name || "Semua Plan"} />
                       <FieldBox label="Created By" value={rule.created_by?.name || "-"} />
                       <FieldBox label="Updated At" value={formatDateTime(rule.updated_at)} />
                     </div>

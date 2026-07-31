@@ -70,14 +70,20 @@ function Badge({
 
 function getStatusBadgeClass(status?: string | null): string {
   switch (String(status || "").toUpperCase()) {
+    // Sprint 15a — ACCEPTED adalah pengganti makna "PAID" lama (balance
+    // sudah kredit); PAID dibiarkan untuk data historis lama.
     case "PAID":
+    case "ACCEPTED":
     case "SUCCESS":
       return "bg-emerald-50 text-emerald-700 border border-emerald-200";
     case "PENDING":
       return "bg-amber-50 text-amber-700 border border-amber-200";
+    case "REJECTED":
     case "FAILED":
     case "CANCELLED":
       return "bg-rose-50 text-rose-700 border border-rose-200";
+    case "EXPIRED":
+      return "bg-gray-100 text-gray-500 border border-gray-200";
     default:
       return "bg-gray-50 text-gray-600 border border-gray-200";
   }

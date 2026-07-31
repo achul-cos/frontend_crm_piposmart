@@ -646,7 +646,7 @@ function OverviewTable({
           <th className="px-4 py-4 font-bold">Nama Outlet</th>
           <th className="px-4 py-4 font-bold">Owner</th>
           <th className="px-4 py-4 font-bold">Kota / Provinsi</th>
-          <th className="px-4 py-4 font-bold">Saldo Wallet</th>
+          <th className="px-4 py-4 font-bold">Saldo Owner</th>
           <th className="px-4 py-4 text-center font-bold">Status</th>
           <th className="px-4 py-4 text-center font-bold">Aksi</th>
         </tr>
@@ -683,7 +683,18 @@ function OverviewTable({
               {item.city || "—"}
               {item.province ? `, ${item.province}` : ""}
             </td>
-            <td className="px-4 py-4 align-top font-mono text-sm font-semibold text-gray-700">{formatRupiah(item.wallet?.balance)}</td>
+            <td className="px-4 py-4 align-top text-sm font-semibold text-gray-700">
+              {item.owner.id ? (
+                <Link
+                  href={`/menu/owner-outlet/${item.owner.id}`}
+                  className="text-[#C92C1E] underline decoration-dotted underline-offset-2 hover:text-red-700"
+                >
+                  Lihat saldo owner
+                </Link>
+              ) : (
+                "—"
+              )}
+            </td>
             <td className="px-4 py-4 align-top text-center">
               <span
                 className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${

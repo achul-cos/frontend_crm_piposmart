@@ -153,9 +153,18 @@ function OutletDetailPageInner() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
               <div className="relative z-10">
-                <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Saldo Berjalan</p>
-                <h2 className="text-2xl font-black">{formatRupiah(detail.wallet?.balance)}</h2>
-                <p className="mt-1 text-[10px] font-bold text-red-100/80">Ledger: {formatRupiah(detail.wallet?.ledger_balance)}</p>
+                <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Saldo Owner</p>
+                <p className="text-xs font-semibold text-red-100/90 mt-1 mb-2">
+                  Saldo sekarang tercatat di level Owner (dipakai bersama seluruh outlet), bukan per outlet.
+                </p>
+                {detail.owner.id ? (
+                  <Link
+                    href={`/menu/owner-outlet/${detail.owner.id}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-xs font-black text-white hover:bg-white/25 transition-colors"
+                  >
+                    Lihat saldo di halaman Owner →
+                  </Link>
+                ) : null}
               </div>
               <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
