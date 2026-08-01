@@ -18,6 +18,8 @@ import {
   softDeleteOwner,
   bulkSoftDeleteOwners,
   bulkCreateOwnerOutlets,
+  listGlobalOutlets,
+  exportOwnerOutlets,
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
@@ -205,6 +207,7 @@ export default function OwnerOutletPage() {
 
   const [owners, setOwners] = useState<BackendOwner[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -212,6 +215,10 @@ export default function OwnerOutletPage() {
   });
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("-created_at");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [exportStartDate, setExportStartDate] = useState("");
+  const [exportEndDate, setExportEndDate] = useState("");
   const [filters, setFilters] = useState({
     code: "",
     name: "",
@@ -270,6 +277,7 @@ export default function OwnerOutletPage() {
     province: "",
     city: "",
     address: "",
+    created_at: "",
   });
 
   const {
@@ -323,6 +331,8 @@ export default function OwnerOutletPage() {
         brand_name: filters.brand_name,
         phone: filters.phone,
         city: filters.city,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
         sort,
       });
       setOwners(res.data.items);
@@ -332,7 +342,7 @@ export default function OwnerOutletPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [pagination.page, pagination.limit, search, filters, sort]);
+  }, [pagination.page, pagination.limit, search, filters, startDate, endDate, sort]);
 
   useEffect(() => {
     loadOwners();
@@ -435,6 +445,7 @@ export default function OwnerOutletPage() {
       province: owner.province || "",
       city: owner.city || "",
       address: owner.address || "",
+      created_at: owner.created_at || "",
     });
 
     if (owner.province) {
@@ -499,26 +510,74 @@ export default function OwnerOutletPage() {
 
   const handleExportExcel = async () => {
     try {
-      const resp = await fetchOwners({ limit: 100000 });
-      const activeOwners = resp.data.items;
+      setIsExporting(true);
+      const activeOutlets = await exportOwnerOutlets({ 
+        limit: 100000,
+        start_date: exportStartDate || undefined,
+        end_date: exportEndDate || undefined,
+      });
 
-      if (activeOwners.length === 0) {
-        alert("Tidak ada data owner untuk di-export.");
+      if (!activeOutlets || activeOutlets.length === 0) {
+        alert("Tidak ada data owner/outlet untuk di-export.");
         return;
       }
 
-      const dataToExport = activeOwners.map((owner) => ({
-        "Kode Owner": owner.code,
-        "Nama Owner": owner.name,
-        "Brand/Usaha": owner.brand_name || "-",
-        Kontak: owner.phone || "-",
-        Provinsi: owner.province || "-",
-        "Kota/Kabupaten": owner.city || "-",
-        "Alamat Lengkap": owner.address || "-",
-        "Total Outlet": owner.outlet_count || 0,
+      const dataToExport = activeOutlets.map((item, index) => ({
+        "No": index + 1,
+        "Date of Work": "",
+        "Nama Penginput": "",
+        "Kategori Akun": "",
+        "Kode Baris": "",
+        "Kode Owner": item.owner_code || "",
+        "Nama Owner ": item.owner_name || "",
+        "Email Owner": item.owner_email || "",
+        "No Hp Owner": item.owner_phone || "",
+        "No. Hp Outlet": item.outlet_phone || "",
+        "Nama Project/BRAND": item.owner_brand_name || "",
+        "Nama Outlet": item.outlet_name || "",
+        "Kota": item.outlet_city || "",
+        "Provinsi": item.outlet_province || "",
+        "Alamat Lengkap": item.outlet_address || "",
+        "Kelurahan": "",
+        "Kecamatan": "",
+        "Status": "",
+        "Mitra": "",
+        "Kategory Mitra": "",
+        "Target Call": "",
+        "Target Omset": "",
+        "Total Call/Bulan": "",
+        "Capaian/Bulan": "",
+        "Total Closing": "",
+        "Create Date Project": item.owner_created_at ? new Date(item.owner_created_at).toLocaleDateString("id-ID") : "",
+        "Bulan": "",
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+      // Mempercantik template Excel
+      worksheet["!cols"] = [
+        { wch: 5 },  // No
+        { wch: 15 }, // Date of Work
+        { wch: 20 }, // Nama Penginput
+        { wch: 15 }, // Kategori Akun
+        { wch: 15 }, // Kode Baris
+        { wch: 20 }, // Kode Owner
+        { wch: 25 }, // Nama Owner 
+        { wch: 25 }, // Email Owner
+        { wch: 15 }, // No Hp Owner
+        { wch: 15 }, // No. Hp Outlet
+        { wch: 20 }, // Create Date Project
+        { wch: 10 }, // Bulan
+        { wch: 20 }, // Nama Project/BRAND
+        { wch: 25 }, // Nama Outlet
+        { wch: 15 }, // Kelurahan 
+        { wch: 15 }, // Kecamatan
+        { wch: 15 }, // Kota
+        { wch: 15 }, // Provinsi
+        { wch: 40 }, // Alamat Lengkap
+      ];
+      worksheet["!views"] = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Owner");
       XLSX.writeFile(
@@ -951,6 +1010,31 @@ export default function OwnerOutletPage() {
                   className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
                 />
 
+                <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-1.5 min-w-max">
+                  <span className="text-xs text-gray-500 font-medium">Tgl Dibuat:</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }}
+                    className="text-sm text-black outline-none bg-transparent w-[120px] focus:border-[#C92C1E]"
+                    title="Mulai Tanggal"
+                  />
+                  <span className="text-sm text-gray-400 font-bold">-</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }}
+                    className="text-sm text-black outline-none bg-transparent w-[120px] focus:border-[#C92C1E]"
+                    title="Sampai Tanggal"
+                  />
+                </div>
+
                 <button
                   type="submit"
                   className="rounded-lg bg-[#C92C1E] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
@@ -969,6 +1053,24 @@ export default function OwnerOutletPage() {
                     Hapus Terpilih ({selectedOwnerIds.length})
                   </button>
                 )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-black outline-none focus:border-[#C92C1E]"
+                    title="Mulai Tanggal (Export)"
+                  />
+                  <span className="text-sm font-bold text-black">-</span>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-black outline-none focus:border-[#C92C1E]"
+                    title="Sampai Tanggal (Export)"
+                  />
+                </div>
 
                 <button
                   onClick={handleExportExcel}
@@ -1038,6 +1140,7 @@ export default function OwnerOutletPage() {
                     {renderFilterHeader("brand_name", "Brand")}
                     {renderFilterHeader("phone", "Kontak")}
                     {renderFilterHeader("city", "Lokasi")}
+                    <th className="px-4 py-4 text-center font-bold">Tgl Dibuat</th>
                     <th className="px-4 py-4 text-center font-bold">Status</th>
                     <th className="px-4 py-4 text-center font-bold">Outlet</th>
                     <th className="px-4 py-4 text-center font-bold">Aksi</th>
@@ -1098,6 +1201,9 @@ export default function OwnerOutletPage() {
                             {owner.city
                               ? `${owner.city}, ${owner.province || ""}`
                               : "-"}
+                          </td>
+                          <td className="px-4 py-4 align-top whitespace-nowrap">
+                            {owner.created_at ? new Date(owner.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : "-"}
                           </td>
                           <td className="px-4 py-4 text-center align-top">
                             <span
@@ -1577,6 +1683,18 @@ export default function OwnerOutletPage() {
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Tgl Dibuat
+                    </span>
+                    <input
+                      type="text"
+                      value={editOwnerForm.created_at ? new Date(editOwnerForm.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "-"}
+                      className={modalInputClass + " bg-slate-100 cursor-not-allowed text-gray-500"}
+                      disabled
+                    />
+                  </label>
+
                   <label className="space-y-2">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Kode Owner <span className="text-[#C92C1E]">*</span>

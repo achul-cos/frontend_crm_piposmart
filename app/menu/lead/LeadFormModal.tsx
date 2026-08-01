@@ -395,7 +395,7 @@ function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "pho
 }
 
 
-export default function FormInputDummyPage() {
+export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditId = null }: { isOpen: boolean; onClose: () => void; onSuccess?: () => void; initialEditId?: number | null }) {
   const router = useRouter();
   const [editId, setEditId] = useState<number | null>(null);
 
@@ -465,8 +465,7 @@ export default function FormInputDummyPage() {
       }
     }
 
-    const params = new URLSearchParams(window.location.search);
-    const idParam = params.get("id");
+    const idParam = initialEditId ? String(initialEditId) : null;
 
     if (!idParam) {
       // Create mode
@@ -770,7 +769,8 @@ export default function FormInputDummyPage() {
         alert("Data profil, prospek (Lead), dan outlet berhasil ditambahkan ke backend.");
       }
 
-      router.push("/menu/lead");
+      if (onSuccess) onSuccess();
+      onClose();
     } catch (err) {
       console.error("Gagal menyimpan ke backend", err);
       alert(`Gagal menyimpan ke backend: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -780,9 +780,13 @@ export default function FormInputDummyPage() {
   };
 
 
+  if (!isOpen) return null;
+
   return (
-    <div className="mx-auto max-w-lg space-y-6 font-sans text-[#1C1C1E]">
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-200/60 bg-white p-6 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl relative">
+        <div className="mx-auto space-y-6 font-sans text-[#1C1C1E] p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-black text-gray-900">
             <svg
@@ -805,21 +809,16 @@ export default function FormInputDummyPage() {
           </p>
         </div>
 
-        <Link
-          href="/menu/lead"
+        <button
+          type="button"
+          onClick={onClose}
           className="inline-flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-700 shadow-sm transition hover:border-[#C92C1E]/30 hover:bg-red-50 hover:text-[#C92C1E]"
         >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
-          <span>Kembali</span>
-        </Link>
+          <span>Batal</span>
+        </button>
       </div>
 
       <form
@@ -944,6 +943,8 @@ export default function FormInputDummyPage() {
           </button>
         </div>
       </form>
+        </div>
+      </div>
     </div>
   );
 }
