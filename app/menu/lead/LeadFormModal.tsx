@@ -1,11 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import OwnerSearchPicker from "@/app/components/OwnerSearchPicker";
 import {
-  getLeads,
   createOwner,
   updateOwner,
   bulkCreateOwnerOutlets,
@@ -15,8 +12,6 @@ import {
   assignSalesToLead,
   assignSupervisorToLead,
   getLead,
-  bulkForceDeleteOutlets,
-  getProfile,
   createLead,
   type BackendOwner,
   type CreateLeadRequest,
@@ -196,8 +191,7 @@ function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "pho
   );
 }
 
-export default function LeadFormPage() {
-  const router = useRouter();
+export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditId = null }: { isOpen: boolean; onClose: () => void; onSuccess?: () => void; initialEditId?: number | null }) {
   const [editId, setEditId] = useState<number | null>(null);
 
   // Owner Selection Mode: "EXISTING" (Search/Pop-up) or "NEW"
@@ -262,8 +256,7 @@ export default function LeadFormPage() {
     getSupervisorList().then(setSupervisorList).catch(console.error);
     getSalesList().then(setSalesList).catch(console.error);
 
-    const params = new URLSearchParams(window.location.search);
-    const idParam = params.get("id");
+    const idParam = initialEditId ? String(initialEditId) : null;
 
     if (!idParam) return;
 
@@ -494,7 +487,8 @@ export default function LeadFormPage() {
         alert("Data Prospek (Lead) dan Kepemilikan Assignment (Sprint 5) berhasil ditambahkan!");
       }
 
-      router.push("/menu/lead");
+      if (onSuccess) onSuccess();
+      onClose();
     } catch (err) {
       console.error("Gagal menyimpan lead:", err);
       alert(`Gagal menyimpan data lead: ${err instanceof Error ? err.message : "Terjadi kesalahan."}`);
@@ -503,10 +497,13 @@ export default function LeadFormPage() {
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="mx-auto max-w-xl space-y-5 font-sans text-[#1C1C1E]">
-      {/* Header Section */}
-      <div className="flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl relative">
+        <div className="mx-auto space-y-6 font-sans text-[#1C1C1E] p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-black text-gray-900">
             <svg
@@ -529,12 +526,16 @@ export default function LeadFormPage() {
           </p>
         </div>
 
-        <Link
-          href="/menu/lead"
-          className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-100"
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-700 shadow-sm transition hover:border-[#C92C1E]/30 hover:bg-red-50 hover:text-[#C92C1E]"
         >
-          <span>← Kembali ke Lead</span>
-        </Link>
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <span>Batal</span>
+        </button>
       </div>
 
       <form
@@ -758,12 +759,13 @@ export default function LeadFormPage() {
 
         {/* Submit Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-          <Link
-            href="/menu/lead"
+          <button
+            type="button"
+            onClick={onClose}
             className="rounded-2xl border border-gray-200 px-5 py-3 text-xs font-bold text-gray-600 hover:bg-gray-50"
           >
             Batal
-          </Link>
+          </button>
 
           <button
             type="submit"
@@ -778,6 +780,8 @@ export default function LeadFormPage() {
           </button>
         </div>
       </form>
+        </div>
+      </div>
     </div>
   );
 }

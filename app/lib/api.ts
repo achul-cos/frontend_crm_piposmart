@@ -484,9 +484,36 @@ export async function getLeads(): Promise<BackendLead[]> {
   return data.data?.items || [];
 }
 
-export async function getLeadsWithTotal(): Promise<{ items: BackendLead[], total: number }> {
+export interface LeadListParams {
+  page?: number;
+  limit?: number;
+  q?: string;
+  ownership?: string;
+  stage?: string;
+  status?: string;
+  sort?: string;
+  score?: number | string;
+  supervisor_id?: number | string;
+  sales_id?: number | string;
+  follow_up_from?: string;
+  follow_up_to?: string;
+  all?: boolean;
+}
+
+export async function getLeadsWithTotal(params: LeadListParams = {}): Promise<{ items: BackendLead[], total: number }> {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.set(key, String(value));
+    }
+  });
+
+  const qs = query.toString();
+  const url = `${API_BASE_URL}/api/v1/leads${qs ? `?${qs}` : ""}`;
+
   const headers = getAuthHeaders();
-  const res = await fetch(`${API_BASE_URL}/api/v1/leads?limit=100000`, {
+  const res = await fetch(url, {
     headers,
   });
   const data = await handleResponse<{ data: LeadListResponse }>(res);
@@ -2214,6 +2241,8 @@ export interface ListGlobalOutletsParams {
   page?: number;
   limit?: number;
   sort?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export type OutletScope = "active" | "trash" | "unscoped";
@@ -2231,6 +2260,35 @@ export async function listGlobalOutlets(
   });
 
   const data = await handleResponse<ApiEnvelope<OutletOverviewListData>>(res);
+  return data.data;
+}
+
+export interface ExportOwnerOutletRow {
+  owner_code: string;
+  owner_name: string;
+  owner_email: string;
+  owner_phone: string;
+  owner_brand_name: string;
+  owner_created_at: string;
+  outlet_code: string;
+  outlet_name: string;
+  outlet_phone: string;
+  outlet_city: string;
+  outlet_province: string;
+  outlet_address: string;
+}
+
+export async function exportOwnerOutlets(
+  params: ListGlobalOutletsParams = {},
+): Promise<ExportOwnerOutletRow[]> {
+  const qs = buildQueryString({ ...params });
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/export${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<ExportOwnerOutletRow[]>>(res);
   return data.data;
 }
 
