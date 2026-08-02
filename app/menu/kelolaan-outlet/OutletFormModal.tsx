@@ -89,11 +89,14 @@ export default function OutletFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-md space-y-4 overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-        <h3 className="text-lg font-black text-gray-900">
-          {mode === "edit" ? "Ubah Outlet" : "Tambah Outlet"}
-        </h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 md:p-6">
+      <div className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all">
+        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+          <h3 className="text-lg font-black text-slate-950">
+            {mode === "edit" ? "Ubah Outlet" : "Tambah Outlet"}
+          </h3>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
 
         <div className="space-y-1">
           <label className="text-[10px] font-black uppercase text-gray-400">Owner *</label>
@@ -107,14 +110,14 @@ export default function OutletFormModal({
         <FormField label="Provinsi" value={province} onChange={setProvince} />
         <FormField label="Alamat" value={address} onChange={setAddress} />
 
-        {error && <p className="text-xs font-bold text-red-600">{error}</p>}
+        </div>
 
-        <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+        <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-4 md:px-6 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600"
+            className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-50"
           >
             Batal
           </button>
@@ -122,7 +125,7 @@ export default function OutletFormModal({
             type="button"
             onClick={() => void handleSubmit()}
             disabled={isSaving}
-            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-xs font-black text-white hover:bg-[#A82216] disabled:cursor-not-allowed disabled:bg-gray-400"
+            className="rounded-2xl bg-[#C92C1E] px-5 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
             {isSaving ? "Menyimpan..." : "Simpan"}
           </button>

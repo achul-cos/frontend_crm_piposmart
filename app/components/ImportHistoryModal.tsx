@@ -80,9 +80,9 @@ export default function ImportHistoryModal({ isOpen, onClose, onResume, profile 
         onClick={onClose}
       />
 
-      <div className="relative z-10 w-full max-w-5xl transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all max-h-[90vh] flex flex-col">
+      <div className="relative z-10 w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] transform overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-4">
+        <div className="flex-shrink-0 flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-4">
           <div>
             <h3 className="text-lg font-black text-gray-900">Riwayat Import</h3>
             <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500 mt-0.5">
