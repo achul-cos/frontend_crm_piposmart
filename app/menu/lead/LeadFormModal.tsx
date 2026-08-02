@@ -248,13 +248,23 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditI
 
     const userName = localStorage.getItem("piposmart_user_name") || "Satria";
     const userRole = localStorage.getItem("piposmart_user_role") || "Admin";
+    const userIsAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(userRole);
+    const userIsSupervisor = ["Supervisor", "SUPERVISOR"].includes(userRole);
 
     setLoggedInUser(userName);
     setLoggedInRole(userRole);
 
-    // Fetch Supervisors and Sales for Sprint 5 Kepemilikan / Assignment Picker
-    getSupervisorList().then(setSupervisorList).catch(console.error);
-    getSalesList().then(setSalesList).catch(console.error);
+    // Fetch assignment options only for roles that are actually allowed to read them.
+    if (userIsAdmin) {
+      getSupervisorList().then(setSupervisorList).catch(console.error);
+      getSalesList().then(setSalesList).catch(console.error);
+    } else if (userIsSupervisor) {
+      getSalesList().then(setSalesList).catch(console.error);
+      setSupervisorList([]);
+    } else {
+      setSupervisorList([]);
+      setSalesList([]);
+    }
 
     const idParam = initialEditId ? String(initialEditId) : null;
 
