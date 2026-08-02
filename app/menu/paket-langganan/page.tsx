@@ -529,7 +529,11 @@ export default function PaketLanggananPage() {
   ]);
 
   useEffect(() => {
-    void load();
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
@@ -2313,11 +2317,15 @@ function PackageDetailBody({
   const [plans, setPlans] = useState<CatalogPlanItem[] | null>(null);
 
   useEffect(() => {
-    setPlans(null);
-    void planApi
-      .list({ package_id: item.id, limit: 100 })
-      .then((res) => setPlans(res.items))
-      .catch(() => setPlans([]));
+    const timer = window.setTimeout(() => {
+      setPlans(null);
+      void planApi
+        .list({ package_id: item.id, limit: 100 })
+        .then((res) => setPlans(res.items))
+        .catch(() => setPlans([]));
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [item.id]);
 
   return (
@@ -2375,10 +2383,14 @@ function PlanDetailBody({
   const [isOpeningPackage, setIsOpeningPackage] = useState(false);
 
   useEffect(() => {
-    setPromotions(null);
-    void getEligiblePromotions(item.id)
-      .then(setPromotions)
-      .catch(() => setPromotions([]));
+    const timer = window.setTimeout(() => {
+      setPromotions(null);
+      void getEligiblePromotions(item.id)
+        .then(setPromotions)
+        .catch(() => setPromotions([]));
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [item.id]);
 
   const handleOpenPromotion = async (promoId: number) => {
@@ -2486,11 +2498,15 @@ function PromotionDetailBody({
   );
 
   useEffect(() => {
-    setPlans(null);
-    void getPromotionEligiblePlans(item.id)
-      .then(setPlans)
-      .catch(() => setPlans([]));
-    void listPromotionBenefits(item.id).then(setBenefits).catch(() => {});
+    const timer = window.setTimeout(() => {
+      setPlans(null);
+      void getPromotionEligiblePlans(item.id)
+        .then(setPlans)
+        .catch(() => setPlans([]));
+      void listPromotionBenefits(item.id).then(setBenefits).catch(() => {});
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [item.id]);
 
   return (

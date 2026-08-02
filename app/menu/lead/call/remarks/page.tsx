@@ -137,9 +137,13 @@ function RemarkOptionsSection({
   );
 
   useEffect(() => {
-    if (selectedScore) {
+    if (!selectedScore) return;
+
+    const timer = window.setTimeout(() => {
       setActiveGroupScore(selectedScore as RemarkScore);
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [selectedScore]);
 
   useEffect(() => {

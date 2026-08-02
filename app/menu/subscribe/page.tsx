@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -10,7 +11,7 @@ import {
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTab from "./AnalyticsTab";
-import { getEligiblePromotions, type CatalogPromotion } from "@/app/lib/api";
+import { authFetchJson, getEligiblePromotions, type CatalogPromotion } from "@/app/lib/api";
 
 type ApiMeta = {
   page?: number;
@@ -259,7 +260,11 @@ const normalizeList = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) return payload as T[];
 
   if (payload && typeof payload === "object") {
-    const data = payload as any;
+    const data = payload as {
+      items?: unknown;
+      rows?: unknown;
+      data?: unknown;
+    };
 
     if (Array.isArray(data.items)) return data.items as T[];
     if (Array.isArray(data.rows)) return data.rows as T[];
@@ -403,26 +408,33 @@ export default function SubscriptionPage() {
     const planIdNumber = Number(createForm.planId);
 
     if (!createForm.planId || Number.isNaN(planIdNumber)) {
-      setEligiblePromotions([]);
-      return;
+      const timer = window.setTimeout(() => {
+        setEligiblePromotions([]);
+        setEligiblePromotionsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
-    setEligiblePromotionsLoading(true);
+    const timer = window.setTimeout(() => {
+      setEligiblePromotionsLoading(true);
 
-    getEligiblePromotions(planIdNumber)
-      .then((result) => {
-        if (!cancelled) setEligiblePromotions(result);
-      })
-      .catch(() => {
-        if (!cancelled) setEligiblePromotions([]);
-      })
-      .finally(() => {
-        if (!cancelled) setEligiblePromotionsLoading(false);
-      });
+      getEligiblePromotions(planIdNumber)
+        .then((result) => {
+          if (!cancelled) setEligiblePromotions(result);
+        })
+        .catch(() => {
+          if (!cancelled) setEligiblePromotions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setEligiblePromotionsLoading(false);
+        });
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [createForm.planId]);
 
@@ -435,14 +447,13 @@ export default function SubscriptionPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [userRole, setUserRole] = useState("");
 
-  const apiUrl =
-    typeof window !== "undefined"
-      ? process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-      : "http://localhost:8080";
-
   useEffect(() => {
-    setIsMounted(true);
-    setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    const timer = window.setTimeout(() => {
+      setIsMounted(true);
+      setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const normalizedRole = userRole.toLowerCase();
@@ -451,28 +462,7 @@ export default function SubscriptionPage() {
   const canReconcile = isAdmin || isSupervisor;
 
   const authFetch = async <T,>(path: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem("piposmart_access_token");
-
-    const response = await fetch(`${apiUrl}/api/v1${path}`, {
-      ...options,
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {}),
-      },
-    });
-
-    const json = (await response.json().catch(() => ({}))) as ApiResponse<T>;
-
-    if (!response.ok) {
-      throw new Error(
-        json.error?.message || `Request gagal (${response.status})`,
-      );
-    }
-
-    return json;
+    return authFetchJson<ApiResponse<T>>(path, options);
   };
 
   const buildQuery = (params: Record<string, string>) => {
@@ -486,7 +476,7 @@ export default function SubscriptionPage() {
     return text ? `?${text}` : "";
   };
 
-  const loadSubscriptionData = async () => {
+  const loadSubscriptionData = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
 
@@ -640,7 +630,7 @@ export default function SubscriptionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, statusFilter, purchasedFrom, purchasedTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -651,9 +641,12 @@ export default function SubscriptionPage() {
   }, [search]);
 
   useEffect(() => {
-    loadSubscriptionData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, purchasedFrom, purchasedTo, reloadKey]);
+    const timer = window.setTimeout(() => {
+      void loadSubscriptionData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadSubscriptionData, reloadKey]);
 
   const summary = useMemo(() => {
     const totalOrderAmount = orders.reduce(
@@ -2171,3 +2164,5 @@ function InfoItem({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+

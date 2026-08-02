@@ -2,18 +2,13 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { clearStoredAuth } from "@/app/lib/api";
 
 export default function LogoutPage() {
   const router = useRouter();
 
   useEffect(() => {
-    localStorage.removeItem("piposmart_is_logged_in");
-    localStorage.removeItem("piposmart_user_name");
-    localStorage.removeItem("piposmart_user_role");
-    localStorage.removeItem("piposmart_user_username");
-    localStorage.removeItem("piposmart_user");
-    localStorage.removeItem("piposmart_token");
-    localStorage.removeItem("isLoggedIn");
+    clearStoredAuth();
 
     router.replace("/auth/login");
   }, [router]);

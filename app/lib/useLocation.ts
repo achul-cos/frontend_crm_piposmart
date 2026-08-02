@@ -14,16 +14,19 @@ export interface City {
 export function useLocation() {
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [cities, setCities] = useState<City[]>([]);
-  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingProvinces, setLoadingProvinces] = useState(true);
   const [loadingCities, setLoadingCities] = useState(false);
 
   useEffect(() => {
-    setLoadingProvinces(true);
-    fetch("https://www.emsifa.com/api-wilayah-indonesia/api/provinces.json")
-      .then((res) => res.json())
-      .then((data) => setProvinces(data))
-      .catch((err) => console.error("Failed to load provinces", err))
-      .finally(() => setLoadingProvinces(false));
+    const timer = window.setTimeout(() => {
+      fetch("https://www.emsifa.com/api-wilayah-indonesia/api/provinces.json")
+        .then((res) => res.json())
+        .then((data) => setProvinces(data))
+        .catch((err) => console.error("Failed to load provinces", err))
+        .finally(() => setLoadingProvinces(false));
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const loadCitiesByProvinceName = async (provinceName: string) => {

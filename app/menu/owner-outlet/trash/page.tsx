@@ -41,10 +41,6 @@ export default function DataKelolaanTrashPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    fetchTrashData();
-  }, []);
-
   const fetchTrashData = () => {
     fetchOwners({ scope: "trash", limit: 1000 })
       .then((res) => {
@@ -76,7 +72,7 @@ export default function DataKelolaanTrashPage() {
           sumberNasabah: "",
           finalisasiClosing: "",
           nominal: 0,
-          noted: ""
+          noted: "",
         }));
         setTrashData(mapped);
       })
@@ -85,6 +81,14 @@ export default function DataKelolaanTrashPage() {
         setTrashData([]);
       });
   };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      fetchTrashData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const filteredTrash = useMemo(() => {
     const keyword = searchTerm.toLowerCase().trim();

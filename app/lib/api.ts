@@ -1,12 +1,190 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const ACCESS_TOKEN_KEY = "piposmart_access_token";
+const REFRESH_TOKEN_KEY = "piposmart_refresh_token";
+const LEGACY_ACCESS_TOKEN_KEY = "piposmart_token";
+const nativeFetch: typeof globalThis.fetch = (input, init) =>
+  globalThis.fetch(input, init);
+let refreshTokenPromise: Promise<string | null> | null = null;
+
+export type AppRole = "ADMIN" | "SUPERVISOR" | "SALES" | "UNKNOWN";
+
+export interface StoredUserSession {
+  isAuthenticated: boolean;
+  accessToken: string;
+  refreshToken: string;
+  name: string;
+  username: string;
+  role: AppRole;
+  rawRole: string;
+}
 
 // ─── Auth helpers ───────────────────────────────────────────────────────────
 
+export function getStoredAccessToken(): string {
+  if (typeof window === "undefined") return "";
+
+  return (
+    localStorage.getItem(ACCESS_TOKEN_KEY) ||
+    localStorage.getItem(LEGACY_ACCESS_TOKEN_KEY) ||
+    ""
+  );
+}
+
+export function normalizeAppRole(role?: string | null): AppRole {
+  const value = String(role || "").trim().toUpperCase();
+
+  if (value.includes("ADMIN")) return "ADMIN";
+  if (value.includes("SUPERVISOR")) return "SUPERVISOR";
+  if (value.includes("SALES")) return "SALES";
+
+  return "UNKNOWN";
+}
+
+export function getRoleLabel(role?: string | null): string {
+  const normalized = normalizeAppRole(role);
+
+  if (normalized === "ADMIN") return "Admin";
+  if (normalized === "SUPERVISOR") return "Supervisor";
+  if (normalized === "SALES") return "Sales";
+
+  return "Unknown";
+}
+
+export function isAdminRole(role?: string | null): boolean {
+  return normalizeAppRole(role) === "ADMIN";
+}
+
+export function isSupervisorRole(role?: string | null): boolean {
+  return normalizeAppRole(role) === "SUPERVISOR";
+}
+
+export function isSalesRole(role?: string | null): boolean {
+  return normalizeAppRole(role) === "SALES";
+}
+
+export function readStoredUserSession(): StoredUserSession {
+  if (typeof window === "undefined") {
+    return {
+      isAuthenticated: false,
+      accessToken: "",
+      refreshToken: "",
+      name: "User",
+      username: "",
+      role: "UNKNOWN",
+      rawRole: "",
+    };
+  }
+
+  const accessToken = getStoredAccessToken();
+  const refreshToken = getStoredRefreshToken();
+  const rawRole = localStorage.getItem("piposmart_user_role") || "";
+
+  return {
+    isAuthenticated: accessToken.trim() !== "",
+    accessToken,
+    refreshToken,
+    name: localStorage.getItem("piposmart_user_name") || "User",
+    username:
+      localStorage.getItem("piposmart_user_username") ||
+      localStorage.getItem("piposmart_user_email") ||
+      "",
+    role: normalizeAppRole(rawRole),
+    rawRole,
+  };
+}
+
+function getStoredRefreshToken(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(REFRESH_TOKEN_KEY) || "";
+}
+
+function updateStoredUserProfile(user: Record<string, unknown> | undefined) {
+  if (typeof window === "undefined" || !user) return;
+
+  const name =
+    typeof user.name === "string"
+      ? user.name
+      : typeof user.full_name === "string"
+        ? user.full_name
+        : "";
+  const username =
+    typeof user.email === "string"
+      ? user.email
+      : typeof user.username === "string"
+        ? user.username
+        : "";
+  const roleSource =
+    typeof user.role === "string"
+      ? user.role
+      : typeof user.role_name === "string"
+        ? user.role_name
+        : "";
+  const role = normalizeAppRole(roleSource);
+
+  if (name) localStorage.setItem("piposmart_user_name", name);
+  if (username) localStorage.setItem("piposmart_user_username", username);
+  if (username) localStorage.setItem("piposmart_user_email", username);
+  if (role !== "UNKNOWN") localStorage.setItem("piposmart_user_role", role);
+
+  if (name || username || role !== "UNKNOWN") {
+    localStorage.setItem(
+      "piposmart_user",
+      JSON.stringify({
+        name: name || localStorage.getItem("piposmart_user_name") || "User",
+        username:
+          username || localStorage.getItem("piposmart_user_username") || "",
+        role:
+          role !== "UNKNOWN"
+            ? role
+            : localStorage.getItem("piposmart_user_role") || "",
+      }),
+    );
+  }
+}
+
+export function storeAuthSession(payload?: {
+  access_token?: string;
+  refresh_token?: string;
+  user?: Record<string, unknown>;
+}) {
+  if (typeof window === "undefined" || !payload) return;
+
+  if (payload.access_token) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, payload.access_token);
+  }
+
+  if (payload.refresh_token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, payload.refresh_token);
+  }
+
+  updateStoredUserProfile(payload.user);
+
+  window.dispatchEvent(new Event("piposmart-auth-change"));
+}
+
+export function clearStoredAuth(options: { redirectToLogin?: boolean } = {}) {
+  if (typeof window === "undefined") return;
+
+  localStorage.removeItem("piposmart_is_logged_in");
+  localStorage.removeItem("piposmart_user_name");
+  localStorage.removeItem("piposmart_user_role");
+  localStorage.removeItem("piposmart_user_username");
+  localStorage.removeItem("piposmart_user_email");
+  localStorage.removeItem("piposmart_user");
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+  localStorage.removeItem("isLoggedIn");
+
+  window.dispatchEvent(new Event("piposmart-auth-change"));
+
+  if (options.redirectToLogin && !window.location.pathname.startsWith("/auth/login")) {
+    window.location.href = "/auth/login";
+  }
+}
+
 function getAuthHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("piposmart_access_token") || ""
-      : "";
+  const token = getStoredAccessToken();
 
   return {
     Authorization: `Bearer ${token}`,
@@ -15,17 +193,134 @@ function getAuthHeaders(): Record<string, string> {
   };
 }
 
+async function rotateRefreshToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) return null;
+
+  const response = await nativeFetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      refresh_token: refreshToken,
+    }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        data?: {
+          access_token?: string;
+          refresh_token?: string;
+          user?: Record<string, unknown>;
+        };
+      }
+    | null;
+
+  if (!response.ok || !payload?.data?.access_token) {
+    clearStoredAuth();
+    return null;
+  }
+
+  storeAuthSession(payload.data);
+  return payload.data.access_token || null;
+}
+
+async function ensureFreshAccessToken(): Promise<string | null> {
+  if (!refreshTokenPromise) {
+    refreshTokenPromise = rotateRefreshToken().finally(() => {
+      refreshTokenPromise = null;
+    });
+  }
+
+  return refreshTokenPromise;
+}
+
+function shouldBypassRefresh(url: string) {
+  return (
+    url.includes("/api/v1/auth/login") ||
+    url.includes("/api/v1/auth/refresh") ||
+    url.includes("/api/v1/auth/logout")
+  );
+}
+
+export async function authFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  const url =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+
+  const execute = async (tokenOverride?: string) => {
+    const headers = new Headers(init.headers || {});
+
+    if (!headers.has("Accept")) {
+      headers.set("Accept", "application/json");
+    }
+
+    if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const token = tokenOverride || getStoredAccessToken();
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    return nativeFetch(input, {
+      ...init,
+      credentials: init.credentials || "include",
+      headers,
+    });
+  };
+
+  let response = await execute();
+
+  if (response.status !== 401 || shouldBypassRefresh(url)) {
+    return response;
+  }
+
+  const refreshedToken = await ensureFreshAccessToken();
+  if (!refreshedToken) {
+    clearStoredAuth({ redirectToLogin: true });
+    return response;
+  }
+
+  response = await execute(refreshedToken);
+
+  if (response.status === 401) {
+    clearStoredAuth({ redirectToLogin: true });
+  }
+
+  return response;
+}
+
+export async function authFetchJson<T = unknown>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const response = await authFetch(`${API_BASE_URL}/api/v1${path}`, options);
+  return handleResponse<T>(response);
+}
+
+async function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return authFetch(input, init);
+}
+
 async function handleResponse<T = unknown>(res: Response): Promise<T> {
   const body = await res.json().catch(() => null);
 
   if (!res.ok) {
     const code = body?.error?.code || "UNKNOWN";
     const message = body?.error?.message || `Request gagal (${res.status})`;
-
-    if (res.status === 401 && typeof window !== "undefined") {
-      // Token expired / invalid — redirect ke login
-      window.location.href = "/auth/login";
-    }
 
     throw new Error(`[${code}] ${message}`);
   }
@@ -438,7 +733,9 @@ export interface LeadListResponse {
 
 export interface CreateInteractionRequest {
   interaction_at: string; // ISO8601
-  type: string;           // "chat", "call", "visit", "email"
+  type?: string;          // deprecated compatibility field
+  call_status?: string;
+  chat_status?: string;
   note?: string;
   remark_score?: number;  // 0, 1, 2 (3 is handled by createLeadClosing)
   remark_reason_id?: number;
@@ -458,7 +755,9 @@ export interface CreateClosingRequest {
   discount_amount: string;
   unique_transfer_code?: number;
   closed_at?: string;
-  interaction_type: string;
+  interaction_type?: string;
+  call_status?: string;
+  chat_status?: string;
   contact_name: string;
   contact_phone: string;
   customer_response: string;
@@ -477,7 +776,7 @@ export interface ScheduleTrainingRequest {
 
 export async function getLeads(): Promise<BackendLead[]> {
   const headers = getAuthHeaders();
-  const res = await fetch(`${API_BASE_URL}/api/v1/leads?limit=100000`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/leads?all=true`, {
     headers,
   });
   const data = await handleResponse<{ data: LeadListResponse }>(res);
@@ -561,14 +860,14 @@ export async function createLead(payload: CreateLeadRequest): Promise<BackendLea
 export async function createLeadClosing(
   leadId: number,
   payload: CreateClosingRequest
-): Promise<any> {
+): Promise<ClosingItem> {
   const res = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/closings`, {
     method: "POST",
     credentials: "include",
     headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
-  const data = await handleResponse<{ data: any }>(res);
+  const data = await handleResponse<{ data: ClosingItem }>(res);
   return data.data;
 }
 
@@ -584,6 +883,8 @@ export async function createInteraction(leadId: number, data: CreateInteractionR
 export interface InteractionItem {
   id: number;
   type: string;
+  call_status?: string;
+  chat_status?: string;
   interaction_at: string;
   remark_score?: number | null;
   remark_label?: string;
@@ -620,13 +921,17 @@ export interface InteractionListParams {
   sort?: string;
 }
 
-export async function fetchCustomerInteractions(params: InteractionListParams = {}): Promise<{ items: InteractionItem[]; pagination: any }> {
+export async function fetchCustomerInteractions(
+  params: InteractionListParams = {},
+): Promise<{ items: InteractionItem[]; pagination: ApiPagination }> {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
   });
   const res = await fetch(`${API_BASE_URL}/api/v1/customer-interactions?${query.toString()}`, { headers: getAuthHeaders() });
-  const data = await handleResponse<{ data: { items: InteractionItem[]; pagination: any } }>(res);
+  const data = await handleResponse<{
+    data: { items: InteractionItem[]; pagination: ApiPagination };
+  }>(res);
   return data.data;
 }
 
@@ -668,13 +973,17 @@ export interface TrainingListParams {
   sort?: string;
 }
 
-export async function fetchTrainings(params: TrainingListParams = {}): Promise<{ items: TrainingItem[]; pagination: any }> {
+export async function fetchTrainings(
+  params: TrainingListParams = {},
+): Promise<{ items: TrainingItem[]; pagination: ApiPagination }> {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
   });
   const res = await fetch(`${API_BASE_URL}/api/v1/trainings?${query.toString()}`, { headers: getAuthHeaders() });
-  const data = await handleResponse<{ data: { items: TrainingItem[]; pagination: any } }>(res);
+  const data = await handleResponse<{
+    data: { items: TrainingItem[]; pagination: ApiPagination };
+  }>(res);
   return data.data;
 }
 
@@ -729,6 +1038,17 @@ export async function getLeadStageHistory(leadId: number): Promise<StageHistoryI
   return data.data?.items || [];
 }
 
+export interface ClosingSnapshotValue {
+  id?: number;
+  code?: string;
+  name?: string;
+  package_name?: string;
+  plan_name?: string;
+  tenure_months?: number;
+  duration_days?: number;
+  [key: string]: unknown;
+}
+
 export interface ClosingItem {
   id: number;
   code?: string;
@@ -737,10 +1057,10 @@ export interface ClosingItem {
   lead?: { id: number; code?: string; name: string } | null;
   plan?: { id: number; code?: string; name: string } | null;
   package?: { id: number; code?: string; name: string } | null;
-  package_snapshot?: any;
-  plan_snapshot?: any;
-  promotion?: any;
-  promotion_snapshot?: any;
+  package_snapshot?: ClosingSnapshotValue | null;
+  plan_snapshot?: ClosingSnapshotValue | null;
+  promotion?: ClosingSnapshotValue | null;
+  promotion_snapshot?: ClosingSnapshotValue | null;
   tenure_months?: number;
   duration_days?: number;
   base_price?: string;
@@ -764,13 +1084,17 @@ export interface ClosingListParams {
   sort?: string;
 }
 
-export async function fetchClosings(params: ClosingListParams = {}): Promise<{ items: ClosingItem[]; pagination: any }> {
+export async function fetchClosings(
+  params: ClosingListParams = {},
+): Promise<{ items: ClosingItem[]; pagination: ApiPagination }> {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
   });
   const res = await fetch(`${API_BASE_URL}/api/v1/closings?${query.toString()}`, { headers: getAuthHeaders() });
-  const data = await handleResponse<{ data: { items: ClosingItem[]; pagination: any } }>(res);
+  const data = await handleResponse<{
+    data: { items: ClosingItem[]; pagination: ApiPagination };
+  }>(res);
   return data.data;
 }
 
@@ -1310,7 +1634,7 @@ export interface ImportRowError {
   id: number;
   batch_id: number;
   row_index: number;
-  raw_payload: any;
+  raw_payload: Record<string, unknown> | null;
   status: string;
   validation_errors?: string[] | Record<string, string>;
   commit_error?: string;
@@ -1366,7 +1690,7 @@ export interface ImportBatchListResponse {
 }
 
 export async function uploadImportFile(file: File, profile: string = "OWNER_OUTLET"): Promise<ImportBatchResponse> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("piposmart_access_token") || "" : "";
+  const token = getStoredAccessToken();
   
   const formData = new FormData();
   formData.append("file", file);
@@ -1419,7 +1743,7 @@ export async function commitImportBatch(id: number): Promise<ImportBatchResponse
 }
 
 export async function downloadImportErrors(batchId: number): Promise<void> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("piposmart_access_token") || "" : "";
+  const token = getStoredAccessToken();
   const res = await fetch(`${API_BASE_URL}/api/v1/imports/${batchId}/rejected-rows/export`, {
     method: "GET",
     headers: {
@@ -2807,6 +3131,27 @@ export async function listOwnerTransfers(
   return data.data;
 }
 
+export async function listTransfers(
+  params: {
+    owner_id?: number;
+    match_status?: TransferMatchStatus;
+    page?: number;
+    limit?: number;
+    all?: boolean;
+  } = {},
+): Promise<TransferListData> {
+  const { all, ...rest } = params;
+  const qs = buildQueryString({ ...rest, all: all ? "true" : undefined });
+  const res = await fetch(`${API_BASE_URL}/api/v1/transfers${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<TransferListData>>(res);
+  return data.data;
+}
+
 export async function getTransferSuggestions(
   ownerId: number,
 ): Promise<TransferMatchSuggestion[]> {
@@ -3254,6 +3599,7 @@ export async function deleteDiscussionReply(replyId: number): Promise<void> {
 
   await handleResponse(res);
 }
+
 
 
 

@@ -181,6 +181,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   usePageTitle("Detail Paket");
   const resolvedParams = use(params);
   const packageId = Number(resolvedParams.id);
+  const isInvalidPackageId = !packageId || Number.isNaN(packageId);
 
   const [item, setItem] = useState<CatalogPackageItem | null>(null);
   const [plans, setPlans] = useState<CatalogPlanItem[]>([]);
@@ -188,44 +189,49 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!packageId || Number.isNaN(packageId)) {
-      setError("ID paket tidak valid.");
-      setIsLoading(false);
-      return;
+    if (isInvalidPackageId) {
+      const timer = window.setTimeout(() => {
+        setError("ID paket tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
 
-    (async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+          const [detail, relatedPlans] = await Promise.all([
+            packageApi.get(packageId),
+            planApi
+              .list({ package_id: packageId, limit: 100, scope: "ALL" })
+              .then((response) => response.items)
+              .catch(() => []),
+          ]);
 
-        const [detail, relatedPlans] = await Promise.all([
-          packageApi.get(packageId),
-          planApi
-            .list({ package_id: packageId, limit: 100, scope: "ALL" })
-            .then((response) => response.items)
-            .catch(() => []),
-        ]);
+          if (cancelled) return;
 
-        if (cancelled) return;
-
-        setItem(detail);
-        setPlans(relatedPlans);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Gagal memuat detail paket.");
+          setItem(detail);
+          setPlans(relatedPlans);
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Gagal memuat detail paket.");
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
+      })();
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [packageId]);
+  }, [isInvalidPackageId, packageId]);
 
   return (
     <div className="min-h-screen bg-[#f6f9fc] p-6">

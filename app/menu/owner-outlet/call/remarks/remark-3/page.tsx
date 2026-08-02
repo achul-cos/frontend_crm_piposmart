@@ -1,6 +1,5 @@
 "use client";
-
-import React, { useMemo, useEffect } from "react";
+import React, { useEffect } from "react";
 import type { CallCustomer } from "../../page";
 import { INITIAL_PAKETS, INITIAL_MASTER_PROMOS, KATEGORI_LABELS } from "@/app/lib/paket-langganan-data";
 import { Receipt, CalendarDays, CheckCircle2, Package } from "lucide-react";
@@ -110,8 +109,6 @@ function Remark3SalesSection({
   backendPlans?: CatalogPlan[];
   backendPromotions?: CatalogPromotion[];
 }) {
-  if (!value) return null;
-
   // Use backend data if available, else fallback to dummy
   const useBackend = backendPackages.length > 0;
 
@@ -148,10 +145,14 @@ function Remark3SalesSection({
 
   // Auto fix promoIndex if out of bounds
   useEffect(() => {
+    if (!value) return;
+
     if (!useBackend && (typeof value.promoIndex !== "number" || value.promoIndex >= activePromos.length)) {
       onChange({ ...value, promoIndex: 0 });
     }
   }, [value.packageType, value.promoIndex, activePromos.length, onChange, value, useBackend]);
+
+  if (!value) return null;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">

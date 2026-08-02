@@ -214,6 +214,7 @@ export default function PromotionDetailPage({ params }: { params: Promise<{ id: 
   usePageTitle("Detail Promosi");
   const resolvedParams = use(params);
   const promotionId = Number(resolvedParams.id);
+  const isInvalidPromotionId = !promotionId || Number.isNaN(promotionId);
 
   const [promotion, setPromotion] = useState<CatalogPromotionItem | null>(null);
   const [benefits, setBenefits] = useState<CatalogBenefitItem[]>([]);
@@ -222,42 +223,47 @@ export default function PromotionDetailPage({ params }: { params: Promise<{ id: 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!promotionId || Number.isNaN(promotionId)) {
-      setError("ID promosi tidak valid.");
-      setIsLoading(false);
-      return;
+    if (isInvalidPromotionId) {
+      const timer = window.setTimeout(() => {
+        setError("ID promosi tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
 
-    (async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+          const [promo, benefitItems, eligiblePlans] = await Promise.all([
+            promotionApi.get(promotionId),
+            listPromotionBenefits(promotionId).catch(() => []),
+            getPromotionEligiblePlans(promotionId).catch(() => []),
+          ]);
 
-        const [promo, benefitItems, eligiblePlans] = await Promise.all([
-          promotionApi.get(promotionId),
-          listPromotionBenefits(promotionId).catch(() => []),
-          getPromotionEligiblePlans(promotionId).catch(() => []),
-        ]);
-
-        if (cancelled) return;
-        setPromotion(promo);
-        setBenefits(benefitItems);
-        setPlans(eligiblePlans);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Gagal memuat detail promosi.");
+          if (cancelled) return;
+          setPromotion(promo);
+          setBenefits(benefitItems);
+          setPlans(eligiblePlans);
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Gagal memuat detail promosi.");
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
+      })();
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [promotionId]);
+  }, [isInvalidPromotionId, promotionId]);
 
   const totalFreeDurationDays = benefits.reduce((sum, benefit) => sum + Number(benefit.duration_days || 0), 0);
 

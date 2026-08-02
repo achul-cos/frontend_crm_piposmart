@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -13,9 +14,11 @@ import AnalyticsTab from "./AnalyticsTab";
 import {
   createTransfer,
   listOwnerTransfers,
+  listTransfers,
   getTransferSuggestions,
   confirmTransferMatch,
   rejectTransferMatch,
+  authFetchJson,
   type TransferItem,
   type TransferMatchSuggestion,
 } from "@/app/lib/api";
@@ -260,7 +263,11 @@ const normalizeList = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) return payload as T[];
 
   if (payload && typeof payload === "object") {
-    const data = payload as any;
+    const data = payload as {
+      items?: unknown;
+      rows?: unknown;
+      data?: unknown;
+    };
 
     if (Array.isArray(data.items)) return data.items as T[];
     if (Array.isArray(data.rows)) return data.rows as T[];
@@ -399,44 +406,22 @@ export default function WalletsPage() {
   const [detailTitle, setDetailTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const apiUrl =
-    typeof window !== "undefined"
-      ? process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-      : "http://localhost:8080";
-
   const [isMounted, setIsMounted] = useState(false);
   const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
-    setIsMounted(true);
-    setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    const timer = window.setTimeout(() => {
+      setIsMounted(true);
+      setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const isAdmin = isMounted && userRole.toLowerCase() === "admin";
 
   const authFetch = async <T,>(path: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem("piposmart_access_token");
-
-    const response = await fetch(`${apiUrl}/api/v1${path}`, {
-      ...options,
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {}),
-      },
-    });
-
-    const json = (await response.json().catch(() => ({}))) as ApiResponse<T>;
-
-    if (!response.ok) {
-      throw new Error(
-        json.error?.message || `Request gagal (${response.status})`,
-      );
-    }
-
-    return json;
+    return authFetchJson<ApiResponse<T>>(path, options);
   };
 
   const buildQuery = (params: Record<string, string>) => {
@@ -450,7 +435,7 @@ export default function WalletsPage() {
     return text ? `?${text}` : "";
   };
 
-  const loadTopUpData = async () => {
+  const loadTopUpData = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
 
@@ -552,7 +537,7 @@ export default function WalletsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, channelFilter, paidFrom, paidTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -563,25 +548,26 @@ export default function WalletsPage() {
   }, [search]);
 
   useEffect(() => {
-    loadTopUpData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, channelFilter, paidFrom, paidTo, reloadKey]);
+    const timer = window.setTimeout(() => {
+      void loadTopUpData();
+    }, 0);
 
-  const loadTransferData = async (ownerId: string) => {
-    if (!ownerId) {
-      setTransferItems([]);
-      setTransferSuggestions([]);
-      return;
-    }
+    return () => window.clearTimeout(timer);
+  }, [loadTopUpData, reloadKey]);
 
+  const loadTransferData = useCallback(async (ownerId: string) => {
     setTransferLoading(true);
     setTransferError("");
 
     try {
-      const [listResult, suggestionResult] = await Promise.allSettled([
-        listOwnerTransfers(Number(ownerId), { all: true }),
-        getTransferSuggestions(Number(ownerId)),
-      ]);
+      const [listResult, suggestionResult] = await Promise.allSettled(
+        ownerId
+          ? [
+              listOwnerTransfers(Number(ownerId), { all: true }),
+              getTransferSuggestions(Number(ownerId)),
+            ]
+          : [listTransfers({ all: true }), Promise.resolve([] as TransferMatchSuggestion[])],
+      );
 
       if (listResult.status === "fulfilled") {
         setTransferItems(listResult.value.items || []);
@@ -613,14 +599,17 @@ export default function WalletsPage() {
     } finally {
       setTransferLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (activeTab === "transfer") {
-      loadTransferData(transferOwnerId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, transferOwnerId]);
+    if (activeTab !== "transfer") return;
+
+    const timer = window.setTimeout(() => {
+      void loadTransferData(transferOwnerId);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [activeTab, loadTransferData, transferOwnerId]);
 
   const handleCreateTransferSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -1611,11 +1600,7 @@ export default function WalletsPage() {
               </p>
             )}
 
-            {!transferOwnerId ? (
-              <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm font-bold text-gray-500">
-                Pilih owner untuk melihat riwayat transfer dan saran kecocokan.
-              </p>
-            ) : transferLoading ? (
+            {transferLoading ? (
               <p className="px-4 py-6 text-center text-sm font-bold text-gray-500">
                 Memuat data transfer...
               </p>
@@ -1625,7 +1610,11 @@ export default function WalletsPage() {
                   <h3 className="mb-3 text-sm font-black text-gray-900">
                     Saran Kecocokan
                   </h3>
-                  {transferSuggestions.length === 0 ? (
+                  {!transferOwnerId ? (
+                    <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
+                      Pilih owner bila ingin melihat saran kecocokan transfer untuk owner tertentu.
+                    </p>
+                  ) : transferSuggestions.length === 0 ? (
                     <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
                       Tidak ada saran kecocokan untuk owner ini.
                     </p>
@@ -1694,6 +1683,7 @@ export default function WalletsPage() {
                   <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
                     <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                       <tr>
+                        <th className="px-4 py-4 font-black">Owner</th>
                         <th className="px-4 py-4 font-black">Tanggal Transfer</th>
                         <th className="px-4 py-4 text-right font-black">Nominal</th>
                         <th className="px-4 py-4 font-black">Status</th>
@@ -1704,13 +1694,23 @@ export default function WalletsPage() {
                     <tbody className="divide-y divide-gray-100 bg-white">
                       {transferItems.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                          <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                             Belum ada transfer tercatat.
                           </td>
                         </tr>
                       ) : (
                         transferItems.map((transfer) => (
                           <tr key={transfer.id} className="transition-colors hover:bg-gray-50">
+                            <td className="px-4 py-4 align-top">
+                              <div className="space-y-1">
+                                <p className="font-black text-gray-900">
+                                  {getOwnerName(transfer.owner)}
+                                </p>
+                                <p className="text-xs font-bold text-gray-400">
+                                  {getOwnerCode(transfer.owner)}
+                                </p>
+                              </div>
+                            </td>
                             <td className="px-4 py-4 align-top font-medium text-gray-600">
                               {formatTanggal(transfer.transfer_date)}
                             </td>

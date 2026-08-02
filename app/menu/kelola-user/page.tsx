@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { authFetchJson } from '@/app/lib/api';
 import KelolaUserFormModal, {
   type UserFormState,
   type UserItem,
@@ -16,7 +17,6 @@ const EMPTY_FORM: UserFormState = {
   supervisorId: "",
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const LOCAL_OVERRIDE_KEY = "piposmart_kelola_user_overrides_v1";
 
 type ApiListResponse<T> = {
@@ -64,16 +64,6 @@ type LocalUserOverride = {
   supervisor_name?: string;
   updated_at?: string;
 };
-
-function getAccessToken() {
-  if (typeof window === "undefined") return "";
-
-  return (
-    localStorage.getItem("piposmart_access_token") ||
-    localStorage.getItem("piposmart_token") ||
-    ""
-  );
-}
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
@@ -189,30 +179,7 @@ function applyLocalOverrides(users: UserItem[]) {
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAccessToken();
-
-  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    credentials: "include",
-  });
-
-  const json = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      json?.error?.message ||
-        json?.message ||
-        `Request gagal dengan status ${response.status}`,
-    );
-  }
-
-  return json as T;
+  return authFetchJson<T>(path, options);
 }
 
 async function listAdmins() {
@@ -542,7 +509,7 @@ export default function KelolaUserPage() {
   ).length;
   const totalSales = users.filter((user) => user.role === "SALES").length;
 
-  const loadUsers = async (showLoading = true) => {
+  const loadUsers = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setPageError("");
 
@@ -578,10 +545,12 @@ export default function KelolaUserPage() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadUsers();
+    const initialTimer = window.setTimeout(() => {
+      void loadUsers();
+    }, 0);
 
     const interval = window.setInterval(() => {
       void loadUsers(false);
@@ -594,10 +563,11 @@ export default function KelolaUserPage() {
     window.addEventListener("focus", handleFocus);
 
     return () => {
+      window.clearTimeout(initialTimer);
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [loadUsers]);
 
   const openCreateModal = (role: UserRole = activeTab) => {
     setEditingUser(null);
@@ -1210,3 +1180,4 @@ export default function KelolaUserPage() {
     </div>
   );
 }
+

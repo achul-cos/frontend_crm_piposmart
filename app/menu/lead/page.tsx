@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 import {
@@ -30,6 +30,9 @@ import {
   commitImportBatch,
   getImportErrorRows,
   getImportValidRows,
+  isAdminRole,
+  isSupervisorRole,
+  isSalesRole,
   type ImportBatchResponse,
   type ImportRowError,
 } from "@/app/lib/api";
@@ -423,6 +426,7 @@ function SummaryMetricCard({
 export default function DataKelolaanPage() {
   usePageTitle("Lead");
   const router = useRouter();
+  const searchParams = useSearchParams();
 
 
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
@@ -449,6 +453,20 @@ export default function DataKelolaanPage() {
   // Ref untuk combobox input PIC — dipakai menghitung posisi dropdown fixed
   const picSearchRef = useRef<HTMLInputElement>(null);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "create") {
+      setIsManualAddModalOpen(true);
+    }
+  }, [searchParams]);
+
+  const closeManualAddModal = useCallback(() => {
+    setIsManualAddModalOpen(false);
+
+    if (searchParams.get("action") === "create") {
+      router.replace("/menu/lead");
+    }
+  }, [router, searchParams]);
 
   const openDropdownWithPosition = () => {
     if (picSearchRef.current) {
@@ -539,7 +557,7 @@ export default function DataKelolaanPage() {
 
 
   const [loggedInUser, setLoggedInUser] = useState("Satria");
-  const [loggedInRole, setLoggedInRole] = useState("Developer");
+  const [loggedInRole, setLoggedInRole] = useState("SALES");
   const [isAdminState, setIsAdminState] = useState(false);
   const [isSupervisorState, setIsSupervisorState] = useState(false);
   const [isSalesState, setIsSalesState] = useState(false);
@@ -638,11 +656,6 @@ export default function DataKelolaanPage() {
         const mappedData = items.map(mapBackendLeadToNasabahItem);
         setDataNasabah(mappedData);
         setBackendTotal(total);
-        try {
-          localStorage.setItem("piposmart_nasabah_data", JSON.stringify(mappedData));
-        } catch (e) {
-          console.warn("localStorage quota exceeded for piposmart_nasabah_data");
-        }
       })
       .catch((err) => {
         console.error("Gagal memuat lead dari backend:", err);
@@ -666,14 +679,14 @@ export default function DataKelolaanPage() {
 
   useEffect(() => {
     const userName = localStorage.getItem("piposmart_user_name");
-    const currentUserRole = localStorage.getItem("piposmart_user_role");
+    const currentUserRole = localStorage.getItem("piposmart_user_role") || "SALES";
 
     if (userName) setLoggedInUser(userName);
     if (currentUserRole) setLoggedInRole(currentUserRole);
 
-    const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(currentUserRole || "");
-    const isSupervisor = ["Supervisor", "SUPERVISOR"].includes(currentUserRole || "");
-    const isSales = ["Sales", "SALES"].includes(currentUserRole || "");
+    const isAdmin = isAdminRole(currentUserRole);
+    const isSupervisor = isSupervisorRole(currentUserRole);
+    const isSales = isSalesRole(currentUserRole);
 
     setIsAdminState(isAdmin);
     setIsSupervisorState(isSupervisor);
@@ -741,11 +754,6 @@ export default function DataKelolaanPage() {
 
   const saveDataNasabah = (nextData: NasabahItem[]) => {
     setDataNasabah(nextData);
-    try {
-      localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
-    } catch (e) {
-      console.warn("localStorage quota exceeded for piposmart_nasabah_data");
-    }
   };
 
   const handleExportExcel = () => {
@@ -1119,7 +1127,8 @@ export default function DataKelolaanPage() {
           discount_amount: String(rawPayload.salesPayload.discount || 0),
           unique_transfer_code: rawPayload.salesPayload.transferCode || 0,
           closed_at: new Date(rawPayload.callTime).toISOString(),
-          interaction_type: "CALL",
+          call_status: rawPayload.callStatus || undefined,
+          chat_status: rawPayload.chatStatus || undefined,
           contact_name: result.nextCustomer?.namaOwner || "-",
           contact_phone: result.nextCustomer?.noHpOwner || "-",
           customer_response: rawPayload.conclusion || "-",
@@ -1131,7 +1140,8 @@ export default function DataKelolaanPage() {
         rawPayload.selectedRemarkScore !== "3"
       ) {
         await createInteraction(customerId, {
-          type: "CALL", // default to call
+          call_status: rawPayload.callStatus || undefined,
+          chat_status: rawPayload.chatStatus || undefined,
           remark_score: Number(rawPayload.selectedRemarkScore),
           note: `Call: ${rawPayload.callStatus}, Chat: ${rawPayload.chatStatus} - ${rawPayload.conclusion}`,
           follow_up_at: rawPayload.followUpDate ? rawPayload.followUpDate + "T00:00:00Z" : undefined,
@@ -2888,7 +2898,7 @@ export default function DataKelolaanPage() {
           </div>
         </div>
       )}
-      <LeadFormModal isOpen={isManualAddModalOpen} onClose={() => setIsManualAddModalOpen(false)} onSuccess={loadOwnersFromBackend} />
+      <LeadFormModal isOpen={isManualAddModalOpen} onClose={closeManualAddModal} onSuccess={loadOwnersFromBackend} />
     </div>
   );
 }

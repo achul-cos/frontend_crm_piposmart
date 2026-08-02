@@ -234,6 +234,7 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
   usePageTitle("Detail Jenis Mitra");
   const resolvedParams = use(params);
   const partnerTypeId = Number(resolvedParams.id);
+  const isInvalidPartnerTypeId = !partnerTypeId || Number.isNaN(partnerTypeId);
 
   const [partnerType, setPartnerType] = useState<PartnerTypeItem | null>(null);
   const [rules, setRules] = useState<PartnerCommissionRuleItem[]>([]);
@@ -243,58 +244,63 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!partnerTypeId || Number.isNaN(partnerTypeId)) {
-      setError("ID jenis mitra tidak valid.");
-      setIsLoading(false);
-      return;
+    if (isInvalidPartnerTypeId) {
+      const timer = window.setTimeout(() => {
+        setError("ID jenis mitra tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
 
-    (async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+          const [detail, ruleList, packageList, planList] = await Promise.all([
+            getPartnerType(partnerTypeId),
+            listPartnerTypeCommissionRules(partnerTypeId),
+            getCatalogPackages().catch(() => []),
+            getCatalogPlans().catch(() => []),
+          ]);
 
-        const [detail, ruleList, packageList, planList] = await Promise.all([
-          getPartnerType(partnerTypeId),
-          listPartnerTypeCommissionRules(partnerTypeId),
-          getCatalogPackages().catch(() => []),
-          getCatalogPlans().catch(() => []),
-        ]);
+          const detailedRules = await Promise.all(
+            (ruleList.items || []).map(async (rule) => {
+              try {
+                return await getPartnerTypeCommissionRule(partnerTypeId, rule.id);
+              } catch {
+                return rule;
+              }
+            }),
+          );
 
-        const detailedRules = await Promise.all(
-          (ruleList.items || []).map(async (rule) => {
-            try {
-              return await getPartnerTypeCommissionRule(partnerTypeId, rule.id);
-            } catch {
-              return rule;
-            }
-          }),
-        );
-
-        if (cancelled) return;
-        setPartnerType(detail);
-        setRules(detailedRules.sort((a, b) => {
-          const left = new Date(b.effective_from || 0).getTime();
-          const right = new Date(a.effective_from || 0).getTime();
-          return left - right;
-        }));
-        setPackages(packageList);
-        setPlans(planList);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Gagal memuat detail jenis mitra.");
+          if (cancelled) return;
+          setPartnerType(detail);
+          setRules(detailedRules.sort((a, b) => {
+            const left = new Date(b.effective_from || 0).getTime();
+            const right = new Date(a.effective_from || 0).getTime();
+            return left - right;
+          }));
+          setPackages(packageList);
+          setPlans(planList);
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Gagal memuat detail jenis mitra.");
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
+      })();
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [partnerTypeId]);
+  }, [isInvalidPartnerTypeId, partnerTypeId]);
 
   const activeRules = useMemo(() => rules.filter((rule) => rule.active), [rules]);
   const tierRules = useMemo(() => rules.filter((rule) => rule.mode === "TIER"), [rules]);

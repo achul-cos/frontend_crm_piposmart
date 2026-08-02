@@ -13,22 +13,31 @@ export default function TrainingDetailPage({
   usePageTitle("Detail Training | CRM Piposmart");
   const { id } = use(params);
   const trainingId = Number(id);
+  const isInvalidTrainingId = !trainingId || Number.isNaN(trainingId);
 
   const [training, setTraining] = useState<TrainingItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!trainingId || isNaN(trainingId)) {
-      setError("ID training tidak valid.");
-      setIsLoading(false);
-      return;
+    if (isInvalidTrainingId) {
+      const timer = window.setTimeout(() => {
+        setError("ID training tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
-    getTrainingById(trainingId)
-      .then(setTraining)
-      .catch((e: Error) => setError(e.message || "Gagal memuat data training."))
-      .finally(() => setIsLoading(false));
-  }, [trainingId]);
+
+    const timer = window.setTimeout(() => {
+      getTrainingById(trainingId)
+        .then(setTraining)
+        .catch((e: Error) => setError(e.message || "Gagal memuat data training."))
+        .finally(() => setIsLoading(false));
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [isInvalidTrainingId, trainingId]);
 
   const formatDateTime = (str?: string | null) => {
     if (!str) return "-";

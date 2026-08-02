@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { getProfile, updateUserProfile } from "@/app/lib/api";
@@ -45,36 +45,29 @@ function getErrorMessage(error: unknown) {
 export default function EditProfilePage() {
   usePageTitle("Edit Profil");
 
-  const [userName, setUserName] = useState("User");
   const [userRole, setUserRole] = useState("Sales");
-  const [username, setUsername] = useState("-");
-
   const [nameInput, setNameInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState("");
   const [profileError, setProfileError] = useState("");
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     const localName = localStorage.getItem("piposmart_user_name") || "User";
     const localRole = localStorage.getItem("piposmart_user_role") || "Sales";
     const localUsername = localStorage.getItem("piposmart_user_username") || "-";
 
-    setUserName(localName);
     setUserRole(localRole);
-    setUsername(localUsername);
     setNameInput(localName);
     setEmailInput(localUsername !== "-" ? localUsername : "");
 
     try {
       const profile = await getProfile();
       if (profile.name) {
-        setUserName(profile.name);
         setNameInput(profile.name);
         localStorage.setItem("piposmart_user_name", profile.name);
       }
       if (profile.email) {
-        setUsername(profile.email);
         setEmailInput(profile.email);
         localStorage.setItem("piposmart_user_username", profile.email);
       }
@@ -85,11 +78,15 @@ export default function EditProfilePage() {
     } catch {
       // Fallback local
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadProfile();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void loadProfile();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadProfile]);
 
   const handleUpdateProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -118,9 +115,6 @@ export default function EditProfilePage() {
 
       const nextName = updated.name || trimmedName;
       const nextEmail = updated.email || trimmedEmail;
-
-      setUserName(nextName);
-      setUsername(nextEmail);
 
       localStorage.setItem("piposmart_user_name", nextName);
       localStorage.setItem("piposmart_user_username", nextEmail);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { getRoleLabel, normalizeAppRole, storeAuthSession } from "@/app/lib/api";
 
 type BackendUser = {
   id?: string | number;
@@ -30,23 +31,10 @@ const getUserDisplayName = (value?: string) => {
     .join(" ");
 };
 
-const normalizeRole = (role?: string) => {
-  if (!role) return "Admin";
-
-  const value = role.toLowerCase();
-
-  if (value.includes("developer")) return "Developer";
-  if (value.includes("supervisor")) return "Supervisor";
-  if (value.includes("sales")) return "Sales";
-  if (value.includes("admin")) return "Admin";
-
-  return role;
-};
-
 const getRoleClass = (role: string) => {
   if (role === "Admin") return "border-purple-100 bg-purple-50 text-purple-700";
-  if (role === "Developer") return "border-red-100 bg-red-50 text-[#C92C1E]";
   if (role === "Supervisor") return "border-amber-100 bg-amber-50 text-amber-700";
+  if (role === "Sales") return "border-blue-100 bg-blue-50 text-blue-700";
   return "border-gray-100 bg-gray-50 text-gray-500";
 };
 
@@ -89,6 +77,7 @@ export default function LoginPage() {
       }
 
       const accessToken = loginResult?.data?.access_token;
+      const refreshToken = loginResult?.data?.refresh_token;
 
       if (!accessToken) {
         throw new Error("Token backend tidak ditemukan.");
@@ -130,25 +119,27 @@ export default function LoginPage() {
         profileData?.email ||
         email.trim();
 
-      const userRole = normalizeRole(
+      const userRole = getRoleLabel(
         profileData?.role ||
           profileData?.role_name ||
-          "Admin",
+          "ADMIN",
+      );
+      const normalizedRole = normalizeAppRole(
+        profileData?.role ||
+          profileData?.role_name ||
+          "ADMIN",
       );
 
-      localStorage.setItem("piposmart_access_token", accessToken);
-      localStorage.setItem("piposmart_is_logged_in", "true");
-      localStorage.setItem("piposmart_user_name", userName);
-      localStorage.setItem("piposmart_user_role", userRole);
-      localStorage.setItem("piposmart_user_username", userUsername);
-      localStorage.setItem(
-        "piposmart_user",
-        JSON.stringify({
+      storeAuthSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: {
+          ...profileData,
           name: userName,
-          username: userUsername,
-          role: userRole,
-        }),
-      );
+          email: userUsername,
+          role: normalizedRole,
+        },
+      });
 
       router.replace("/");
     } catch (error) {
@@ -162,7 +153,13 @@ export default function LoginPage() {
     }
   };
 
-  const previewRole = email.toLowerCase().includes("admin") ? "Admin" : "User";
+  const previewRole = email.toLowerCase().includes("admin")
+    ? "Admin"
+    : email.toLowerCase().includes("supervisor")
+      ? "Supervisor"
+      : email.toLowerCase().includes("sales")
+        ? "Sales"
+        : "Akun Backend";
 
   return (
     <main className="flex min-h-screen w-full font-sans text-[#1C1C1E]">
@@ -341,9 +338,6 @@ export default function LoginPage() {
               <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-gray-500 shadow-lg">
                 Sales
               </span>
-              <span className="rounded-full border border-red-100 bg-red-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-[#C92C1E] shadow-lg">
-                Developer
-              </span>
             </div>
           </div>
           </div>
@@ -407,11 +401,9 @@ export default function LoginPage() {
 
             {email && (
               <div className={`rounded-2xl border px-4 py-3 ${getRoleClass(previewRole)}`}>
-                <p className="text-[10px] font-black uppercase">
-                  Login Backend
-                </p>
+                <p className="text-[10px] font-black uppercase">Role Terdeteksi</p>
                 <p className="mt-1 text-sm font-black">
-                  {email}
+                  {previewRole}
                 </p>
               </div>
             )}

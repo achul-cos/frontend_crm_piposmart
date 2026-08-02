@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 // API Imports
@@ -170,8 +170,18 @@ export default function BantuanPage() {
   const [activeTab, setActiveTab] = useState<MainTab>("business-flow");
 
   // User State
-  const [currentUserName, setCurrentUserName] = useState("User");
-  const [currentUserRole, setCurrentUserRole] = useState<"ADMIN" | "SUPERVISOR" | "SALES">("SALES");
+  const [currentUserName] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("piposmart_user_name") || "User" : "User",
+  );
+  const [currentUserRole] = useState<"ADMIN" | "SUPERVISOR" | "SALES">(() => {
+    if (typeof window === "undefined") return "SALES";
+    const savedRoleRaw = (localStorage.getItem("piposmart_user_role") || "SALES").toUpperCase();
+    return savedRoleRaw.includes("ADMIN")
+      ? "ADMIN"
+      : savedRoleRaw.includes("SUPERVISOR")
+        ? "SUPERVISOR"
+        : "SALES";
+  });
 
   // Tab 1: Glosarium State
   const [glosariumSearch, setGlosariumSearch] = useState("");
@@ -197,18 +207,8 @@ export default function BantuanPage() {
   // Reply Input State
   const [replyContent, setReplyContent] = useState("");
 
-  useEffect(() => {
-    const savedName = localStorage.getItem("piposmart_user_name") || "User";
-    const savedRoleRaw = (localStorage.getItem("piposmart_user_role") || "SALES").toUpperCase();
-    const normalizedRole: "ADMIN" | "SUPERVISOR" | "SALES" =
-      savedRoleRaw.includes("ADMIN") ? "ADMIN" : savedRoleRaw.includes("SUPERVISOR") ? "SUPERVISOR" : "SALES";
-
-    setCurrentUserName(savedName);
-    setCurrentUserRole(normalizedRole);
-  }, []);
-
   // Fetch Threads from Backend API
-  const loadBackendThreads = async () => {
+  const loadBackendThreads = useCallback(async () => {
     try {
       const data: BackendDiscussionThread[] = await fetchDiscussionThreads(activeChannel, discussionSearch);
       if (data && data.length > 0) {
@@ -254,13 +254,17 @@ export default function BantuanPage() {
     } catch {
       // Fallback silently if offline or token expired
     }
-  };
+  }, [activeChannel, discussionSearch, selectedThread]);
 
   useEffect(() => {
-    if (activeTab === "discussion") {
-      loadBackendThreads();
-    }
-  }, [activeTab, activeChannel, discussionSearch]);
+    if (activeTab !== "discussion") return;
+
+    const timer = window.setTimeout(() => {
+      void loadBackendThreads();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [activeTab, loadBackendThreads]);
 
   // Filter Glosarium Items
   const filteredGlosarium = useMemo(() => {

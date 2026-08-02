@@ -182,40 +182,46 @@ export default function TopupDetailPage({ params }: { params: Promise<{ id: stri
   usePageTitle("Detail Top Up");
   const resolvedParams = use(params);
   const paymentId = Number(resolvedParams.id);
+  const isInvalidPaymentId = !paymentId || Number.isNaN(paymentId);
 
   const [detail, setDetail] = useState<WalletPaymentDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!paymentId || Number.isNaN(paymentId)) {
-      setError("ID top up tidak valid.");
-      setIsLoading(false);
-      return;
+    if (isInvalidPaymentId) {
+      const timer = window.setTimeout(() => {
+        setError("ID top up tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
-
-    (async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const result = await getWalletPaymentDetail(paymentId);
-        if (cancelled) return;
-        setDetail(result);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Gagal memuat detail top up.");
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
+          const result = await getWalletPaymentDetail(paymentId);
+          if (cancelled) return;
+          setDetail(result);
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Gagal memuat detail top up.");
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
+      })();
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [paymentId]);
+  }, [isInvalidPaymentId, paymentId]);
 
   const payment = detail?.payment;
   const transaction = detail?.transaction;

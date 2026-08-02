@@ -36,6 +36,10 @@ const modalSelectClass =
 const modalTextareaClass =
   "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 function ModalShell({
   open,
   title,
@@ -241,7 +245,7 @@ export default function OwnerOutletPage() {
   const [isImportLoading, setIsImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importErrorRows, setImportErrorRows] = useState<ImportRowError[]>([]);
-  const [editedErrorRows, setEditedErrorRows] = useState<Record<number, any>>(
+  const [editedErrorRows, setEditedErrorRows] = useState<Record<number, Record<string, unknown>>>(
     {},
   );
   const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
@@ -345,7 +349,11 @@ export default function OwnerOutletPage() {
   }, [pagination.page, pagination.limit, search, filters, startDate, endDate, sort]);
 
   useEffect(() => {
-    loadOwners();
+    const timer = window.setTimeout(() => {
+      void loadOwners();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadOwners]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -428,8 +436,8 @@ export default function OwnerOutletPage() {
         outlet_address: "",
       });
       loadOwners();
-    } catch (err: any) {
-      alert(err.message || "Gagal menambahkan owner");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "Gagal menambahkan owner"));
     } finally {
       setIsAddOwnerSubmitting(false);
     }
@@ -479,8 +487,8 @@ export default function OwnerOutletPage() {
       alert("Owner berhasil diupdate");
       setIsEditOwnerModalOpen(false);
       loadOwners();
-    } catch (err: any) {
-      alert(err.message || "Gagal update owner");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "Gagal update owner"));
     } finally {
       setIsEditOwnerSubmitting(false);
     }
@@ -492,8 +500,8 @@ export default function OwnerOutletPage() {
     try {
       await softDeleteOwner(ownerId);
       loadOwners();
-    } catch (err: any) {
-      alert(err.message || "Gagal menghapus owner");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "Gagal menghapus owner"));
     }
   };
 
@@ -503,8 +511,8 @@ export default function OwnerOutletPage() {
     try {
       await restoreOwner(ownerId);
       loadOwners();
-    } catch (err: any) {
-      alert(err.message || "Gagal merestore owner");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "Gagal merestore owner"));
     }
   };
 
@@ -605,8 +613,8 @@ export default function OwnerOutletPage() {
       await bulkSoftDeleteOwners(selectedOwnerIds);
       setSelectedOwnerIds([]);
       loadOwners();
-    } catch (err: any) {
-      alert(err.message || "Gagal menghapus owner terpilih.");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "Gagal menghapus owner terpilih."));
     }
   };
 
@@ -627,8 +635,8 @@ export default function OwnerOutletPage() {
       const resp = await uploadImportFile(importFile, "OWNER_OUTLET");
       setImportBatch(resp);
       pollImportStatus(resp.id);
-    } catch (err: any) {
-      setImportError(err.message || "Gagal mengunggah file");
+    } catch (err: unknown) {
+      setImportError(getErrorMessage(err, "Gagal mengunggah file"));
       setIsImportLoading(false);
     }
   };
@@ -687,9 +695,9 @@ export default function OwnerOutletPage() {
           );
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       pollTimerRef.current = null;
-      setImportError(err.message || "Gagal mengecek status import");
+      setImportError(getErrorMessage(err, "Gagal mengecek status import"));
       setIsImportLoading(false);
     }
   };
@@ -703,8 +711,8 @@ export default function OwnerOutletPage() {
       const resp = await commitImportBatch(importBatch.id);
       setImportBatch(resp);
       pollImportStatus(resp.id);
-    } catch (err: any) {
-      setImportError(err.message || "Gagal menyimpan data import");
+    } catch (err: unknown) {
+      setImportError(getErrorMessage(err, "Gagal menyimpan data import"));
       setIsImportLoading(false);
     }
   };
@@ -781,9 +789,9 @@ export default function OwnerOutletPage() {
       setCorrectionProgress(90);
       setCorrectionStatusText("Memvalidasi ulang data...");
       pollImportStatus(resp.id);
-    } catch (e: any) {
-      console.error(e);
-      setImportError(e.message || "Gagal menerapkan perbaikan.");
+    } catch (error: unknown) {
+      console.error(error);
+      setImportError(getErrorMessage(error, "Gagal menerapkan perbaikan."));
       setIsApplyingCorrections(false);
       setCorrectionProgress(0);
       setCorrectionStatusText("");

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { getImportBatches, ImportBatchResponse } from "@/app/lib/api";
 
 interface ImportHistoryModalProps {
@@ -50,13 +50,7 @@ export default function ImportHistoryModal({ isOpen, onClose, onResume, profile 
   const [batches, setBatches] = useState<ImportBatchResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadHistory();
-    }
-  }, [isOpen]);
-
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     setIsLoading(true);
     try {
       const resp = await getImportBatches({ profile, limit: 20 });
@@ -66,7 +60,17 @@ export default function ImportHistoryModal({ isOpen, onClose, onResume, profile 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [profile]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = window.setTimeout(() => {
+      void loadHistory();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [isOpen, loadHistory]);
 
   if (!isOpen) return null;
 

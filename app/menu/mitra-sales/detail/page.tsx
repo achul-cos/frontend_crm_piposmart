@@ -532,7 +532,7 @@ function MitraSalesDetailPageInner() {
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C92C1E] text-xs font-black text-white">2</span>
                 <p className="text-xs font-black text-slate-950">Tambah Lead Afiliasi Mitra</p>
               </div>
-              <Link href="/menu/lead/form" className="text-[10px] font-bold text-[#C92C1E] underline hover:text-red-700">+ Lead Baru</Link>
+              <Link href="/menu/lead?action=create" className="text-[10px] font-bold text-[#C92C1E] underline hover:text-red-700">+ Lead Baru</Link>
             </div>
             <p className="mt-2 text-[11px] font-medium text-slate-500">Daftarkan Lead yang berafiliasi dengan Mitra untuk pelacakan komisi.</p>
             <div className="mt-4 space-y-3">

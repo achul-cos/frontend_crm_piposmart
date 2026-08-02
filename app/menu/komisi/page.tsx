@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import AnalyticsTab from "./AnalyticsTab";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import AnalyticsTab from './AnalyticsTab';
+import { authFetchJson } from '@/app/lib/api';
 
 type ApiListResponse<T> = {
   data?:
@@ -87,16 +86,6 @@ type PartnerPayout = {
   created_at?: string;
 };
 
-function getAccessToken() {
-  if (typeof window === "undefined") return "";
-
-  return (
-    localStorage.getItem("piposmart_access_token") ||
-    localStorage.getItem("piposmart_token") ||
-    ""
-  );
-}
-
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   return "Terjadi kesalahan yang tidak diketahui.";
@@ -155,32 +144,7 @@ function getStatusDotClass(status?: string) {
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAccessToken();
-
-  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    credentials: "include",
-  });
-
-  const json = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      json?.error?.code
-        ? `${json.error.code}: ${json.error.message || "Request gagal."}`
-        : json?.error?.message ||
-            json?.message ||
-            `Request gagal dengan status ${response.status}`,
-    );
-  }
-
-  return json as T;
+  return authFetchJson<T>(path, options);
 }
 
 async function listPartners() {
@@ -361,7 +325,7 @@ export default function KomisiPage() {
     };
   }, [commissions]);
 
-  const loadPartners = async () => {
+  const loadPartners = useCallback(async () => {
     setLoadingPartners(true);
     setPageError("");
 
@@ -378,9 +342,9 @@ export default function KomisiPage() {
     } finally {
       setLoadingPartners(false);
     }
-  };
+  }, [selectedPartnerId]);
 
-  const loadPartnerDetail = async (partnerId: number) => {
+  const loadPartnerDetail = useCallback(async (partnerId: number) => {
     setLoadingDetail(true);
     setPageError("");
 
@@ -399,17 +363,25 @@ export default function KomisiPage() {
     } finally {
       setLoadingDetail(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadPartners();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void loadPartners();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadPartners]);
 
   useEffect(() => {
     if (!selectedPartnerId) return;
 
-    void loadPartnerDetail(selectedPartnerId);
-  }, [selectedPartnerId]);
+    const timer = window.setTimeout(() => {
+      void loadPartnerDetail(selectedPartnerId);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadPartnerDetail, selectedPartnerId]);
 
   const handleSync = async () => {
     if (!selectedPartnerId) return;
@@ -1189,3 +1161,4 @@ export default function KomisiPage() {
     </div>
   );
 }
+

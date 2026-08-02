@@ -13,6 +13,8 @@ import {
   assignSupervisorToLead,
   getLead,
   createLead,
+  isAdminRole,
+  isSupervisorRole,
   type BackendOwner,
   type CreateLeadRequest,
   type UserResponse,
@@ -237,74 +239,69 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditI
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [loggedInUser, setLoggedInUser] = useState("Satria");
-  const [loggedInRole, setLoggedInRole] = useState("Admin");
-
-  const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(loggedInRole);
-  const isSupervisor = ["Supervisor", "SUPERVISOR"].includes(loggedInRole);
+  const [loggedInRole] = useState(() => {
+    if (typeof window === "undefined") return "SALES";
+    return localStorage.getItem("piposmart_user_role") || "SALES";
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const userName = localStorage.getItem("piposmart_user_name") || "Satria";
-    const userRole = localStorage.getItem("piposmart_user_role") || "Admin";
-    const userIsAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(userRole);
-    const userIsSupervisor = ["Supervisor", "SUPERVISOR"].includes(userRole);
+    const userRole = localStorage.getItem("piposmart_user_role") || "SALES";
+    const userIsAdmin = isAdminRole(userRole);
+    const userIsSupervisor = isSupervisorRole(userRole);
+    const timer = window.setTimeout(() => {
+      if (userIsAdmin) {
+        getSupervisorList().then(setSupervisorList).catch(console.error);
+        getSalesList().then(setSalesList).catch(console.error);
+      } else if (userIsSupervisor) {
+        getSalesList().then(setSalesList).catch(console.error);
+        setSupervisorList([]);
+      } else {
+        setSupervisorList([]);
+        setSalesList([]);
+      }
 
-    setLoggedInUser(userName);
-    setLoggedInRole(userRole);
+      const idParam = initialEditId ? String(initialEditId) : null;
+      if (!idParam) return;
 
-    // Fetch assignment options only for roles that are actually allowed to read them.
-    if (userIsAdmin) {
-      getSupervisorList().then(setSupervisorList).catch(console.error);
-      getSalesList().then(setSalesList).catch(console.error);
-    } else if (userIsSupervisor) {
-      getSalesList().then(setSalesList).catch(console.error);
-      setSupervisorList([]);
-    } else {
-      setSupervisorList([]);
-      setSalesList([]);
-    }
+      const targetNo = Number(idParam);
+      setEditId(targetNo);
 
-    const idParam = initialEditId ? String(initialEditId) : null;
+      getLead(targetNo)
+        .then((leadData) => {
+          if (leadData?.owner && leadData.owner.id) {
+            const ownerObj = leadData.owner as unknown as BackendOwner;
+            setSelectedOwner(ownerObj);
+            setOwnerMode("EXISTING");
+            setFormInput((prev) => ({
+              ...prev,
+              ownerId: leadData.owner?.id,
+              kodeOwner: leadData.owner?.code || "",
+              namaOwner: leadData.owner?.name || "",
+              projectBrand: leadData.owner?.brand_name || "",
+              noHpOwner: leadData.owner?.phone || "",
+            }));
 
-    if (!idParam) return;
+            fetchOwnerOutlets(leadData.owner.id)
+              .then((outletsData) => {
+                if (outletsData && outletsData.length > 0) {
+                  setOutletRows(
+                    outletsData.map((o) => ({
+                      namaOutlet: o.name,
+                      noHpOutlet: o.phone || "",
+                    })),
+                  );
+                }
+              })
+              .catch(console.error);
+          }
+        })
+        .catch(console.error);
+    }, 0);
 
-    const targetNo = Number(idParam);
-    setEditId(targetNo);
-
-    // Fetch lead details for edit mode
-    getLead(targetNo)
-      .then((leadData) => {
-        if (leadData?.owner && leadData.owner.id) {
-          const ownerObj = leadData.owner as unknown as BackendOwner;
-          setSelectedOwner(ownerObj);
-          setOwnerMode("EXISTING");
-          setFormInput((prev) => ({
-            ...prev,
-            ownerId: leadData.owner?.id,
-            kodeOwner: leadData.owner?.code || "",
-            namaOwner: leadData.owner?.name || "",
-            projectBrand: leadData.owner?.brand_name || "",
-            noHpOwner: leadData.owner?.phone || "",
-          }));
-
-          fetchOwnerOutlets(leadData.owner.id)
-            .then((outletsData) => {
-              if (outletsData && outletsData.length > 0) {
-                setOutletRows(
-                  outletsData.map((o) => ({
-                    namaOutlet: o.name,
-                    noHpOutlet: o.phone || "",
-                  })),
-                );
-              }
-            })
-            .catch(console.error);
-        }
-      })
-      .catch(console.error);
-  }, []);
+    return () => window.clearTimeout(timer);
+  }, [initialEditId]);
 
   // When an existing Owner is selected via OwnerSearchPicker pop-up
   const handleSelectExistingOwner = (owner: BackendOwner | null) => {
