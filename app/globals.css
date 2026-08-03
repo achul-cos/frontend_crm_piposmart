@@ -5,6 +5,12 @@
   --foreground: #171717;
 }
 
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  color-scheme: dark;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -14,8 +20,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f172a;
+    --foreground: #f8fafc;
   }
 }
 
@@ -23,6 +29,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .scrollbar-none {
@@ -32,4 +39,113 @@ body {
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+/* ─── Global Dark Mode Overrides for Consistent Card & Text Styling ─── */
+
+.dark body {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+/* Card & Box Backgrounds in Dark Mode */
+.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-gray-50\/50,
+.dark .bg-gray-50\/80 {
+  background-color: #0f172a !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #334155 !important;
+}
+
+/* Text Colors in Dark Mode */
+.dark .text-gray-900 {
+  color: #f8fafc !important;
+}
+
+.dark .text-gray-800,
+.dark .text-gray-700 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-gray-600,
+.dark .text-gray-500 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+/* Borders & Dividers in Dark Mode */
+.dark .border-gray-200,
+.dark .border-gray-200\/60,
+.dark .border-gray-100,
+.dark .border-gray-50 {
+  border-color: #334155 !important;
+}
+
+.dark .divide-gray-100 > * + * {
+  border-color: #334155 !important;
+}
+
+/* Tables in Dark Mode */
+.dark table thead {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;
+}
+
+.dark table tbody tr {
+  background-color: #1e293b !important;
+}
+
+.dark table tbody tr:hover {
+  background-color: #334155 !important;
+}
+
+/* Inputs, Selects, and Modals in Dark Mode */
+.dark input:not([type="checkbox"]),
+.dark select,
+.dark textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #475569 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Red/Green/Blue Badges and Icon Containers in Dark Mode */
+.dark .bg-red-50 {
+  background-color: rgba(201, 44, 30, 0.18) !important;
+}
+.dark .border-red-100,
+.dark .border-red-200 {
+  border-color: rgba(201, 44, 30, 0.35) !important;
+}
+.dark \.text-\[\#C92C1E\] {
+  color: #ef4444 !important;
+}
+
+.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+}
+.dark .border-emerald-100,
+.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.18) !important;
+}
+.dark .border-blue-100,
+.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.35) !important;
 }

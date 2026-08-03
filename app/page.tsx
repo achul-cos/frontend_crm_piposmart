@@ -156,10 +156,14 @@ export interface KpiRankingItem {
 
 type DashboardState = {
   ownerTotal: number;
+  outletTotal: number;
   leadTotal: number;
   closingTotal: number;
   interactionTotal: number;
   trainingTotal: number;
+  activeSubscriptions: number;
+  topupRevenue: string;
+  closingAmount: string;
   closings: ClosingItem[];
   interactions: InteractionItem[];
   trainings: TrainingItem[];
@@ -170,10 +174,14 @@ type DashboardState = {
 
 const EMPTY_DASHBOARD: DashboardState = {
   ownerTotal: 0,
+  outletTotal: 0,
   leadTotal: 0,
   closingTotal: 0,
   interactionTotal: 0,
   trainingTotal: 0,
+  activeSubscriptions: 0,
+  topupRevenue: "0",
+  closingAmount: "0",
   closings: [],
   interactions: [],
   trainings: [],
@@ -409,10 +417,24 @@ export default function DashboardOverviewPage() {
       // Jika kosong, berarti proses KPI belum dijalankan untuk periode ini.
 
 
+      let reportCards: Array<{ key: string; label: string; value: string; description: string }> = [];
+      try {
+        const reportRes = await authFetchJson<{ data?: { cards?: Array<{ key: string; label: string; value: string; description: string }> } }>("/reports/dashboard");
+        reportCards = reportRes?.data?.cards || [];
+      } catch {
+        reportCards = [];
+      }
+
+      const getCardVal = (key: string) => reportCards.find(c => c.key === key)?.value || "0";
+
       setDashboard({
-        ownerTotal: ownerResponse.data.pagination.total,
-        leadTotal: leadResponse.total,
-        closingTotal: closingResponse.pagination?.total || 0,
+        ownerTotal: Number(getCardVal("owners_total")) || ownerResponse.data.pagination.total || 0,
+        outletTotal: Number(getCardVal("outlets_total")) || 0,
+        activeSubscriptions: Number(getCardVal("subscriptions_active")) || 0,
+        topupRevenue: getCardVal("topup_revenue"),
+        closingAmount: getCardVal("confirmed_closing_amount"),
+        leadTotal: leadResponse.total || 0,
+        closingTotal: Number(getCardVal("confirmed_closing_count")) || closingResponse.pagination?.total || 0,
         interactionTotal: interactionResponse.pagination?.total || 0,
         trainingTotal: trainingResponse.pagination?.total || 0,
         closings: closingResponse.items || [],
@@ -1008,8 +1030,7 @@ export default function DashboardOverviewPage() {
                           const hasGap = currentRank - prevRank > 1;
 
                           return (
-                            <div key={rank.sales_id || idx} className="space-y-3">
-                            <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 p-3">
+                            <div key={rank.sales_id || idx} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 p-3">
                               <div className="flex items-center gap-3">
                                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-xs font-black text-[#C92C1E]">
                                   #{rank.rank_position || idx + 1}
@@ -1023,21 +1044,6 @@ export default function DashboardOverviewPage() {
                                 {rank.classification || "STABLE"}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 p-3">
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-xs font-black text-[#C92C1E]">
-                                #{rank.rank_position || idx + 1}
-                              </span>
-                              <div>
-                                <p className="text-xs font-black text-gray-900">{rank.sales_name || "Sales"}</p>
-                                <p className="text-[10px] text-gray-500">{rank.total_score || "0"} pts</p>
-                              </div>
-                            </div>
-                            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black text-emerald-700">
-                              {rank.classification || "STABLE"}
-                            </span>
-                          </div>
-                          </div>
                         );
                       })}
 
