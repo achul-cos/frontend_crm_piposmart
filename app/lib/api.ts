@@ -357,8 +357,11 @@ export interface BackendOwner {
   address?: string;
   province?: string;
   city?: string;
+  district?: string;
+  sub_district?: string;
   status: string;
   outlet_count?: number;
+  wallet_balance?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -371,6 +374,8 @@ export interface BackendOutlet {
   phone: string;
   province?: string;
   city?: string;
+  district?: string;
+  sub_district?: string;
   address?: string;
   status?: string;
   created_at?: string;
@@ -548,7 +553,7 @@ export async function updateOwner(
 
 export async function bulkCreateOwnerOutlets(
   ownerId: number,
-  items: { code: string; name: string; phone?: string; province?: string; city?: string; address?: string }[],
+  items: { code: string; name: string; phone?: string; province?: string; city?: string; district?: string; sub_district?: string; address?: string }[],
 ) {
   const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/outlets/bulk`, {
     method: "POST",
@@ -2697,6 +2702,8 @@ export interface OutletDetail {
   phone?: string;
   province?: string;
   city?: string;
+  district?: string;
+  sub_district?: string;
   address?: string;
   status: string;
   subscription_summary: OutletSubscriptionSummary;

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   fetchOwnerDetail,
   type BackendOwner,
@@ -10,10 +11,11 @@ import {
   bulkCreateOwnerOutlets,
   bulkUpdateOwnerOutlets,
   bulkSoftDeleteOwnerOutlets,
+  type ImportRowError,
+  type ImportBatchResponse,
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import OwnerOverviewCard from "../OwnerOverviewCard";
 
 export default function OwnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   usePageTitle("Detail Owner");
@@ -34,6 +36,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
     phone: "",
     province: "",
     city: "",
+    district: "",
+    sub_district: "",
     address: "",
   });
 
@@ -47,10 +51,12 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
     phone: "",
     province: "",
     city: "",
+    district: "",
+    sub_district: "",
     address: "",
   });
 
-  const { provinces, cities, loadCitiesByProvinceName, loadingProvinces, loadingCities } = useLocation();
+  const { provinces, cities, districts, villages, loadCitiesByProvinceName, loadDistrictsByCityName, loadVillagesByDistrictName, loadAllForEdit, loadingProvinces, loadingCities, loadingDistricts, loadingVillages } = useLocation();
 
   const loadData = async () => {
     setIsLoading(true);
@@ -88,7 +94,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
       await bulkCreateOwnerOutlets(ownerId, [addForm]);
       alert("Outlet berhasil ditambahkan!");
       setIsAddModalOpen(false);
-      setAddForm({ code: "", name: "", phone: "", province: "", city: "", address: "" });
+      setAddForm({ code: "", name: "", phone: "", province: "", city: "", district: "", sub_district: "", address: "" });
       // Reload outlets
       const outletsData = await fetchOwnerOutlets(ownerId);
       setOutlets(outletsData);
@@ -109,9 +115,11 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
       phone: outlet.phone || "",
       province: outlet.province || "",
       city: outlet.city || "",
+      district: outlet.district || "",
+      sub_district: outlet.sub_district || "",
       address: outlet.address || "",
     });
-    if (outlet.province) loadCitiesByProvinceName(outlet.province);
+    loadAllForEdit(outlet.province, outlet.city, outlet.district);
     setIsEditModalOpen(true);
   };
 
@@ -243,9 +251,6 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Sprint 15a: Owner Overview — saldo & status murni milik Owner */}
-          <OwnerOverviewCard ownerId={ownerId} />
-
           {/* Level 2: Informasi Dasar */}
           <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
@@ -285,46 +290,32 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cara menghubungi dan alamat owner</p>
               </div>
             </div>
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
-                   <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                   </svg>
-                </div>
-                <div>
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nomor Kontak</span>
-                  <span className="font-semibold text-gray-900 text-sm">{owner.phone || "-"}</span>
-                </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 border-b border-gray-50">
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Nomor Kontak</span>
+                <span className="font-bold text-gray-900">{owner.phone || "-"}</span>
               </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
-                   <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                   </svg>
-                </div>
-                <div>
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lokasi Asal</span>
-                  <span className="font-semibold text-gray-900 text-sm">
-                    {owner.city && owner.province ? `${owner.city}, ${owner.province}` : owner.city || owner.province || "-"}
-                  </span>
-                </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Provinsi</span>
+                <span className="font-bold text-gray-900">{owner.province || "-"}</span>
               </div>
-
-              <div className="flex items-start gap-3 sm:col-span-2">
-                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
-                   <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                   </svg>
-                </div>
-                <div>
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Alamat Lengkap</span>
-                  <span className="font-semibold text-gray-900 text-sm">
-                    {owner.address || "-"}
-                  </span>
-                </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kota/Kabupaten</span>
+                <span className="font-bold text-gray-900">{owner.city || "-"}</span>
+              </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kecamatan</span>
+                <span className="font-bold text-gray-900">{owner.district || "-"}</span>
+              </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kelurahan</span>
+                <span className="font-bold text-gray-900">{owner.sub_district || "-"}</span>
+              </div>
+            </div>
+            <div className="px-5 pb-5 pt-3">
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Alamat Lengkap</span>
+                <span className="font-bold text-gray-900">{owner.address || "-"}</span>
               </div>
             </div>
           </div>
@@ -391,7 +382,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                         <td className="px-6 py-4 font-bold text-gray-900">{outlet.name}</td>
                         <td className="px-6 py-4 text-gray-600 font-medium">{outlet.phone || "-"}</td>
                         <td className="px-6 py-4 text-gray-600 font-medium">
-                          {outlet.city && outlet.province ? `${outlet.city}, ${outlet.province}` : outlet.city || outlet.province || "-"}
+                          {[outlet.sub_district, outlet.district, outlet.city, outlet.province].filter(Boolean).join(", ") || "-"}
                         </td>
                         <td className="px-6 py-4 text-gray-600 font-medium">{outlet.address || "-"}</td>
                         <td className="px-6 py-4 text-center">
@@ -406,6 +397,16 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2 opacity-100 sm:opacity-100 transition-opacity">
+                            <Link 
+                              href={`/menu/kelolaan-outlet/detail?id=${outlet.id}`}
+                              className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700" 
+                              title="Lihat Detail Outlet"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </Link>
                             <button 
                               onClick={() => handleEditClick(outlet)}
                               className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700" 
@@ -519,7 +520,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                     <select
                       value={addForm.province}
                       onChange={(e) => {
-                        setAddForm({...addForm, province: e.target.value, city: ""});
+                        setAddForm({...addForm, province: e.target.value, city: "", district: "", sub_district: ""});
                         loadCitiesByProvinceName(e.target.value);
                       }}
                       className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900 bg-white"
@@ -537,13 +538,54 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                     </label>
                     <select
                       value={addForm.city}
-                      onChange={(e) => setAddForm({...addForm, city: e.target.value})}
+                      onChange={(e) => {
+                        setAddForm({...addForm, city: e.target.value, district: "", sub_district: ""});
+                        loadDistrictsByCityName(e.target.value);
+                      }}
                       className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900 bg-white"
                       disabled={isSubmitting || !addForm.province || loadingCities}
                     >
                       <option value="">Pilih Kota/Kabupaten</option>
                       {cities.map(c => (
                         <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
+                      Kecamatan <span className="text-gray-400 text-[10px] normal-case tracking-normal">(Opsional)</span>
+                    </label>
+                    <select
+                      value={addForm.district}
+                      onChange={(e) => {
+                        setAddForm({...addForm, district: e.target.value, sub_district: ""});
+                        loadVillagesByDistrictName(e.target.value);
+                      }}
+                      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900 bg-white"
+                      disabled={isSubmitting || !addForm.city || loadingDistricts}
+                    >
+                      <option value="">Pilih Kecamatan</option>
+                      {districts.map(d => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
+                      Kelurahan/Desa <span className="text-gray-400 text-[10px] normal-case tracking-normal">(Opsional)</span>
+                    </label>
+                    <select
+                      value={addForm.sub_district}
+                      onChange={(e) => setAddForm({...addForm, sub_district: e.target.value})}
+                      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900 bg-white"
+                      disabled={isSubmitting || !addForm.district || loadingVillages}
+                    >
+                      <option value="">Pilih Kelurahan/Desa</option>
+                      {villages.map(v => (
+                        <option key={v.id} value={v.name}>{v.name}</option>
                       ))}
                     </select>
                   </div>
@@ -679,7 +721,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                     <select
                       value={editForm.province}
                       onChange={(e) => {
-                        setEditForm({...editForm, province: e.target.value, city: ""});
+                        setEditForm({...editForm, province: e.target.value, city: "", district: "", sub_district: ""});
                         loadCitiesByProvinceName(e.target.value);
                       }}
                       className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-all text-gray-900 bg-white"
@@ -697,13 +739,54 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                     </label>
                     <select
                       value={editForm.city}
-                      onChange={(e) => setEditForm({...editForm, city: e.target.value})}
+                      onChange={(e) => {
+                        setEditForm({...editForm, city: e.target.value, district: "", sub_district: ""});
+                        loadDistrictsByCityName(e.target.value);
+                      }}
                       className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-all text-gray-900 bg-white"
                       disabled={isEditSubmitting || !editForm.province || loadingCities}
                     >
                       <option value="">Pilih Kota/Kabupaten</option>
                       {cities.map(c => (
                         <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
+                      Kecamatan <span className="text-gray-400 text-[10px] normal-case tracking-normal">(Opsional)</span>
+                    </label>
+                    <select
+                      value={editForm.district}
+                      onChange={(e) => {
+                        setEditForm({...editForm, district: e.target.value, sub_district: ""});
+                        loadVillagesByDistrictName(e.target.value);
+                      }}
+                      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-all text-gray-900 bg-white"
+                      disabled={isEditSubmitting || !editForm.city || loadingDistricts}
+                    >
+                      <option value="">Pilih Kecamatan</option>
+                      {districts.map(d => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
+                      Kelurahan/Desa <span className="text-gray-400 text-[10px] normal-case tracking-normal">(Opsional)</span>
+                    </label>
+                    <select
+                      value={editForm.sub_district}
+                      onChange={(e) => setEditForm({...editForm, sub_district: e.target.value})}
+                      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-all text-gray-900 bg-white"
+                      disabled={isEditSubmitting || !editForm.district || loadingVillages}
+                    >
+                      <option value="">Pilih Kelurahan/Desa</option>
+                      {villages.map(v => (
+                        <option key={v.id} value={v.name}>{v.name}</option>
                       ))}
                     </select>
                   </div>

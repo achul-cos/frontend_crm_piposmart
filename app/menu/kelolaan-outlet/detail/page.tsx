@@ -218,7 +218,10 @@ function OutletDetailPageInner() {
             <FieldBox label="Kode Outlet" value={detail.code} />
             <FieldBox label="Nama Outlet" value={detail.name} />
             <FieldBox label="Telepon" value={detail.phone} />
-            <FieldBox label="Lokasi" value={[detail.city, detail.province].filter(Boolean).join(", ")} />
+            <FieldBox label="Provinsi" value={detail.province} />
+            <FieldBox label="Kota/Kabupaten" value={detail.city} />
+            <FieldBox label="Kecamatan" value={detail.district} />
+            <FieldBox label="Kelurahan" value={detail.sub_district} />
             <FieldBox label="Alamat Lengkap" value={detail.address} span />
             <FieldBox label="Status" badge value={detail.status} />
           </InfoSection>
