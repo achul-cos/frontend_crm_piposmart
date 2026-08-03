@@ -68,21 +68,35 @@ function Badge({
   );
 }
 
-function getStatusBadgeClass(status?: string | null): string {
+function getPaymentStatusLabel(status?: string | null): string {
   switch (String(status || "").toUpperCase()) {
-    // Sprint 15a — ACCEPTED adalah pengganti makna "PAID" lama (balance
-    // sudah kredit); PAID dibiarkan untuk data historis lama.
-    case "PAID":
     case "ACCEPTED":
-    case "SUCCESS":
+    case "PAID":
+    case "ACC":
+      return "ACC";
+    case "PENDING":
+      return "PENDING";
+    case "REJECTED":
+    case "REJECT":
+      return "REJECT";
+    case "EXPIRED":
+    case "EXP":
+      return "EXP";
+    default:
+      return formatLabel(status);
+  }
+}
+
+function getStatusBadgeClass(status?: string | null): string {
+  const norm = getPaymentStatusLabel(status);
+  switch (norm) {
+    case "ACC":
       return "bg-emerald-50 text-emerald-700 border border-emerald-200";
     case "PENDING":
       return "bg-amber-50 text-amber-700 border border-amber-200";
-    case "REJECTED":
-    case "FAILED":
-    case "CANCELLED":
+    case "REJECT":
       return "bg-rose-50 text-rose-700 border border-rose-200";
-    case "EXPIRED":
+    case "EXP":
       return "bg-gray-100 text-gray-500 border border-gray-200";
     default:
       return "bg-gray-50 text-gray-600 border border-gray-200";
@@ -301,20 +315,20 @@ export default function TopupDetailPage({ params }: { params: Promise<{ id: stri
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SummaryCard
-              title="Kode Top Up"
-              value={payment.code || `PAY-${payment.id}`}
-              description="Identitas payment top up yang masuk ke wallet owner."
+              title="Awal Pembelian"
+              value={formatRupiah(payment.amount)}
+              description="Nominal transaksi awal top up."
               primary
             />
             <SummaryCard
-              title="Status Pembayaran"
-              value={formatLabel(payment.status)}
+              title="Status Top Up"
+              value={getPaymentStatusLabel(payment.status)}
               description={`${formatDateTime(payment.paid_at || payment.created_at)} • ${payment.payment_channel || payment.channel || "-"}`}
             />
             <SummaryCard
-              title="Nominal Top Up"
-              value={formatRupiah(payment.amount)}
-              description={`Currency ${payment.currency || "IDR"} • tipe ${payment.payment_type || "TOPUP"}`}
+              title="Owner / Outlet"
+              value={ownerName(payment.owner || wallet?.owner)}
+              description={`Kode Owner ${ownerCode(payment.owner || wallet?.owner)}`}
             />
           </div>
 
@@ -324,13 +338,12 @@ export default function TopupDetailPage({ params }: { params: Promise<{ id: stri
             icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />}
           >
             <FieldBox label="ID Payment" value={payment.id} />
-            <FieldBox label="Kode Payment" value={payment.code || `PAY-${payment.id}`} />
             <FieldBox label="Payment Type" value={payment.payment_type || "TOPUP"} />
             <FieldBox label="Payment Channel" value={payment.payment_channel || payment.channel || "-"} />
-            <FieldBox label="Status">
-              <Badge value={formatLabel(payment.status)} className={getStatusBadgeClass(payment.status)} />
+            <FieldBox label="Status Top Up">
+              <Badge value={getPaymentStatusLabel(payment.status)} className={getStatusBadgeClass(payment.status)} />
             </FieldBox>
-            <FieldBox label="Amount" value={formatRupiah(payment.amount)} />
+            <FieldBox label="Awal Pembelian" value={formatRupiah(payment.amount)} />
             <FieldBox label="Currency" value={payment.currency || "IDR"} />
             <FieldBox label="Paid At" value={formatDateTime(payment.paid_at || payment.created_at)} />
             <FieldBox label="External Reference" value={payment.external_reference || "-"} />
@@ -346,33 +359,11 @@ export default function TopupDetailPage({ params }: { params: Promise<{ id: stri
             <FieldBox label="Kode Owner" value={ownerCode(payment.owner || wallet?.owner)} />
             <FieldBox label="Nama Owner" value={ownerName(payment.owner || wallet?.owner)} />
             <FieldBox label="Wallet ID" value={wallet?.id ?? "-"} />
-            <FieldBox label="Account Code" value={wallet?.account_code || wallet?.code || "-"} />
             <FieldBox label="Status Wallet">
               <Badge value={formatLabel(wallet?.status)} className={getStatusBadgeClass(wallet?.status)} />
             </FieldBox>
             <FieldBox label="Balance" value={formatRupiah(wallet?.balance)} />
-            <FieldBox label="Ledger Balance" value={formatRupiah(wallet?.ledger_balance)} />
             <FieldBox label="Currency Wallet" value={wallet?.currency || "IDR"} />
-          </InfoSection>
-
-          <InfoSection
-            title="Informasi Ledger Top Up"
-            subtitle="Transaksi ledger yang terbentuk dari payment ini"
-            icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}
-          >
-            <FieldBox label="Transaction ID" value={transaction?.id ?? "-"} />
-            <FieldBox label="Transaction Code" value={transaction?.code || "-"} />
-            <FieldBox label="Transaction Type" value={transaction?.transaction_type || "-"} />
-            <FieldBox label="Direction">
-              <Badge value={formatLabel(transaction?.direction)} className={getDirectionBadgeClass(transaction?.direction)} />
-            </FieldBox>
-            <FieldBox label="Source Type" value={transaction?.source_type || "-"} />
-            <FieldBox label="Source Reference" value={transaction?.source_reference || "-"} />
-            <FieldBox label="External Reference" value={transaction?.external_reference || "-"} />
-            <FieldBox label="Occurred At" value={formatDateTime(transaction?.occurred_at || transaction?.created_at)} />
-            <FieldBox label="Amount Ledger" value={formatRupiah(transaction?.amount)} />
-            <FieldBox label="Balance After" value={formatRupiah(transaction?.balance_after)} />
-            <FieldBox label="Catatan Ledger" value={transaction?.note || "-"} span />
           </InfoSection>
         </div>
       )}

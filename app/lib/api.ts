@@ -1643,6 +1643,9 @@ export interface ImportRowError {
   status: string;
   validation_errors?: string[] | Record<string, string>;
   commit_error?: string;
+  owner_id?: number | null;
+  outlet_id?: number | null;
+  lead_id?: number | null;
 }
 
 export interface ImportRowListResponse {
@@ -1667,6 +1670,8 @@ export interface ImportBatchResponse {
   id: number;
   code: string;
   profile: string;
+  sheet_name?: string;
+  target_sales_user_id?: number;
   original_filename: string;
   file?: ImportBatchFileResponse;
   status: string; // 'UPLOADED' | 'VALIDATING' | 'VALIDATED' | 'VALIDATION_FAILED' | 'COMMITTING' | 'COMMITTED' | 'COMMIT_FAILED'
@@ -1694,12 +1699,23 @@ export interface ImportBatchListResponse {
   };
 }
 
-export async function uploadImportFile(file: File, profile: string = "OWNER_OUTLET"): Promise<ImportBatchResponse> {
+export async function uploadImportFile(
+  file: File,
+  profile: string = "OWNER_OUTLET",
+  sheetName?: string,
+  targetSalesUserId?: number
+): Promise<ImportBatchResponse> {
   const token = getStoredAccessToken();
   
   const formData = new FormData();
   formData.append("file", file);
   formData.append("profile", profile);
+  if (sheetName) {
+    formData.append("sheet_name", sheetName);
+  }
+  if (targetSalesUserId) {
+    formData.append("target_sales_user_id", String(targetSalesUserId));
+  }
 
   const res = await fetch(`${API_BASE_URL}/api/v1/imports`, {
     method: "POST",
@@ -1795,6 +1811,58 @@ export async function getImportValidRows(batchId: number, page = 1, limit = 1000
     pagination: json.data.pagination ?? json.data.meta,
     meta: json.data.meta ?? json.data.pagination,
   };
+}
+
+export async function getImportRowsByStatus(
+  batchId: number,
+  status: string,
+  page = 1,
+  limit = 50
+): Promise<ImportRowListResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/${batchId}/rows?status=${status}&page=${page}&limit=${limit}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  const json = await handleResponse<{ data: ImportRowListResponse }>(res);
+  return {
+    ...json.data,
+    pagination: json.data.pagination ?? json.data.meta,
+    meta: json.data.meta ?? json.data.pagination,
+  };
+}
+
+export interface RelinkImportRowPayload {
+  owner_id?: number;
+  outlet_id?: number;
+  lead_id?: number;
+}
+
+export async function relinkImportRow(
+  batchId: number,
+  rowId: number,
+  payload: RelinkImportRowPayload
+): Promise<ImportRowError> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/${batchId}/rows/${rowId}/relink`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const json = await handleResponse<{ data: ImportRowError }>(res);
+  return json.data;
+}
+
+export interface ImportSummaryResponse {
+  total_batches: number;
+  by_status: Record<string, number>;
+  needs_attention: number;
+}
+
+export async function getImportSummary(): Promise<ImportSummaryResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/imports/summary`, {
+    headers: getAuthHeaders(),
+  });
+  const json = await handleResponse<{ data: ImportSummaryResponse }>(res);
+  return json.data;
 }
 
 export async function bulkReleaseLeads(leadIds: number[], reason: string) {

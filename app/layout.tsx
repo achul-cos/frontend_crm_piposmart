@@ -138,11 +138,13 @@ export default function RootLayout({
     if (!authChecked) return;
 
     if (!isAuthPage && !isAuthenticated) {
+      console.warn("[AUTH] Redirecting to /auth/login because !isAuthenticated", { pathname });
       router.replace("/auth/login");
       return;
     }
 
     if (isAuthPage && isAuthenticated && pathname !== "/auth/logout") {
+      console.warn("[AUTH] Redirecting to / because isAuthPage && isAuthenticated", { pathname });
       router.replace("/");
       return;
     }

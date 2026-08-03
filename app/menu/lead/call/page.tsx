@@ -640,6 +640,7 @@ export default function CallPage({
                     <input
                       type="datetime-local"
                       value={callTime}
+                      max={new Date().toISOString().slice(0, 16)}
                       onChange={(event) => setCallTime(event.target.value)}
                       className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
                     />

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import {
@@ -59,7 +59,7 @@ type TypeFormState = {
 };
 
 type RuleFormState = {
-  // Sprint 15a — commission rule scoped langsung ke plan (bukan package lagi).
+  // Sprint 15a â€” commission rule scoped langsung ke plan (bukan package lagi).
   planId: string;
   mode: "PERCENTAGE" | "FIXED" | "TIER";
   value: string;
@@ -217,41 +217,39 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70" onClick={onClose}>
-      <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
-        <div
-          className="w-full max-w-6xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                  Kelolaan Mitra
-                </p>
+    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
+      <div
+        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                Kelolaan Mitra
+              </p>
 
-                <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
-                  {title}
-                </h2>
+              <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
+                {title}
+              </h2>
 
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  {subtitle}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
-              >
-                Tutup
-              </button>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {subtitle}
+              </p>
             </div>
-          </div>
 
-          <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 md:p-6">
-            {children}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+            >
+              Tutup
+            </button>
           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+          {children}
         </div>
       </div>
     </div>
@@ -1614,7 +1612,7 @@ export default function KelolaanMitraPage() {
                   <option value="">Semua Plan</option>
                   {plans.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.package?.name ? `${item.package.name} — ` : ""}
+                      {item.package?.name ? `${item.package.name} â€” ` : ""}
                       {item.name} ({item.tenure_months} bln)
                     </option>
                   ))}
@@ -1624,7 +1622,7 @@ export default function KelolaanMitraPage() {
               <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">
                 {!selectedRulePlan
                   ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)."
-                  : `Plan terpilih: ${selectedRulePlan.name} — harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedRulePlan.price || 0))}`}
+                  : `Plan terpilih: ${selectedRulePlan.name} â€” harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedRulePlan.price || 0))}`}
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

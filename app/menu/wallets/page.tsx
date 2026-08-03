@@ -86,16 +86,35 @@ type PaymentItem = {
   note?: string;
 };
 
-function getPaymentStatusBadgeClass(status?: string): string {
+function getPaymentStatusLabel(status?: string): string {
   switch (status) {
     case "ACCEPTED":
     case "PAID":
+    case "ACC":
+      return "ACC";
+    case "PENDING":
+      return "PENDING";
+    case "REJECTED":
+    case "REJECT":
+      return "REJECT";
+    case "EXPIRED":
+    case "EXP":
+      return "EXP";
+    default:
+      return status || "-";
+  }
+}
+
+function getPaymentStatusBadgeClass(status?: string): string {
+  const norm = getPaymentStatusLabel(status);
+  switch (norm) {
+    case "ACC":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "PENDING":
       return "border-amber-200 bg-amber-50 text-amber-700";
-    case "REJECTED":
+    case "REJECT":
       return "border-red-200 bg-red-50 text-red-700";
-    case "EXPIRED":
+    case "EXP":
       return "border-gray-200 bg-gray-100 text-gray-500";
     default:
       return "border-gray-200 bg-gray-100 text-gray-500";
@@ -143,18 +162,18 @@ type PaymentDetailResponse = {
 type WalletDetailResponse =
   | WalletItem
   | {
-      wallet?: WalletItem;
-      transactions?: LedgerItem[];
-    };
+    wallet?: WalletItem;
+    transactions?: LedgerItem[];
+  };
 
 const inputClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400";
 
 const selectClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400";
 
 const textareaClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100";
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100";
 
 const getTodayDatetimeLocal = () => {
   const now = new Date();
@@ -271,7 +290,7 @@ const normalizeList = <T,>(payload: unknown): T[] => {
 
     if (Array.isArray(data.items)) return data.items as T[];
     if (Array.isArray(data.rows)) return data.rows as T[];
-    if (Array.isArray(data.data)) return data.data as T[];
+    return data.data as T[];
   }
 
   return [];
@@ -281,8 +300,8 @@ function ModalShell({
   open,
   title,
   subtitle,
-  label = "Topup",
-  maxWidth = "max-w-3xl",
+  label = "TOPUP",
+  maxWidth = "max-w-2xl",
   onClose,
   children,
 }: {
@@ -297,41 +316,39 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70" onClick={onClose}>
-      <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
-        <div
-          className={`w-full ${maxWidth} overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl`}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                  {label}
-                </p>
+    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
+      <div
+        className={`w-full ${maxWidth} min-h-[460px] max-h-[85vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-6 py-5 md:px-8 md:py-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                {label}
+              </p>
 
-                <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
-                  {title}
-                </h2>
+              <h2 className="mt-2 text-xl font-black text-slate-950 md:text-2xl">
+                {title}
+              </h2>
 
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  {subtitle}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
-              >
-                Tutup
-              </button>
+              <p className="mt-1.5 text-xs font-medium text-slate-500 md:text-sm">
+                {subtitle}
+              </p>
             </div>
-          </div>
 
-          <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 md:p-6">
-            {children}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+            >
+              Tutup
+            </button>
           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+          {children}
         </div>
       </div>
     </div>
@@ -1155,7 +1172,6 @@ export default function WalletsPage() {
           {[
             { key: "payments", label: "Riwayat Top Up" },
             { key: "wallets", label: "Saldo Wallet" },
-            { key: "ledger", label: "Ledger" },
             { key: "transfer", label: "Transfer" },
             { key: "analytics", label: "Analitik" },
           ].map((item) => (
@@ -1163,11 +1179,10 @@ export default function WalletsPage() {
               key={item.key}
               type="button"
               onClick={() => setActiveTab(item.key as typeof activeTab)}
-              className={`rounded-lg px-5 py-2.5 transition-all ${
-                activeTab === item.key
+              className={`rounded-lg px-5 py-2.5 transition-all ${activeTab === item.key
                   ? "bg-white text-[#C92C1E] shadow-sm"
                   : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-              }`}
+                }`}
             >
               {item.label}
             </button>
@@ -1178,577 +1193,554 @@ export default function WalletsPage() {
       {activeTab === "analytics" ? (
         <AnalyticsTab />
       ) : (
-      <section className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-          <div>
-            <h2 className="text-sm font-black text-gray-900">
-              Filter Data Wallets
-            </h2>
-            <p className="mt-1 text-xs font-medium text-gray-400">
-              Pencarian, channel, dan tanggal otomatis diterapkan tanpa tombol
-              terapkan.
+        <section className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+            <div>
+              <h2 className="text-sm font-black text-gray-900">
+                Filter Data Wallets
+              </h2>
+              <p className="mt-1 text-xs font-medium text-gray-400">
+                Pencarian, channel, dan tanggal otomatis diterapkan tanpa tombol
+                terapkan.
+              </p>
+            </div>
+
+            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Cari payment / owner..."
+                className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              />
+
+              <select
+                value={channelFilter}
+                onChange={(event) => setChannelFilter(event.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              >
+                <option value="Semua">Semua Channel</option>
+                {channelOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="date"
+                value={paidFrom}
+                onChange={(event) => setPaidFrom(event.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              />
+
+              <input
+                type="date"
+                value={paidTo}
+                onChange={(event) => setPaidTo(event.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              />
+            </div>
+          </div>
+
+          <div className="px-4 pt-4">
+            {errorMessage && (
+              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+                {errorMessage}
+              </div>
+            )}
+
+            <p className="text-[11px] font-bold text-gray-400">
+              Klik tombol detail atau baris data untuk membuka detail. Tombol mutasi
+              tetap khusus Admin.
             </p>
           </div>
 
-          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Cari payment / owner..."
-              className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            />
-
-            <select
-              value={channelFilter}
-              onChange={(event) => setChannelFilter(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            >
-              <option value="Semua">Semua Channel</option>
-              {channelOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-
-            <input
-              type="date"
-              value={paidFrom}
-              onChange={(event) => setPaidFrom(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            />
-
-            <input
-              type="date"
-              value={paidTo}
-              onChange={(event) => setPaidTo(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            />
-          </div>
-        </div>
-
-        <div className="px-4 pt-4">
-          {errorMessage && (
-            <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
-              {errorMessage}
-            </div>
-          )}
-
-          <p className="text-[11px] font-bold text-gray-400">
-            Klik tombol detail atau baris data untuk membuka detail. Tombol mutasi
-            tetap khusus Admin.
-          </p>
-        </div>
-
-        {activeTab === "payments" && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
-              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="px-4 py-4 font-black">Payment</th>
-                  <th className="px-4 py-4 font-black">Owner</th>
-                  <th className="px-4 py-4 font-black">Channel</th>
-                  <th className="px-4 py-4 font-black">Status</th>
-                  <th className="px-4 py-4 font-black">Paid At</th>
-                  <th className="px-4 py-4 text-right font-black">Amount</th>
-                  <th className="px-4 py-4 text-center font-black">Aksi</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {payments.length === 0 ? (
+          {activeTab === "payments" && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
-                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
-                      Data top up tidak ditemukan.
-                    </td>
+                    <th className="px-4 py-4 font-black">No / Ref</th>
+                    <th className="px-4 py-4 font-black">Owner</th>
+                    <th className="px-4 py-4 font-black">Channel</th>
+                    <th className="px-4 py-4 font-black">Status</th>
+                    <th className="px-4 py-4 font-black">Paid At</th>
+                    <th className="px-4 py-4 text-right font-black">Amount</th>
+                    <th className="px-4 py-4 text-center font-black">Aksi</th>
                   </tr>
-                ) : (
-                  payments.map((payment) => (
-                    <tr
-                      key={payment.id}
-                      onClick={() => handleOpenPaymentDetail(payment)}
-                      className="cursor-pointer transition-colors hover:bg-gray-50"
-                    >
-                      <td className="px-4 py-4 align-top">
-                        <Link
-                          href={`/menu/wallets/payments/${payment.id}`}
-                          onClick={(event) => event.stopPropagation()}
-                          className="font-black text-gray-900 transition-colors hover:text-[#C92C1E]"
-                        >
-                          {payment.code || `PAY-${payment.id}`}
-                        </Link>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {payment.external_reference || "-"}
-                        </p>
-                      </td>
+                </thead>
 
-                      <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">
-                          {getOwnerName(payment.owner)}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {getOwnerCode(payment.owner)}
-                        </p>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {payments.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                        Data top up tidak ditemukan.
                       </td>
-
-                      <td className="px-4 py-4 align-top font-medium text-gray-600">
-                        {payment.payment_channel || payment.channel || "-"}
-                      </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getPaymentStatusBadgeClass(payment.status)}`}
-                        >
-                          {payment.status || "-"}
-                        </span>
-                        {payment.status === "PENDING" && payment.session_expires_at ? (
-                          <p className="mt-1 text-[10px] font-bold text-amber-600">
-                            Exp: {formatTanggal(payment.session_expires_at)}
-                          </p>
-                        ) : null}
-                      </td>
-
-                      <td className="px-4 py-4 align-top font-medium text-gray-600">
-                        {formatTanggal(payment.paid_at || payment.created_at)}
-                      </td>
-
-                      <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
-                        {formatRupiah(payment.amount)}
-                      </td>
-
-                      <td
-                        className="px-4 py-4 text-center align-top"
-                        onMouseDown={(event) => event.stopPropagation()}
+                    </tr>
+                  ) : (
+                    payments.map((payment) => (
+                      <tr
+                        key={payment.id}
+                        onClick={() => handleOpenPaymentDetail(payment)}
+                        className="cursor-pointer transition-colors hover:bg-gray-50"
                       >
-                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        <td className="px-4 py-4 align-top">
                           <Link
                             href={`/menu/wallets/payments/${payment.id}`}
                             onClick={(event) => event.stopPropagation()}
-                            className="inline-flex rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            className="font-black text-gray-900 transition-colors hover:text-[#C92C1E]"
                           >
-                            Detail
+                            #{payment.id}
                           </Link>
-                          {payment.status === "PENDING" && isAdmin ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openTopupAction(payment, "accept");
-                                }}
-                                className="inline-flex rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100"
-                              >
-                                Terima
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openTopupAction(payment, "reject");
-                                }}
-                                className="inline-flex rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition-colors hover:bg-red-100"
-                              >
-                                Tolak
-                              </button>
-                            </>
+                          {payment.external_reference ? (
+                            <p className="mt-1 text-[11px] font-bold text-gray-400">
+                              {payment.external_reference}
+                            </p>
                           ) : null}
-                          {isAdmin ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openTopupAction(payment, "transfer_date");
-                              }}
-                              className="inline-flex rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:bg-gray-200"
-                            >
-                              Koreksi Tanggal
-                            </button>
+                        </td>
+
+                        <td className="px-4 py-4 align-top">
+                          <p className="font-black text-gray-900">
+                            {getOwnerName(payment.owner)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {getOwnerCode(payment.owner)}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4 align-top font-medium text-gray-600">
+                          {payment.payment_channel || payment.channel || "-"}
+                        </td>
+
+                        <td className="px-4 py-4 align-top">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getPaymentStatusBadgeClass(payment.status)}`}
+                          >
+                            {getPaymentStatusLabel(payment.status)}
+                          </span>
+                          {payment.status === "PENDING" && payment.session_expires_at ? (
+                            <p className="mt-1 text-[10px] font-bold text-amber-600">
+                              Exp: {formatTanggal(payment.session_expires_at)}
+                            </p>
                           ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        </td>
 
-        {activeTab === "wallets" && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
-              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="px-4 py-4 font-black">Wallet</th>
-                  <th className="px-4 py-4 font-black">Owner</th>
-                  <th className="px-4 py-4 font-black">Status</th>
-                  <th className="px-4 py-4 text-right font-black">Balance</th>
-                  <th className="px-4 py-4 text-right font-black">
-                    Ledger Balance
-                  </th>
-                  <th className="px-4 py-4 text-center font-black">Mutasi</th>
-                </tr>
-              </thead>
+                        <td className="px-4 py-4 align-top font-medium text-gray-600">
+                          {formatTanggal(payment.paid_at || payment.created_at)}
+                        </td>
 
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {wallets.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
-                      Data wallet tidak ditemukan.
-                    </td>
-                  </tr>
-                ) : (
-                  wallets.map((wallet) => (
-                    <tr
-                      key={wallet.id}
-                      onClick={() => handleOpenWalletDetail(wallet)}
-                      className="cursor-pointer transition-colors hover:bg-gray-50"
-                    >
-                      <td className="px-4 py-4 align-top font-black text-gray-900">
-                        {wallet.account_code || wallet.code || `WALLET-${wallet.id}`}
-                      </td>
+                        <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
+                          {formatRupiah(payment.amount)}
+                        </td>
 
-                      <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">
-                          {getOwnerName(wallet.owner)}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {getOwnerCode(wallet.owner)}
-                        </p>
-                      </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
-                          {wallet.status || "-"}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4 text-right align-top font-black text-gray-900">
-                        {formatRupiah(wallet.balance)}
-                      </td>
-
-                      <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
-                        {formatRupiah(wallet.ledger_balance)}
-                      </td>
-
-                      <td
-                        className="px-4 py-4 text-center align-top"
-                        onMouseDown={(event) => event.stopPropagation()}
-                      >
-                        <div className="flex flex-wrap justify-center gap-2">
-                          {isMounted && isAdmin && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleOpenWalletAction(
-                                    "debit",
-                                    String(wallet.owner?.id || wallet.owner_id || ""),
-                                  );
-                                }}
-                                className="rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E] transition-colors hover:bg-red-100"
-                              >
-                                Debit
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleOpenWalletAction(
-                                    "adjustment",
-                                    String(wallet.owner?.id || wallet.owner_id || ""),
-                                  );
-                                }}
-                                className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
-                              >
-                                Adjustment
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleOpenWalletAction(
-                                    "refund",
-                                    String(wallet.owner?.id || wallet.owner_id || ""),
-                                  );
-                                }}
-                                className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-black text-gray-500 transition-colors hover:bg-gray-100"
-                              >
-                                Refund
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {activeTab === "ledger" && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
-              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="px-4 py-4 font-black">Ledger</th>
-                  <th className="px-4 py-4 font-black">Owner</th>
-                  <th className="px-4 py-4 font-black">Type</th>
-                  <th className="px-4 py-4 font-black">Direction</th>
-                  <th className="px-4 py-4 font-black">Occurred At</th>
-                  <th className="px-4 py-4 text-right font-black">Amount</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {ledgers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
-                      Data ledger tidak ditemukan.
-                    </td>
-                  </tr>
-                ) : (
-                  ledgers.map((ledger) => (
-                    <tr key={ledger.id} className="transition-colors hover:bg-gray-50">
-                      <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">
-                          {ledger.code || `TRX-${ledger.id}`}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {ledger.source_reference || ledger.external_reference || "-"}
-                        </p>
-                      </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <p className="font-black text-gray-900">
-                          {getOwnerName(ledger.owner)}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {getOwnerCode(ledger.owner)}
-                        </p>
-                      </td>
-
-                      <td className="px-4 py-4 align-top font-medium text-gray-600">
-                        {ledger.transaction_type || "-"}
-                      </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
-                          {ledger.direction || "-"}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4 align-top font-medium text-gray-600">
-                        {formatTanggal(ledger.occurred_at || ledger.created_at)}
-                      </td>
-
-                      <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
-                        {formatRupiah(ledger.amount)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {activeTab === "transfer" && (
-          <div className="mt-4 space-y-6">
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
-                  Owner
-                </label>
-                <select
-                  value={transferOwnerId}
-                  onChange={(event) => setTransferOwnerId(event.target.value)}
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
-                >
-                  <option value="">Pilih owner...</option>
-                  {owners.map((owner) => (
-                    <option key={owner.id} value={owner.id}>
-                      {getOwnerName(owner)} ({getOwnerCode(owner)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {isMounted && isAdmin && (
-                <button
-                  type="button"
-                  disabled={!transferOwnerId}
-                  onClick={() => {
-                    setCreateTransferError("");
-                    setIsCreateTransferOpen(true);
-                  }}
-                  className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  + Catat Transfer
-                </button>
-              )}
-            </div>
-
-            {transferError && (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
-                {transferError}
-              </p>
-            )}
-
-            {transferLoading ? (
-              <p className="px-4 py-6 text-center text-sm font-bold text-gray-500">
-                Memuat data transfer...
-              </p>
-            ) : (
-              <>
-                <div>
-                  <h3 className="mb-3 text-sm font-black text-gray-900">
-                    Saran Kecocokan
-                  </h3>
-                  {!transferOwnerId ? (
-                    <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
-                      Pilih owner bila ingin melihat saran kecocokan transfer untuk owner tertentu.
-                    </p>
-                  ) : transferSuggestions.length === 0 ? (
-                    <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
-                      Tidak ada saran kecocokan untuk owner ini.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {transferSuggestions.map((suggestion) => (
-                        <div
-                          key={`${suggestion.transfer.id}-${suggestion.wallet_payment_id}`}
-                          className={`rounded-2xl border p-4 ${
-                            suggestion.amount_mismatch
-                              ? "border-red-300 bg-red-50"
-                              : "border-gray-200 bg-white"
-                          }`}
+                        <td
+                          className="px-4 py-4 text-center align-top"
+                          onMouseDown={(event) => event.stopPropagation()}
                         >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-black text-gray-900">
-                                Transfer {formatRupiah(suggestion.transfer.amount)} →{" "}
-                                {suggestion.wallet_payment_code} (
-                                {formatRupiah(suggestion.wallet_payment_amount)})
-                              </p>
-                              <p className="mt-1 text-[11px] font-bold text-gray-400">
-                                Tanggal transfer: {formatTanggal(suggestion.transfer.transfer_date)}
-                                {suggestion.unique_code
-                                  ? ` · Kode unik: ${suggestion.unique_code}`
-                                  : ""}
-                              </p>
-                              {suggestion.amount_mismatch && (
-                                <span className="mt-2 inline-flex rounded-full border border-red-300 bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-red-700">
-                                  Nominal Tidak Cocok — Periksa Manual
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex flex-wrap items-center justify-center gap-1.5">
+                            <Link
+                              href={`/menu/wallets/payments/${payment.id}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="inline-flex rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            >
+                              Detail
+                            </Link>
+                            {payment.status === "PENDING" && isAdmin ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openTopupAction(payment, "accept");
+                                  }}
+                                  className="inline-flex rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100"
+                                >
+                                  Terima
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openTopupAction(payment, "reject");
+                                  }}
+                                  className="inline-flex rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition-colors hover:bg-red-100"
+                                >
+                                  Tolak
+                                </button>
+                              </>
+                            ) : null}
+                            {isAdmin ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openTopupAction(payment, "transfer_date");
+                                }}
+                                className="inline-flex rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:bg-gray-200"
+                              >
+                                Koreksi Tanggal
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
+          {activeTab === "wallets" && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
+                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+                  <tr>
+                    <th className="px-4 py-4 font-black">Owner</th>
+                    <th className="px-4 py-4 font-black">Status</th>
+                    <th className="px-4 py-4 text-right font-black">Balance</th>
+                    <th className="px-4 py-4 text-center font-black">Mutasi</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {wallets.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
+                        Data wallet tidak ditemukan.
+                      </td>
+                    </tr>
+                  ) : (
+                    wallets.map((wallet) => (
+                      <tr
+                        key={wallet.id}
+                        onClick={() => handleOpenWalletDetail(wallet)}
+                        className="cursor-pointer transition-colors hover:bg-gray-50"
+                      >
+                        <td className="px-4 py-4 align-top">
+                          <p className="font-black text-gray-900">
+                            {getOwnerName(wallet.owner)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {getOwnerCode(wallet.owner)}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4 align-top">
+                          <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
+                            {wallet.status || "-"}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4 text-right align-top font-black text-gray-900">
+                          {formatRupiah(wallet.balance)}
+                        </td>
+
+                        <td
+                          className="px-4 py-4 text-center align-top"
+                          onMouseDown={(event) => event.stopPropagation()}
+                        >
+                          <div className="flex flex-wrap justify-center gap-2">
                             {isMounted && isAdmin && (
-                              <div className="flex gap-2">
+                              <>
                                 <button
                                   type="button"
-                                  disabled={matchActionLoadingId === suggestion.transfer.id}
-                                  onClick={() => handleConfirmMatch(suggestion)}
-                                  className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOpenWalletAction(
+                                      "debit",
+                                      String(wallet.owner?.id || wallet.owner_id || ""),
+                                    );
+                                  }}
+                                  className="rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E] transition-colors hover:bg-red-100"
                                 >
-                                  Confirm Match
+                                  Debit
                                 </button>
+
                                 <button
                                   type="button"
-                                  disabled={matchActionLoadingId === suggestion.transfer.id}
-                                  onClick={() => handleRejectMatch(suggestion)}
-                                  className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:bg-gray-200 disabled:opacity-50"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOpenWalletAction(
+                                      "adjustment",
+                                      String(wallet.owner?.id || wallet.owner_id || ""),
+                                    );
+                                  }}
+                                  className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
                                 >
-                                  Reject Match
+                                  Adjustment
                                 </button>
-                              </div>
+
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOpenWalletAction(
+                                      "refund",
+                                      String(wallet.owner?.id || wallet.owner_id || ""),
+                                    );
+                                  }}
+                                  className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-black text-gray-500 transition-colors hover:bg-gray-100"
+                                >
+                                  Refund
+                                </button>
+                              </>
                             )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        </td>
+                      </tr>
+                    ))
                   )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === "ledger" && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+                  <tr>
+                    <th className="px-4 py-4 font-black">Ledger</th>
+                    <th className="px-4 py-4 font-black">Owner</th>
+                    <th className="px-4 py-4 font-black">Type</th>
+                    <th className="px-4 py-4 font-black">Direction</th>
+                    <th className="px-4 py-4 font-black">Occurred At</th>
+                    <th className="px-4 py-4 text-right font-black">Amount</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {ledgers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                        Data ledger tidak ditemukan.
+                      </td>
+                    </tr>
+                  ) : (
+                    ledgers.map((ledger) => (
+                      <tr key={ledger.id} className="transition-colors hover:bg-gray-50">
+                        <td className="px-4 py-4 align-top">
+                          <p className="font-black text-gray-900">
+                            {ledger.code || `TRX-${ledger.id}`}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {ledger.source_reference || ledger.external_reference || "-"}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4 align-top">
+                          <p className="font-black text-gray-900">
+                            {getOwnerName(ledger.owner)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {getOwnerCode(ledger.owner)}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4 align-top font-medium text-gray-600">
+                          {ledger.transaction_type || "-"}
+                        </td>
+
+                        <td className="px-4 py-4 align-top">
+                          <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
+                            {ledger.direction || "-"}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4 align-top font-medium text-gray-600">
+                          {formatTanggal(ledger.occurred_at || ledger.created_at)}
+                        </td>
+
+                        <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
+                          {formatRupiah(ledger.amount)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === "transfer" && (
+            <div className="mt-4 space-y-6">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+                    Owner
+                  </label>
+                  <select
+                    value={transferOwnerId}
+                    onChange={(event) => setTransferOwnerId(event.target.value)}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
+                  >
+                    <option value="">Pilih owner...</option>
+                    {owners.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {getOwnerName(owner)} ({getOwnerCode(owner)})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <h3 className="mb-3 text-sm font-black text-gray-900">
-                    Riwayat Transfer
-                  </h3>
-                  <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
-                    <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                      <tr>
-                        <th className="px-4 py-4 font-black">Owner</th>
-                        <th className="px-4 py-4 font-black">Tanggal Transfer</th>
-                        <th className="px-4 py-4 text-right font-black">Nominal</th>
-                        <th className="px-4 py-4 font-black">Status</th>
-                        <th className="px-4 py-4 font-black">Sumber</th>
-                        <th className="px-4 py-4 font-black">Catatan</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 bg-white">
-                      {transferItems.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
-                            Belum ada transfer tercatat.
-                          </td>
-                        </tr>
-                      ) : (
-                        transferItems.map((transfer) => (
-                          <tr key={transfer.id} className="transition-colors hover:bg-gray-50">
-                            <td className="px-4 py-4 align-top">
-                              <div className="space-y-1">
-                                <p className="font-black text-gray-900">
-                                  {getOwnerName(transfer.owner)}
+                {isMounted && isAdmin && (
+                  <button
+                    type="button"
+                    disabled={!transferOwnerId}
+                    onClick={() => {
+                      setCreateTransferError("");
+                      setIsCreateTransferOpen(true);
+                    }}
+                    className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    + Catat Transfer
+                  </button>
+                )}
+              </div>
+
+              {transferError && (
+                <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+                  {transferError}
+                </p>
+              )}
+
+              {!transferOwnerId ? (
+                <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm font-bold text-gray-500">
+                  Pilih owner untuk melihat riwayat transfer dan saran kecocokan.
+                </p>
+              ) : transferLoading ? (
+                <p className="px-4 py-6 text-center text-sm font-bold text-gray-500">
+                  Memuat data transfer...
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <h3 className="mb-3 text-sm font-black text-gray-900">
+                      Saran Kecocokan
+                    </h3>
+                    {transferSuggestions.length === 0 ? (
+                      <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
+                        Tidak ada saran kecocokan untuk owner ini.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {transferSuggestions.map((suggestion) => (
+                          <div
+                            key={`${suggestion.transfer.id}-${suggestion.wallet_payment_id}`}
+                            className={`rounded-2xl border p-4 ${suggestion.amount_mismatch
+                                ? "border-red-300 bg-red-50"
+                                : "border-gray-200 bg-white"
+                              }`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-black text-gray-900">
+                                  Transfer {formatRupiah(suggestion.transfer.amount)} →{" "}
+                                  {suggestion.wallet_payment_code} (
+                                  {formatRupiah(suggestion.wallet_payment_amount)})
                                 </p>
-                                <p className="text-xs font-bold text-gray-400">
-                                  {getOwnerCode(transfer.owner)}
+                                <p className="mt-1 text-[11px] font-bold text-gray-400">
+                                  Tanggal transfer: {formatTanggal(suggestion.transfer.transfer_date)}
+                                  {suggestion.unique_code
+                                    ? ` · Kode unik: ${suggestion.unique_code}`
+                                    : ""}
                                 </p>
+                                {suggestion.amount_mismatch && (
+                                  <span className="mt-2 inline-flex rounded-full border border-red-300 bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-red-700">
+                                    Nominal Tidak Cocok — Periksa Manual
+                                  </span>
+                                )}
                               </div>
-                            </td>
-                            <td className="px-4 py-4 align-top font-medium text-gray-600">
-                              {formatTanggal(transfer.transfer_date)}
-                            </td>
-                            <td className="px-4 py-4 text-right align-top font-black text-gray-900">
-                              {formatRupiah(transfer.amount)}
-                            </td>
-                            <td className="px-4 py-4 align-top">
-                              <span
-                                className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${
-                                  transfer.match_status === "MATCHED"
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : transfer.match_status === "SUGGESTED"
-                                      ? "border-amber-200 bg-amber-50 text-amber-700"
-                                      : transfer.match_status === "REJECTED_MATCH"
-                                        ? "border-red-200 bg-red-50 text-red-700"
-                                        : "border-gray-200 bg-gray-100 text-gray-500"
-                                }`}
-                              >
-                                {transfer.match_status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 align-top font-medium text-gray-600">
-                              {transfer.source}
-                            </td>
-                            <td className="px-4 py-4 align-top font-medium text-gray-600">
-                              {transfer.note || "-"}
+
+                              {isMounted && isAdmin && (
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={matchActionLoadingId === suggestion.transfer.id}
+                                    onClick={() => handleConfirmMatch(suggestion)}
+                                    className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                  >
+                                    Confirm Match
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={matchActionLoadingId === suggestion.transfer.id}
+                                    onClick={() => handleRejectMatch(suggestion)}
+                                    className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:bg-gray-200 disabled:opacity-50"
+                                  >
+                                    Reject Match
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <h3 className="mb-3 text-sm font-black text-gray-900">
+                      Riwayat Transfer
+                    </h3>
+                    <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
+                      <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+                        <tr>
+                          <th className="px-4 py-4 font-black">Tanggal Transfer</th>
+                          <th className="px-4 py-4 text-right font-black">Nominal</th>
+                          <th className="px-4 py-4 font-black">Status</th>
+                          <th className="px-4 py-4 font-black">Sumber</th>
+                          <th className="px-4 py-4 font-black">Catatan</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {transferItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                              Belum ada transfer tercatat.
                             </td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </section>
+                        ) : (
+                          transferItems.map((transfer) => (
+                            <tr key={transfer.id} className="transition-colors hover:bg-gray-50">
+                              <td className="px-4 py-4 align-top font-medium text-gray-600">
+                                {formatTanggal(transfer.transfer_date)}
+                              </td>
+                              <td className="px-4 py-4 text-right align-top font-black text-gray-900">
+                                {formatRupiah(transfer.amount)}
+                              </td>
+                              <td className="px-4 py-4 align-top">
+                                <span
+                                  className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${transfer.match_status === "MATCHED"
+                                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                      : transfer.match_status === "SUGGESTED"
+                                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                                        : transfer.match_status === "REJECTED_MATCH"
+                                          ? "border-red-200 bg-red-50 text-red-700"
+                                          : "border-gray-200 bg-gray-100 text-gray-500"
+                                    }`}
+                                >
+                                  {transfer.match_status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 align-top font-medium text-gray-600">
+                                {transfer.source}
+                              </td>
+                              <td className="px-4 py-4 align-top font-medium text-gray-600">
+                                {transfer.note || "-"}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       <ModalShell
@@ -2098,17 +2090,10 @@ export default function WalletsPage() {
           {selectedPaymentDetail?.payment && (
             <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                Payment
+                Detail Payment Top Up
               </p>
 
               <div className="mt-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
-                <InfoItem
-                  label="Kode"
-                  value={
-                    selectedPaymentDetail.payment.code ||
-                    `PAY-${selectedPaymentDetail.payment.id}`
-                  }
-                />
                 <InfoItem
                   label="Owner"
                   value={`${getOwnerCode(
@@ -2124,19 +2109,19 @@ export default function WalletsPage() {
                   }
                 />
                 <InfoItem
-                  label="Status Pembayaran"
-                  value={selectedPaymentDetail.payment.status || "-"}
+                  label="Status Top Up"
+                  value={getPaymentStatusLabel(selectedPaymentDetail.payment.status)}
+                />
+                <InfoItem
+                  label="Awal Pembelian"
+                  value={formatRupiah(selectedPaymentDetail.payment.amount)}
                 />
                 <InfoItem
                   label="Paid At"
                   value={formatTanggal(
                     selectedPaymentDetail.payment.paid_at ||
-                      selectedPaymentDetail.payment.created_at,
+                    selectedPaymentDetail.payment.created_at,
                   )}
-                />
-                <InfoItem
-                  label="Amount"
-                  value={formatRupiah(selectedPaymentDetail.payment.amount)}
                 />
                 {selectedPaymentDetail.payment.unique_code ? (
                   <InfoItem
@@ -2172,14 +2157,6 @@ export default function WalletsPage() {
 
               <div className="mt-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
                 <InfoItem
-                  label="Account Code"
-                  value={
-                    selectedWalletDetail.account_code ||
-                    selectedWalletDetail.code ||
-                    `WALLET-${selectedWalletDetail.id}`
-                  }
-                />
-                <InfoItem
                   label="Owner"
                   value={`${getOwnerCode(
                     selectedWalletDetail.owner,
@@ -2191,71 +2168,9 @@ export default function WalletsPage() {
                   value={formatRupiah(selectedWalletDetail.balance)}
                 />
                 <InfoItem
-                  label="Ledger Balance"
-                  value={formatRupiah(selectedWalletDetail.ledger_balance)}
-                />
-                <InfoItem
                   label="Currency"
                   value={selectedWalletDetail.currency || "IDR"}
                 />
-              </div>
-            </div>
-          )}
-
-          {selectedOwnerLedger.length > 0 && (
-            <div className="rounded-[28px] border border-slate-200 bg-white p-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                Owner Ledger
-              </p>
-
-              <div className="mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
-                {selectedOwnerLedger.map((item) => {
-                  const isCredit =
-                    (item.direction || item.transaction_type || "").toUpperCase() ===
-                    "CREDIT";
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                    >
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="min-w-0">
-                          <p className="break-words text-xs font-black text-gray-900">
-                            {item.code || `TRX-${item.id}`}
-                          </p>
-                          <p className="mt-1 text-[11px] font-bold text-gray-400">
-                            {formatTanggal(item.occurred_at || item.created_at)}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-black text-gray-600">
-                            {item.transaction_type || "-"}
-                          </span>
-
-                          <span
-                            className={`rounded-full border px-3 py-1 text-[10px] font-black ${
-                              isCredit
-                                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                : "border-red-100 bg-red-50 text-[#C92C1E]"
-                            }`}
-                          >
-                            {item.direction || "-"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <InfoItem label="Amount" value={formatRupiah(item.amount)} />
-                        <InfoItem
-                          label="Balance After"
-                          value={formatRupiah(item.balance_after)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
           )}
@@ -2288,18 +2203,18 @@ export default function WalletsPage() {
               ? "Top up PENDING tidak pernah menyentuh balance, jadi menolak tidak butuh pembalikan apapun."
               : "Ubah tanggal transfer efektif berdasarkan bukti/struk, terpisah dari kapan sistem mencatat top up."
         }
-        maxWidth="max-w-lg"
+        maxWidth="max-w-xl"
         onClose={closeTopupAction}
       >
         {topupActionModal ? (
-          <form onSubmit={handleTopupActionSubmit} className="space-y-4">
+          <form onSubmit={handleTopupActionSubmit} className="flex min-h-[300px] flex-col justify-between space-y-6">
             {topupActionError ? (
               <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
                 {topupActionError}
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-gray-100 bg-[#FAFAFA] px-4 py-3 text-xs font-bold text-gray-500">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700">
               {topupActionModal.payment.code || `PAY-${topupActionModal.payment.id}`} —{" "}
               {formatRupiah(topupActionModal.payment.amount)}
             </div>
@@ -2307,7 +2222,7 @@ export default function WalletsPage() {
             {topupActionModal.mode === "accept" ? (
               <>
                 <label className="block space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
                     Kode Unik (opsional)
                   </span>
                   <input
@@ -2319,11 +2234,11 @@ export default function WalletsPage() {
                       }))
                     }
                     placeholder="Contoh: 123 (selisih transfer manual)"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-[#C92C1E]"
                   />
                 </label>
                 <label className="block space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
                     Tanggal Transfer (opsional, dari bukti/struk)
                   </span>
                   <input
@@ -2335,7 +2250,7 @@ export default function WalletsPage() {
                         transferDateOverride: event.target.value,
                       }))
                     }
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-[#C92C1E]"
                   />
                 </label>
               </>
@@ -2343,7 +2258,7 @@ export default function WalletsPage() {
 
             {topupActionModal.mode === "reject" ? (
               <label className="block space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
                   Catatan (opsional)
                 </span>
                 <textarea
@@ -2356,14 +2271,14 @@ export default function WalletsPage() {
                   }
                   rows={3}
                   placeholder="Alasan penolakan"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-[#C92C1E]"
                 />
               </label>
             ) : null}
 
             {topupActionModal.mode === "transfer_date" ? (
               <label className="block space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
                   Tanggal Transfer (wajib)
                 </span>
                 <input
@@ -2375,7 +2290,7 @@ export default function WalletsPage() {
                       transferDateOverride: event.target.value,
                     }))
                   }
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-[#C92C1E]"
                 />
               </label>
             ) : null}

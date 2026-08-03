@@ -509,7 +509,7 @@ function PartnerDetailPageInner() {
                 <option value="CALL">CALL</option>
                 <option value="CHAT">CHAT</option>
               </select>
-              <input type="datetime-local" value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <input type="datetime-local" max={new Date().toISOString().slice(0, 16)} value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
               <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={4} placeholder="Catatan interaksi dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
               <button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Simpan Interaksi</button>
             </div>

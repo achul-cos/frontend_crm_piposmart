@@ -4,8 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import Sprint14g1Board, {
   type Sprint14g1Section,
-} from '@/app/components/analytics/Sprint14g1Board';
-import { authFetchJson } from '@/app/lib/api';
+} from "@/app/components/analytics/Sprint14g1Board";
+import ImportHistoryModal from "@/app/components/ImportHistoryModal";
+import {
+  uploadImportFile,
+  getImportBatch,
+  commitImportBatch,
+  downloadImportErrors,
+  authFetchJson,
+  ImportBatchResponse,
+} from "@/app/lib/api";
 
 export type TargetFormMode =
   | "TARGET_BULK"
@@ -110,84 +118,118 @@ function TargetFormModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <h3 className="text-lg font-black text-slate-900">
-          {mode === "TARGET_BULK"
-            ? "Bulk Target Sales (Semua Sales Aktif)"
-            : mode === "TARGET_OVERRIDE"
-            ? "Override Target Per Sales"
-            : mode === "KPI_DEFINITION"
-            ? "KPI Definition"
-            : "Recompute KPI Worker"}
-        </h3>
-        {formError ? (
-          <div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">
-            {formError}
-          </div>
-        ) : null}
+    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
+      <div
+        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                Target & KPI
+              </p>
+              <h2 className="mt-1.5 text-lg font-black text-slate-950 md:text-xl">
+                {mode === "TARGET_BULK"
+                  ? "Bulk Target Sales"
+                  : mode === "TARGET_OVERRIDE"
+                  ? "Override Target Per Sales"
+                  : mode === "KPI_DEFINITION"
+                  ? "KPI Definition"
+                  : "Recompute KPI Worker"}
+              </h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {mode === "TARGET_BULK"
+                  ? "Set target sekaligus untuk semua akun sales aktif."
+                  : mode === "TARGET_OVERRIDE"
+                  ? "Ubah target spesifik untuk satu akun sales tertentu."
+                  : mode === "KPI_DEFINITION"
+                  ? "Konfigurasi bobot dan threshold nilai pencapaian KPI."
+                  : "Jalankan worker untuk menghitung ulang skor KPI periode berjalan."}
+              </p>
+            </div>
 
-        <div className="mt-4 space-y-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+          {formError ? (
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-600">
+              {formError}
+            </div>
+          ) : null}
+
           <div>
-            <label className="text-xs font-bold text-slate-500">Tahun Periode</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block">Tahun Periode</label>
             <input
               type="number"
               value={form.periodYear}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, periodYear: Number(e.target.value) }))
               }
-              className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-500">Bulan Periode (1-12)</label>
-            <input
-              type="number"
-              min={1}
-              max={12}
-              value={form.periodMonth}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, periodMonth: Number(e.target.value) }))
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+              className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
             />
           </div>
 
+          {mode === "TARGET_BULK" || mode === "TARGET_OVERRIDE" ? (
+            <div>
+              <label className="text-xs font-bold text-slate-700 mb-1 block">Bulan Periode</label>
+              <input
+                type="number"
+                value={form.periodMonth}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, periodMonth: Number(e.target.value) }))
+                }
+                placeholder="1-12"
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              />
+            </div>
+          ) : null}
+
           {mode === "TARGET_OVERRIDE" ? (
             <div>
-              <label className="text-xs font-bold text-slate-500">Sales ID</label>
+              <label className="text-xs font-bold text-slate-700 mb-1 block">Sales ID</label>
               <input
                 type="number"
                 value={form.salesId}
                 onChange={(e) => setForm((prev) => ({ ...prev, salesId: e.target.value }))}
                 placeholder="Contoh ID: 12"
-                className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
               />
             </div>
           ) : null}
 
           {mode === "TARGET_BULK" || mode === "TARGET_OVERRIDE" || mode === "KPI_DEFINITION" ? (
             <div>
-              <label className="text-xs font-bold text-slate-500">Metric Code</label>
+              <label className="text-xs font-bold text-slate-700 mb-1 block">Metric Code</label>
               <input
                 type="text"
                 value={form.metricCode}
                 onChange={(e) => setForm((prev) => ({ ...prev, metricCode: e.target.value }))}
                 placeholder="CONFIRMED_CLOSING_COUNT"
-                className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
               />
             </div>
           ) : null}
 
           {mode === "TARGET_BULK" || mode === "TARGET_OVERRIDE" ? (
             <div>
-              <label className="text-xs font-bold text-slate-500">Target Value</label>
+              <label className="text-xs font-bold text-slate-700 mb-1 block">Target Value</label>
               <input
                 type="text"
                 value={form.targetValue}
                 onChange={(e) => setForm((prev) => ({ ...prev, targetValue: e.target.value }))}
                 placeholder="5"
-                className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
               />
             </div>
           ) : null}
@@ -195,44 +237,45 @@ function TargetFormModal({
           {mode === "KPI_DEFINITION" ? (
             <>
               <div>
-                <label className="text-xs font-bold text-slate-500">Weight (%)</label>
+                <label className="text-xs font-bold text-slate-700 mb-1 block">Weight (%)</label>
                 <input
                   type="text"
                   value={form.weight}
                   onChange={(e) => setForm((prev) => ({ ...prev, weight: e.target.value }))}
                   placeholder="100.00"
-                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500">Threshold Achieved (%)</label>
+                <label className="text-xs font-bold text-slate-700 mb-1 block">Threshold Achieved (%)</label>
                 <input
                   type="text"
                   value={form.thresholdAchieved}
                   onChange={(e) => setForm((prev) => ({ ...prev, thresholdAchieved: e.target.value }))}
                   placeholder="100.00"
-                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500">Threshold Near (%)</label>
+                <label className="text-xs font-bold text-slate-700 mb-1 block">Threshold Near (%)</label>
                 <input
                   type="text"
                   value={form.thresholdNear}
                   onChange={(e) => setForm((prev) => ({ ...prev, thresholdNear: e.target.value }))}
                   placeholder="80.00"
-                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs font-bold"
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
                 />
               </div>
             </>
           ) : null}
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
+        {/* Modal Footer */}
+        <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-4 md:px-6 flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-50"
           >
             Batal
           </button>
@@ -240,7 +283,7 @@ function TargetFormModal({
             type="button"
             onClick={onSubmit}
             disabled={saving}
-            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-2xl bg-[#C92C1E] px-5 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
           >
             {saving ? "Memproses..." : "Simpan"}
           </button>
@@ -249,6 +292,300 @@ function TargetFormModal({
     </div>
   );
 }
+
+function SalesTargetImportModal({
+  open,
+  onClose,
+  onOpenHistory,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onOpenHistory: () => void;
+  onSuccess: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [sheetName, setSheetName] = useState("TARGET");
+  const [targetSalesUserId, setTargetSalesUserId] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [batch, setBatch] = useState<ImportBatchResponse | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setFile(null);
+      setSheetName("TARGET");
+      setTargetSalesUserId("");
+      setError("");
+      setBatch(null);
+      setLoading(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (batch && ["UPLOADED", "VALIDATING", "COMMITTING"].includes(batch.status)) {
+      timer = setTimeout(async () => {
+        try {
+          const updated = await getImportBatch(batch.id);
+          setBatch(updated);
+          if (updated.status === "COMMITTED") {
+            onSuccess();
+          }
+        } catch (e) {
+          console.error("Polling import status error", e);
+        }
+      }, 1500);
+    }
+    return () => clearTimeout(timer);
+  }, [batch, onSuccess]);
+
+  if (!open) return null;
+
+  const handleUpload = async () => {
+    if (!file) {
+      setError("Pilih file Excel (.xlsx) terlebih dahulu.");
+      return;
+    }
+    if (!sheetName.trim()) {
+      setError("Nama sheet wajib diisi untuk profil SALES_TARGET (contoh: TARGET).");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const salesIdNum = targetSalesUserId.trim() ? Number(targetSalesUserId) : undefined;
+      const res = await uploadImportFile(file, "SALES_TARGET", sheetName.trim(), salesIdNum);
+      setBatch(res);
+    } catch (e: any) {
+      setError(e.message || "Gagal mengunggah file import.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (!batch) return;
+    setError("");
+    setLoading(true);
+    try {
+      const res = await commitImportBatch(batch.id);
+      setBatch(res);
+    } catch (e: any) {
+      setError(e.message || "Gagal commit batch import.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadErrors = async () => {
+    if (!batch) return;
+    try {
+      await downloadImportErrors(batch.id);
+    } catch (e: any) {
+      setError(e.message || "Gagal mendownload laporan error.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
+      <div
+        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                Import Excel (Sprint 15)
+              </p>
+              <h2 className="mt-1.5 text-lg font-black text-slate-950 md:text-xl">
+                Import Target Sales
+              </h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                Profil <span className="font-bold text-slate-700">SALES_TARGET</span> — Unggah file PBGC / Excel Target Sales
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+            {error ? (
+              <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-600">
+                {error}
+              </div>
+            ) : null}
+
+            {!batch ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">File Excel (.xlsx)</label>
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">
+                    Nama Sheet Excel (Wajib per profil SALES_TARGET)
+                  </label>
+                  <input
+                    type="text"
+                    value={sheetName}
+                    onChange={(e) => setSheetName(e.target.value)}
+                    placeholder="Contoh: TARGET"
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">
+                    Target Sales User ID (Opsional)
+                  </label>
+                  <input
+                    type="number"
+                    value={targetSalesUserId}
+                    onChange={(e) => setTargetSalesUserId(e.target.value)}
+                    placeholder="Contoh: 12"
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                  <p className="mt-1 text-[10px] font-bold text-slate-400">
+                    Isi ID akun Sales jika file sheet tidak mencantumkan ID Sales per baris.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-black text-slate-900">{batch.original_filename}</p>
+                      <p className="text-[10px] font-bold text-slate-500 mt-0.5">Kode: {batch.code}</p>
+                    </div>
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-[10px] font-black text-blue-700">
+                      {batch.status}
+                    </span>
+                  </div>
+
+                  {batch.progress_percentage !== undefined ? (
+                    <div className="mt-3">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
+                        <span>Progress</span>
+                        <span>{batch.progress_percentage}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          className="h-full bg-[#C92C1E] transition-all duration-300"
+                          style={{ width: `${batch.progress_percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-bold">
+                    <div className="rounded-xl bg-white p-2.5 border border-slate-200">
+                      <span className="block text-[10px] text-slate-400">Total</span>
+                      <span className="text-slate-900 font-black">{batch.total_rows}</span>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 p-2.5 border border-emerald-200">
+                      <span className="block text-[10px] text-emerald-600">Valid</span>
+                      <span className="text-emerald-700 font-black">{batch.valid_rows}</span>
+                    </div>
+                    <div className="rounded-xl bg-red-50 p-2.5 border border-red-200">
+                      <span className="block text-[10px] text-red-600">Invalid</span>
+                      <span className="text-red-700 font-black">{batch.invalid_rows}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {batch.invalid_rows > 0 ? (
+                  <div className="flex items-center justify-between rounded-2xl bg-amber-50 p-3.5 border border-amber-200">
+                    <span className="text-xs font-bold text-amber-800">
+                      Terdapat {batch.invalid_rows} baris bermasalah.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleDownloadErrors}
+                      className="rounded-xl bg-amber-600 px-3.5 py-1.5 text-xs font-black text-white hover:bg-amber-700 transition"
+                    >
+                      Unduh File Error
+                    </button>
+                  </div>
+                ) : null}
+
+                {batch.error_message ? (
+                  <div className="rounded-2xl bg-red-50 p-4 text-xs font-bold text-red-600">
+                    {batch.error_message}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-4 md:px-6 flex justify-between items-center">
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="text-xs font-black text-purple-600 hover:underline flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Lihat Riwayat Import</span>
+            </button>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+              >
+                {!batch ? "Batal" : "Tutup"}
+              </button>
+
+              {!batch ? (
+                <button
+                  type="button"
+                  onClick={handleUpload}
+                  disabled={loading}
+                  className="rounded-2xl bg-[#C92C1E] px-5 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? "Mengunggah..." : "Unggah & Validasi"}
+                </button>
+              ) : batch.status === "VALIDATED" ? (
+                <button
+                  type="button"
+                  onClick={handleCommit}
+                  disabled={loading || batch.valid_rows === 0}
+                  className="rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {loading ? "Menyimpan..." : "Commit Data Import"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+  );
+}
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const DEFAULT_PERIOD = {
   periodYear: new Date().getFullYear(),
@@ -450,6 +787,9 @@ export default function TargetPage() {
   const [formMode, setFormMode] = useState<TargetFormMode>("TARGET_BULK");
   const [form, setForm] = useState<TargetFormState>(EMPTY_FORM);
   const [formError, setFormError] = useState("");
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
 
   const [selectedRanking, setSelectedRanking] = useState<KpiRankingItem | null>(null);
 
@@ -729,18 +1069,40 @@ export default function TargetPage() {
                   d="M9 5l7 7-7 7"
                 />
               </svg>
-              <span className="text-[#C92C1E]">Target & KPI (Sprint 13)</span>
+              <span className="text-[#C92C1E]">Target & KPI (Sprint 15)</span>
             </div>
 
             <h1 className="text-2xl font-black tracking-tight text-gray-900">
               Sales Target, KPI, dan Ranking
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Manajemen Target Bulanan, Override Per Sales, KPI Worker Recompute, dan Leaderboard Ranking.
+              Manajemen Target Bulanan, Override Per Sales, Import Target Excel (Sprint 15), KPI Worker Recompute, dan Leaderboard.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setIsImportModalOpen(true)}
+              className="rounded-xl bg-blue-50 px-3.5 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-100 flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <span>Import Target Excel</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsImportHistoryModalOpen(true)}
+              className="rounded-xl bg-purple-50 px-3.5 py-2 text-xs font-black text-purple-700 transition hover:bg-purple-100 flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Riwayat Import</span>
+            </button>
+
             <button
               type="button"
               onClick={() => openModal("TARGET_BULK")}
@@ -1258,6 +1620,28 @@ export default function TargetPage() {
           ) : null}
         </>
       )}
+
+      <SalesTargetImportModal
+        open={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onOpenHistory={() => {
+          setIsImportModalOpen(false);
+          setIsImportHistoryModalOpen(true);
+        }}
+        onSuccess={() => {
+          loadData(false);
+        }}
+      />
+
+      <ImportHistoryModal
+        isOpen={isImportHistoryModalOpen}
+        onClose={() => setIsImportHistoryModalOpen(false)}
+        profile="SALES_TARGET"
+        onResume={() => {
+          setIsImportHistoryModalOpen(false);
+          setIsImportModalOpen(true);
+        }}
+      />
     </div>
   );
 }

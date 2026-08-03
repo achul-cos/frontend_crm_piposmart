@@ -75,9 +75,6 @@ export default function OwnerOverviewCard({ ownerId }: { ownerId: number }) {
         <div className="rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
           <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">Saldo Berjalan</p>
           <h3 className="text-2xl font-black">{formatRupiah(balance.wallet.balance)}</h3>
-          <p className="mt-1 text-[10px] font-bold text-red-100/80">
-            Ledger: {formatRupiah(balance.wallet.ledger_balance)}
-          </p>
         </div>
         <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
           <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Total Transfer</p>

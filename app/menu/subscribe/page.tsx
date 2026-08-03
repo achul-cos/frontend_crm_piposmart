@@ -11,7 +11,11 @@ import {
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTab from "./AnalyticsTab";
-import { authFetchJson, getEligiblePromotions, type CatalogPromotion } from "@/app/lib/api";
+import {
+  authFetchJson,
+  getEligiblePromotions,
+  type CatalogPromotion,
+} from "@/app/lib/api";
 
 type ApiMeta = {
   page?: number;
@@ -100,7 +104,7 @@ type SubscriptionOrderItem = {
     code?: string;
     name?: string;
   };
-  // Sprint 15a — order bisa memakai lebih dari satu promotion sekaligus;
+  // Sprint 15a â€” order bisa memakai lebih dari satu promotion sekaligus;
   // `promotion` singular dipertahankan untuk kompatibilitas data lama.
   promotions?: {
     id?: number;
@@ -221,6 +225,16 @@ type CreateOrderForm = {
   promotionIds: number[];
 };
 
+type UpgradeOrderForm = {
+  planId: string;
+  closingId: string;
+  externalReference: string;
+  idempotencyKey: string;
+  purchasedAt: string;
+  effectiveStartDate: string;
+  note: string;
+};
+
 type ReconcileForm = {
   orderId: string;
   action: "CONFIRM" | "REJECT" | "PARTIAL_CONFIRM";
@@ -231,13 +245,13 @@ type ReconcileForm = {
 };
 
 const inputClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400";
 
 const selectClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400";
 
 const textareaClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100";
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100";
 
 const getTodayDate = () => {
   const now = new Date();
@@ -260,6 +274,16 @@ const emptyCreateOrderForm: CreateOrderForm = {
   subscriptionStartDate: getTodayDate(),
   note: "",
   promotionIds: [],
+};
+
+const emptyUpgradeOrderForm: UpgradeOrderForm = {
+  planId: "",
+  closingId: "",
+  externalReference: "",
+  idempotencyKey: "",
+  purchasedAt: getTodayDatetimeLocal(),
+  effectiveStartDate: getTodayDate(),
+  note: "",
 };
 
 const emptyReconcileForm: ReconcileForm = {
@@ -398,41 +422,39 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70" onClick={onClose}>
-      <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
-        <div
-          className={`w-full ${maxWidth} overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl`}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                  {label}
-                </p>
+    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
+      <div
+        className={`w-full ${maxWidth || "md:w-[60vw] md:max-w-[60vw]"} min-h-[460px] max-h-[85vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                {label}
+              </p>
 
-                <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
-                  {title}
-                </h2>
+              <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
+                {title}
+              </h2>
 
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  {subtitle}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
-              >
-                Tutup
-              </button>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {subtitle}
+              </p>
             </div>
-          </div>
 
-          <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 md:p-6">
-            {children}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+            >
+              Tutup
+            </button>
           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+          {children}
         </div>
       </div>
     </div>
@@ -457,6 +479,7 @@ export default function SubscriptionPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua");
+  const [orderTypeFilter, setOrderTypeFilter] = useState("Semua");
   const [purchasedFrom, setPurchasedFrom] = useState("");
   const [purchasedTo, setPurchasedTo] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -470,7 +493,13 @@ export default function SubscriptionPage() {
   const [reconcileForm, setReconcileForm] =
     useState<ReconcileForm>(emptyReconcileForm);
 
-  // Sprint 15a — daftar promotion yang eligible untuk plan yang dipilih di form create order.
+  // Upgrade State
+  const [upgradeMode, setUpgradeMode] = useState(false);
+  const [selectedUpgradeSub, setSelectedUpgradeSub] = useState<SubscriptionItem | null>(null);
+  const [upgradeForm, setUpgradeForm] = useState<UpgradeOrderForm>(emptyUpgradeOrderForm);
+  const [catalogPlans, setCatalogPlans] = useState<Plan[]>([]);
+
+  // Sprint 15a â€” daftar promotion yang eligible untuk plan yang dipilih di form create order.
   const [eligiblePromotions, setEligiblePromotions] = useState<
     CatalogPromotion[]
   >([]);
@@ -516,6 +545,8 @@ export default function SubscriptionPage() {
   const [selectedSubscriptionDetail, setSelectedSubscriptionDetail] =
     useState<SubscriptionDetailResponse | null>(null);
 
+
+
   const [detailTitle, setDetailTitle] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const [userRole, setUserRole] = useState("");
@@ -557,6 +588,7 @@ export default function SubscriptionPage() {
       const orderQuery = buildQuery({
         q: debouncedSearch,
         status: statusFilter,
+        order_type: orderTypeFilter === "Semua" ? "" : orderTypeFilter,
         purchased_from: purchasedFrom,
         purchased_to: purchasedTo,
         sort: "-purchased_at",
@@ -609,6 +641,7 @@ export default function SubscriptionPage() {
         issueResult,
         walletResult,
         ownerResult,
+        catalogPlanResult,
       ] = await Promise.allSettled([
         authFetch<
           | SubscriptionOrderItem[]
@@ -632,7 +665,16 @@ export default function SubscriptionPage() {
         authFetch<Owner[] | { items?: Owner[]; rows?: Owner[] }>(
           `/owners${ownersQuery}`,
         ),
+        authFetch<Plan[] | { items?: Plan[]; rows?: Plan[] }>(
+          `/catalog/plans/all`,
+        ),
       ]);
+
+      if (catalogPlanResult.status === "fulfilled") {
+        setCatalogPlans(normalizeList<Plan>(catalogPlanResult.value.data));
+      } else {
+        setCatalogPlans([]);
+      }
 
       if (orderResult.status === "fulfilled") {
         setOrders(normalizeList<SubscriptionOrderItem>(orderResult.value.data));
@@ -703,7 +745,7 @@ export default function SubscriptionPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, purchasedFrom, purchasedTo]);
+  }, [debouncedSearch, statusFilter, orderTypeFilter, purchasedFrom, purchasedTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -746,18 +788,18 @@ export default function SubscriptionPage() {
   }, [orders, subscriptions, reconciliations, issues]);
 
   const planOptions = useMemo(() => {
-    const fromOrders = orders
-      .map((item) => item.plan)
-      .filter((item): item is Plan => Boolean(item?.id));
-
     const unique = new Map<number, Plan>();
 
-    fromOrders.forEach((plan) => {
+    catalogPlans.forEach((plan) => {
       if (plan.id) unique.set(plan.id, plan);
     });
 
+    orders.forEach((item) => {
+      if (item.plan?.id) unique.set(item.plan.id, item.plan);
+    });
+
     return Array.from(unique.values());
-  }, [orders]);
+  }, [catalogPlans, orders]);
 
   const ownerOptions = useMemo(() => {
     const walletByOwnerId = new Map<number, WalletItem>();
@@ -803,6 +845,53 @@ export default function SubscriptionPage() {
 
     return Array.from(ownerMap.values());
   }, [owners, wallets]);
+
+  const handleOpenUpgrade = (sub: SubscriptionItem) => {
+    setSelectedUpgradeSub(sub);
+    setUpgradeForm({
+      ...emptyUpgradeOrderForm,
+      idempotencyKey: `sub-upgrade-${sub.id}-${Date.now()}`,
+    });
+    setUpgradeMode(true);
+  };
+
+  const handleUpgradeOrder = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isAdmin) {
+      alert("Hanya Admin yang bisa melakukan upgrade subscription.");
+      return;
+    }
+    if (!selectedUpgradeSub?.id) return;
+    if (!upgradeForm.planId) {
+      alert("Plan Tujuan wajib dipilih.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authFetch(`/subscriptions/${selectedUpgradeSub.id}/upgrades`, {
+        method: "POST",
+        body: JSON.stringify({
+          plan_id: Number(upgradeForm.planId),
+          closing_id: upgradeForm.closingId ? Number(upgradeForm.closingId) : undefined,
+          external_reference: upgradeForm.externalReference || undefined,
+          idempotency_key: upgradeForm.idempotencyKey,
+          purchased_at: toIsoFromDatetimeLocal(upgradeForm.purchasedAt),
+          effective_start_date: upgradeForm.effectiveStartDate,
+          note: upgradeForm.note || undefined,
+        }),
+      });
+
+      setUpgradeMode(false);
+      setSelectedUpgradeSub(null);
+      setUpgradeForm(emptyUpgradeOrderForm);
+      setReloadKey((prev) => prev + 1);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Gagal melakukan upgrade.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateOrder = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1008,6 +1097,143 @@ export default function SubscriptionPage() {
     "REJECTED",
   ];
 
+  if (upgradeMode && selectedUpgradeSub) {
+    return (
+      <div className="space-y-6">
+        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+                <span>Menu</span>
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-gray-500">Subscribe</span>
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-[#C92C1E]">Upgrade</span>
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-gray-900">
+                Upgrade Paket Langganan
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Lakukan upgrade paket berlangganan untuk sisa masa aktif dari langganan {selectedUpgradeSub.code || selectedUpgradeSub.id}.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setUpgradeMode(false);
+                  setSelectedUpgradeSub(null);
+                }}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+              >
+                Kembali
+              </button>
+            </div>
+          </div>
+
+          <div className="p-5 md:p-6 bg-gray-50">
+            <form onSubmit={handleUpgradeOrder} className="space-y-4 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm max-w-4xl mx-auto">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Paket Tujuan (Plan) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className={selectClass}
+                    value={upgradeForm.planId}
+                    onChange={(e) => setUpgradeForm({ ...upgradeForm, planId: e.target.value })}
+                    required
+                  >
+                    <option value="">Pilih paket tujuan...</option>
+                    {planOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Nama Owner (Akun)
+                  </label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={getOwnerName(selectedUpgradeSub.owner)}
+                    disabled
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">Pemilik subscription yang akan di-upgrade.</p>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Waktu Pembelian <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className={inputClass}
+                    value={upgradeForm.purchasedAt}
+                    onChange={(e) => setUpgradeForm({ ...upgradeForm, purchasedAt: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Tanggal Mulai Efektif <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={upgradeForm.effectiveStartDate}
+                    onChange={(e) => setUpgradeForm({ ...upgradeForm, effectiveStartDate: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                  Referensi Eksternal
+                </label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="Contoh: INV-UPG-001"
+                  value={upgradeForm.externalReference}
+                  onChange={(e) => setUpgradeForm({ ...upgradeForm, externalReference: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                  Catatan Admin
+                </label>
+                <textarea
+                  className={textareaClass}
+                  placeholder="Opsional..."
+                  rows={2}
+                  value={upgradeForm.note}
+                  onChange={(e) => setUpgradeForm({ ...upgradeForm, note: e.target.value })}
+                />
+              </div>
+              
+              <div className="flex justify-end pt-4 border-t border-gray-100">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded-xl border border-red-100 bg-[#C92C1E] px-6 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  {loading ? "Memproses..." : "Proses Upgrade"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
@@ -1041,15 +1267,18 @@ export default function SubscriptionPage() {
             </p>
           </div>
 
-          {isMounted && isAdmin && (
-            <button
-              type="button"
-              onClick={() => setIsCreateOpen(true)}
-              className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-            >
-              + Buat Order
-            </button>
-          )}
+          <div className="flex flex-wrap gap-2">
+
+            {isMounted && isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsCreateOpen(true)}
+                className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
+              >
+                + Buat Order
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1118,11 +1347,10 @@ export default function SubscriptionPage() {
               key={item.key}
               type="button"
               onClick={() => setActiveTab(item.key as typeof activeTab)}
-              className={`rounded-lg px-5 py-2.5 transition-all ${
-                activeTab === item.key
+              className={`rounded-lg px-5 py-2.5 transition-all ${activeTab === item.key
                   ? "bg-white text-[#C92C1E] shadow-sm"
                   : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-              }`}
+                }`}
             >
               {item.label}
             </button>
@@ -1133,456 +1361,459 @@ export default function SubscriptionPage() {
       {activeTab === "analytics" ? (
         <AnalyticsTab />
       ) : (
-      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-          <div>
-            <h2 className="text-sm font-black text-gray-900">
-              Filter Subscription
-            </h2>
-            <p className="mt-1 text-xs font-medium text-gray-400">
-              Pencarian, status, dan tanggal otomatis diterapkan tanpa tombol
-              terapkan.
-            </p>
+        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+            <div>
+              <h2 className="text-sm font-black text-gray-900">
+                Filter Subscription
+              </h2>
+              <p className="mt-1 text-xs font-medium text-gray-400">
+                Pencarian, status, dan tanggal otomatis diterapkan tanpa tombol
+                terapkan.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Cari order / owner"
+                className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              />
+
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              >
+                <option value="Semua">Semua Status</option>
+                {statusOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+
+              {activeTab === "orders" && (
+                <select
+                  value={orderTypeFilter}
+                  onChange={(event) => setOrderTypeFilter(event.target.value)}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                >
+                  <option value="Semua">Semua Tipe Order</option>
+                  <option value="NEW">Baru (NEW)</option>
+                  <option value="UPGRADE">Upgrade (UPGRADE)</option>
+                </select>
+              )}
+
+              <input
+                type="date"
+                value={purchasedFrom}
+                onChange={(event) => setPurchasedFrom(event.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              />
+
+              <input
+                type="date"
+                value={purchasedTo}
+                onChange={(event) => setPurchasedTo(event.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              />
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Cari order / owner"
-              className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            />
+          {errorMessage && (
+            <div className="mx-4 mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+              {errorMessage}
+            </div>
+          )}
 
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            >
-              <option value="Semua">Semua Status</option>
-              {statusOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+          <p className="px-4 pt-4 text-[11px] font-bold text-gray-400">
+            Klik baris order atau subscription untuk membuka detail. Reconciliation
+            dapat dilakukan Admin/Supervisor.
+          </p>
 
-            <input
-              type="date"
-              value={purchasedFrom}
-              onChange={(event) => setPurchasedFrom(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            />
+          <div className="h-2" />
 
-            <input
-              type="date"
-              value={purchasedTo}
-              onChange={(event) => setPurchasedTo(event.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            />
-          </div>
-        </div>
-
-        {errorMessage && (
-          <div className="mx-4 mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
-            {errorMessage}
-          </div>
-        )}
-
-        <p className="px-4 pt-4 text-[11px] font-bold text-gray-400">
-          Klik baris order atau subscription untuk membuka detail. Reconciliation
-          dapat dilakukan Admin/Supervisor.
-        </p>
-
-        <div className="h-2" />
-
-        {activeTab === "orders" && (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-left text-xs">
-              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="p-3 font-black">Order</th>
-                  <th className="p-3 font-black">Owner</th>
-                  <th className="p-3 font-black">Plan</th>
-                  <th className="p-3 font-black">Status</th>
-                  <th className="p-3 font-black">Purchased</th>
-                  <th className="p-3 text-right font-black">Amount</th>
-                  {canReconcile && (
-                    <th className="p-3 text-center font-black">Reconcile</th>
-                  )}
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {orders.length === 0 ? (
+          {activeTab === "orders" && (
+            <div className="w-full overflow-x-auto">
+              <table className="w-full min-w-[1120px] text-left text-xs">
+                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
-                    <td
-                      colSpan={canReconcile ? 7 : 6}
-                      className="p-8 text-center font-bold text-gray-400"
-                    >
-                      Data subscription order tidak ditemukan.
-                    </td>
+                    <th className="p-3 font-black">Order</th>
+                    <th className="p-3 font-black">Owner</th>
+                    <th className="p-3 font-black">Plan</th>
+                    <th className="p-3 font-black">Status</th>
+                    <th className="p-3 font-black">Purchased</th>
+                    <th className="p-3 text-right font-black">Amount</th>
+                    {canReconcile && (
+                      <th className="p-3 text-center font-black">Reconcile</th>
+                    )}
                   </tr>
-                ) : (
-                  orders.map((order) => (
-                    <tr
-                      key={order.id}
-                      onClick={() => handleOpenOrderDetail(order)}
-                      className="cursor-pointer transition-colors hover:bg-gray-50"
-                    >
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {order.code || `ORDER-${order.id}`}
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                </thead>
+
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {orders.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={canReconcile ? 7 : 6}
+                        className="p-8 text-center font-bold text-gray-400"
+                      >
+                        Data subscription order tidak ditemukan.
+                      </td>
+                    </tr>
+                  ) : (
+                    orders.map((order) => (
+                      <tr
+                        key={order.id}
+                        onClick={() => handleOpenOrderDetail(order)}
+                        className="cursor-pointer transition-colors hover:bg-gray-50"
+                      >
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {order.code || `ORDER-${order.id}`}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            Closing: {order.closing?.code || order.closing?.id || "-"}
+                          </p>
+                        </td>
+
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {getOwnerName(order.owner)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {getOwnerCode(order.owner)}
+                          </p>
+                        </td>
+
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {order.plan?.name || "-"}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {order.duration_days || 0} hari
+                          </p>
+                        </td>
+
+                        <td className="p-3 align-top">
                           <span
-                            className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${getOrderTypeClass(
-                              order.order_type,
+                            className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
+                              order.status,
                             )}`}
                           >
-                            {getOrderTypeLabel(order.order_type)}
+                            {order.status || "-"}
                           </span>
-                          {order.source_subscription?.code && (
-                            <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600">
-                              Dari {order.source_subscription.code}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          Closing: {order.closing?.code || order.closing?.id || "-"}
-                        </p>
-                        {order.upgrade?.remaining_days ? (
-                          <p className="mt-1 text-[11px] font-bold text-amber-600">
-                            Sisa {order.upgrade.remaining_days} hari • efektif{" "}
-                            {formatTanggalPendek(order.upgrade.effective_start_date)}
-                          </p>
-                        ) : null}
-                      </td>
-
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {getOwnerName(order.owner)}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {getOwnerCode(order.owner)}
-                        </p>
-                      </td>
-
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {order.plan?.name || "-"}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {order.duration_days || 0} hari
-                        </p>
-                      </td>
-
-                      <td className="p-3 align-top">
-                        <span
-                          className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
-                            order.status,
-                          )}`}
-                        >
-                          {order.status || "-"}
-                        </span>
-                      </td>
-
-                      <td className="p-3 align-top font-bold text-gray-600">
-                        <p>{formatTanggal(order.purchased_at)}</p>
-                        <p className="mt-1 text-[11px] text-gray-400">
-                          Start:{" "}
-                          {formatTanggalPendek(order.subscription_start_date)}
-                        </p>
-                      </td>
-
-                      <td className="p-3 text-right align-top">
-                        <span className="inline-flex min-w-[130px] justify-end rounded-2xl border border-red-100 bg-red-50 px-4 py-3 font-black text-[#C92C1E]">
-                          {formatRupiah(order.final_amount)}
-                        </span>
-                      </td>
-
-                      {canReconcile && (
-                        <td className="p-3 text-center align-top">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openReconcileModal(order);
-                            }}
-                            className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black text-[#C92C1E] transition hover:bg-red-100"
-                          >
-                            Reconcile
-                          </button>
                         </td>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
 
-        {activeTab === "subscriptions" && (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-xs">
-              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="p-3 font-black">Subscription</th>
-                  <th className="p-3 font-black">Owner</th>
-                  <th className="p-3 font-black">Plan</th>
-                  <th className="p-3 font-black">Status</th>
-                  <th className="p-3 font-black">Periode</th>
-                  <th className="p-3 text-right font-black">Durasi</th>
-                  <th className="p-3 text-center font-black">Aksi</th>
-                </tr>
-              </thead>
+                        <td className="p-3 align-top font-bold text-gray-600">
+                          <p>{formatTanggal(order.purchased_at)}</p>
+                          <p className="mt-1 text-[11px] text-gray-400">
+                            Start:{" "}
+                            {formatTanggalPendek(order.subscription_start_date)}
+                          </p>
+                        </td>
 
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {subscriptions.length === 0 ? (
+                        <td className="p-3 text-right align-top">
+                          <span className="inline-flex min-w-[130px] justify-end rounded-2xl border border-red-100 bg-red-50 px-4 py-3 font-black text-[#C92C1E]">
+                            {formatRupiah(order.final_amount)}
+                          </span>
+                        </td>
+
+                        {canReconcile && (
+                          <td className="p-3 text-center align-top">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openReconcileModal(order);
+                              }}
+                              className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black text-[#C92C1E] transition hover:bg-red-100"
+                            >
+                              Reconcile
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === "subscriptions" && (
+            <div className="w-full overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-xs">
+                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="p-8 text-center font-bold text-gray-400"
-                    >
-                      Data subscription tidak ditemukan.
-                    </td>
+                    <th className="p-3 font-black">Subscription</th>
+                    <th className="p-3 font-black">Owner</th>
+                    <th className="p-3 font-black">Plan</th>
+                    <th className="p-3 font-black">Status</th>
+                    <th className="p-3 font-black">Periode</th>
+                    <th className="p-3 text-right font-black">Durasi</th>
+                    <th className="p-3 text-center font-black">Aksi</th>
                   </tr>
-                ) : (
-                  subscriptions.map((subscription) => (
-                    <tr
-                      key={subscription.id}
-                      onClick={() => handleOpenSubscriptionDetail(subscription)}
-                      className="cursor-pointer transition-colors hover:bg-gray-50"
-                    >
-                      <td className="p-3 align-top">
-                        <Link
-                          href={`/menu/subscribe/${subscription.id}`}
-                          onClick={(event) => event.stopPropagation()}
-                          className="font-black text-gray-900 transition-colors hover:text-[#C92C1E]"
-                        >
-                          {subscription.code || `SUB-${subscription.id}`}
-                        </Link>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          Order:{" "}
-                          {subscription.order?.code ||
-                            subscription.order?.id ||
-                            "-"}
-                        </p>
-                      </td>
+                </thead>
 
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {getOwnerName(subscription.owner)}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {getOwnerCode(subscription.owner)}
-                        </p>
-                      </td>
-
-                      <td className="p-3 align-top font-bold text-gray-700">
-                        {subscription.plan?.name || "-"}
-                      </td>
-
-                      <td className="p-3 align-top">
-                        <span
-                          className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
-                            subscription.status,
-                          )}`}
-                        >
-                          {subscription.status || "-"}
-                        </span>
-                      </td>
-
-                      <td className="p-3 align-top font-bold text-gray-600">
-                        {formatTanggalPendek(subscription.active_from)} -{" "}
-                        {formatTanggalPendek(subscription.active_until)}
-                      </td>
-
-                      <td className="p-3 text-right align-top font-black text-[#C92C1E]">
-                        {subscription.total_duration_days || 0} hari
-                      </td>
-
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {subscriptions.length === 0 ? (
+                    <tr>
                       <td
-                        className="p-3 text-center align-top"
-                        onClick={(event) => event.stopPropagation()}
+                        colSpan={7}
+                        className="p-8 text-center font-bold text-gray-400"
                       >
-                        <Link
-                          href={`/menu/subscribe/${subscription.id}`}
-                          className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                        >
-                          Detail
-                        </Link>
+                        Data subscription tidak ditemukan.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  ) : (
+                    subscriptions.map((subscription) => (
+                      <tr
+                        key={subscription.id}
+                        onClick={() => handleOpenSubscriptionDetail(subscription)}
+                        className="cursor-pointer transition-colors hover:bg-gray-50"
+                      >
+                        <td className="p-3 align-top">
+                          <Link
+                            href={`/menu/subscribe/${subscription.id}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className="font-black text-gray-900 transition-colors hover:text-[#C92C1E]"
+                          >
+                            {subscription.code || `SUB-${subscription.id}`}
+                          </Link>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            Order:{" "}
+                            {subscription.order?.code ||
+                              subscription.order?.id ||
+                              "-"}
+                          </p>
+                        </td>
 
-        {activeTab === "reconciliations" && (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-xs">
-              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="p-3 font-black">Reconciliation</th>
-                  <th className="p-3 font-black">Owner</th>
-                  <th className="p-3 font-black">Order</th>
-                  <th className="p-3 font-black">Closing</th>
-                  <th className="p-3 font-black">Status</th>
-                  <th className="p-3 text-right font-black">Selisih</th>
-                </tr>
-              </thead>
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {getOwnerName(subscription.owner)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {getOwnerCode(subscription.owner)}
+                          </p>
+                        </td>
 
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {reconciliations.length === 0 ? (
+                        <td className="p-3 align-top font-bold text-gray-700">
+                          {subscription.plan?.name || "-"}
+                        </td>
+
+                        <td className="p-3 align-top">
+                          <span
+                            className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
+                              subscription.status,
+                            )}`}
+                          >
+                            {subscription.status || "-"}
+                          </span>
+                        </td>
+
+                        <td className="p-3 align-top font-bold text-gray-600">
+                          {formatTanggalPendek(subscription.active_from)} -{" "}
+                          {formatTanggalPendek(subscription.active_until)}
+                        </td>
+
+                        <td className="p-3 text-right align-top font-black text-[#C92C1E]">
+                          {subscription.total_duration_days || 0} hari
+                        </td>
+
+                        <td
+                          className="p-3 text-center align-top"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <div className="flex flex-col gap-2 items-center">
+                            <Link
+                              href={`/menu/subscribe/${subscription.id}`}
+                              className="w-full rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            >
+                              Detail
+                            </Link>
+                            {String(subscription.status || "").toUpperCase() === "ACTIVE" && isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenUpgrade(subscription)}
+                                className="w-full rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-600 transition-colors hover:bg-amber-100 hover:text-amber-700"
+                              >
+                                Upgrade
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === "reconciliations" && (
+            <div className="w-full overflow-x-auto">
+              <table className="w-full min-w-[920px] text-left text-xs">
+                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="p-8 text-center font-bold text-gray-400"
-                    >
-                      Data reconciliation tidak ditemukan.
-                    </td>
+                    <th className="p-3 font-black">Reconciliation</th>
+                    <th className="p-3 font-black">Owner</th>
+                    <th className="p-3 font-black">Order</th>
+                    <th className="p-3 font-black">Closing</th>
+                    <th className="p-3 font-black">Status</th>
+                    <th className="p-3 text-right font-black">Selisih</th>
                   </tr>
-                ) : (
-                  reconciliations.map((reconciliation) => (
-                    <tr
-                      key={reconciliation.id}
-                      className="transition-colors hover:bg-gray-50"
-                    >
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {reconciliation.code || `REC-${reconciliation.id}`}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {reconciliation.match_type || "-"} •{" "}
-                          {formatTanggal(
-                            reconciliation.confirmed_at ||
+                </thead>
+
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {reconciliations.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="p-8 text-center font-bold text-gray-400"
+                      >
+                        Data reconciliation tidak ditemukan.
+                      </td>
+                    </tr>
+                  ) : (
+                    reconciliations.map((reconciliation) => (
+                      <tr
+                        key={reconciliation.id}
+                        className="transition-colors hover:bg-gray-50"
+                      >
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {reconciliation.code || `REC-${reconciliation.id}`}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {reconciliation.match_type || "-"} â€¢{" "}
+                            {formatTanggal(
+                              reconciliation.confirmed_at ||
                               reconciliation.created_at,
-                          )}
-                        </p>
-                      </td>
+                            )}
+                          </p>
+                        </td>
 
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {getOwnerName(reconciliation.owner)}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {getOwnerCode(reconciliation.owner)}
-                        </p>
-                      </td>
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {getOwnerName(reconciliation.owner)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {getOwnerCode(reconciliation.owner)}
+                          </p>
+                        </td>
 
-                      <td className="p-3 align-top font-bold text-gray-700">
-                        {reconciliation.order?.code ||
-                          reconciliation.order?.id ||
-                          "-"}
-                      </td>
+                        <td className="p-3 align-top font-bold text-gray-700">
+                          {reconciliation.order?.code ||
+                            reconciliation.order?.id ||
+                            "-"}
+                        </td>
 
-                      <td className="p-3 align-top font-bold text-gray-700">
-                        {reconciliation.closing?.code ||
-                          reconciliation.closing?.id ||
-                          "-"}
-                      </td>
+                        <td className="p-3 align-top font-bold text-gray-700">
+                          {reconciliation.closing?.code ||
+                            reconciliation.closing?.id ||
+                            "-"}
+                        </td>
 
-                      <td className="p-3 align-top">
-                        <span
-                          className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
-                            reconciliation.status,
-                          )}`}
-                        >
-                          {reconciliation.status || "-"}
-                        </span>
-                      </td>
+                        <td className="p-3 align-top">
+                          <span
+                            className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
+                              reconciliation.status,
+                            )}`}
+                          >
+                            {reconciliation.status || "-"}
+                          </span>
+                        </td>
 
-                      <td className="p-3 text-right align-top font-black text-[#C92C1E]">
-                        {formatRupiah(reconciliation.amount_difference)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <td className="p-3 text-right align-top font-black text-[#C92C1E]">
+                          {formatRupiah(reconciliation.amount_difference)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-        {activeTab === "issues" && (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-xs">
-              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="p-3 font-black">Issue</th>
-                  <th className="p-3 font-black">Owner</th>
-                  <th className="p-3 font-black">Order</th>
-                  <th className="p-3 font-black">Type</th>
-                  <th className="p-3 font-black">Status</th>
-                  <th className="p-3 font-black">Detected</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {issues.length === 0 ? (
+          {activeTab === "issues" && (
+            <div className="w-full overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-xs">
+                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="p-8 text-center font-bold text-gray-400"
-                    >
-                      Data issue tidak ditemukan.
-                    </td>
+                    <th className="p-3 font-black">Issue</th>
+                    <th className="p-3 font-black">Owner</th>
+                    <th className="p-3 font-black">Order</th>
+                    <th className="p-3 font-black">Type</th>
+                    <th className="p-3 font-black">Status</th>
+                    <th className="p-3 font-black">Detected</th>
                   </tr>
-                ) : (
-                  issues.map((issue) => (
-                    <tr
-                      key={issue.id}
-                      className="transition-colors hover:bg-gray-50"
-                    >
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {issue.code || `ISSUE-${issue.id}`}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-[11px] font-bold text-gray-400">
-                          {issue.description || "-"}
-                        </p>
-                      </td>
+                </thead>
 
-                      <td className="p-3 align-top">
-                        <p className="font-black text-gray-900">
-                          {getOwnerName(issue.owner)}
-                        </p>
-                        <p className="mt-1 text-[11px] font-bold text-gray-400">
-                          {getOwnerCode(issue.owner)}
-                        </p>
-                      </td>
-
-                      <td className="p-3 align-top font-bold text-gray-700">
-                        {issue.order?.code || issue.order?.id || "-"}
-                      </td>
-
-                      <td className="p-3 align-top font-bold text-gray-700">
-                        {issue.issue_type || "-"}
-                      </td>
-
-                      <td className="p-3 align-top">
-                        <span
-                          className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
-                            issue.status,
-                          )}`}
-                        >
-                          {issue.status || "-"}
-                        </span>
-                      </td>
-
-                      <td className="p-3 align-top font-bold text-gray-600">
-                        {formatTanggal(issue.detected_at || issue.created_at)}
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {issues.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="p-8 text-center font-bold text-gray-400"
+                      >
+                        Data issue tidak ditemukan.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                  ) : (
+                    issues.map((issue) => (
+                      <tr
+                        key={issue.id}
+                        className="transition-colors hover:bg-gray-50"
+                      >
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {issue.code || `ISSUE-${issue.id}`}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-[11px] font-bold text-gray-400">
+                            {issue.description || "-"}
+                          </p>
+                        </td>
+
+                        <td className="p-3 align-top">
+                          <p className="font-black text-gray-900">
+                            {getOwnerName(issue.owner)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-bold text-gray-400">
+                            {getOwnerCode(issue.owner)}
+                          </p>
+                        </td>
+
+                        <td className="p-3 align-top font-bold text-gray-700">
+                          {issue.order?.code || issue.order?.id || "-"}
+                        </td>
+
+                        <td className="p-3 align-top font-bold text-gray-700">
+                          {issue.issue_type || "-"}
+                        </td>
+
+                        <td className="p-3 align-top">
+                          <span
+                            className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
+                              issue.status,
+                            )}`}
+                          >
+                            {issue.status || "-"}
+                          </span>
+                        </td>
+
+                        <td className="p-3 align-top font-bold text-gray-600">
+                          {formatTanggal(issue.detected_at || issue.created_at)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       <ModalShell
@@ -1611,7 +1842,7 @@ export default function SubscriptionPage() {
                   label="Owner"
                   value={`${getOwnerCode(
                     selectedOrderDetail.order.owner,
-                  )} — ${getOwnerName(selectedOrderDetail.order.owner)}`}
+                  )} â€” ${getOwnerName(selectedOrderDetail.order.owner)}`}
                 />
                 <InfoItem
                   label="Plan"
@@ -1670,13 +1901,13 @@ export default function SubscriptionPage() {
                   label="Promotion"
                   value={
                     selectedOrderDetail.order.promotions &&
-                    selectedOrderDetail.order.promotions.length > 0
+                      selectedOrderDetail.order.promotions.length > 0
                       ? selectedOrderDetail.order.promotions
-                          .map((promotion) => promotion.name || promotion.code)
-                          .join(", ")
+                        .map((promotion) => promotion.name || promotion.code)
+                        .join(", ")
                       : selectedOrderDetail.order.promotion?.name ||
-                        selectedOrderDetail.order.promotion?.code ||
-                        "-"
+                      selectedOrderDetail.order.promotion?.code ||
+                      "-"
                   }
                 />
               </div>
@@ -1893,7 +2124,7 @@ export default function SubscriptionPage() {
                   label="Detected"
                   value={formatTanggal(
                     selectedOrderDetail.issue.detected_at ||
-                      selectedOrderDetail.issue.created_at,
+                    selectedOrderDetail.issue.created_at,
                   )}
                 />
               </div>
@@ -1924,7 +2155,7 @@ export default function SubscriptionPage() {
                   label="Owner"
                   value={`${getOwnerCode(
                     selectedSubscriptionDetail.subscription.owner,
-                  )} — ${getOwnerName(
+                  )} â€” ${getOwnerName(
                     selectedSubscriptionDetail.subscription.owner,
                   )}`}
                 />
@@ -1954,10 +2185,9 @@ export default function SubscriptionPage() {
                 />
                 <InfoItem
                   label="Duration"
-                  value={`${
-                    selectedSubscriptionDetail.subscription.total_duration_days ||
+                  value={`${selectedSubscriptionDetail.subscription.total_duration_days ||
                     0
-                  } hari`}
+                    } hari`}
                 />
                 <InfoItem
                   label="Order"
@@ -2020,7 +2250,7 @@ export default function SubscriptionPage() {
                   <option value="">Pilih Owner</option>
                   {ownerOptions.map((owner) => (
                     <option key={owner.ownerId} value={owner.ownerId}>
-                      {owner.ownerCode} — {owner.ownerName} — saldo{" "}
+                      {owner.ownerCode} â€” {owner.ownerName} â€” saldo{" "}
                       {formatRupiah(owner.balance)}
                     </option>
                   ))}
@@ -2099,8 +2329,8 @@ export default function SubscriptionPage() {
                               promotionIds: event.target.checked
                                 ? [...prev.promotionIds, promotion.id]
                                 : prev.promotionIds.filter(
-                                    (id) => id !== promotion.id,
-                                  ),
+                                  (id) => id !== promotion.id,
+                                ),
                             }))
                           }
                           className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
@@ -2378,7 +2608,6 @@ export default function SubscriptionPage() {
               </label>
             </div>
           </div>
-
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -2414,5 +2643,3 @@ function InfoItem({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-

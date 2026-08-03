@@ -567,7 +567,7 @@ function MitraSalesDetailPageInner() {
                 <option value="CALL">CALL (Telepon)</option>
                 <option value="CHAT">CHAT (WhatsApp / Message)</option>
               </select>
-              <input type="datetime-local" value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <input type="datetime-local" max={new Date().toISOString().slice(0, 16)} value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
               <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={2} placeholder="Hasil pembahasan dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
               <button type="submit" disabled={saving} className="w-full rounded-2xl border border-slate-900 bg-white px-5 py-3 text-xs font-black text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed">Simpan Log Interaksi</button>
             </div>

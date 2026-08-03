@@ -510,78 +510,88 @@ export default function BantuanPage() {
   return (
     <div className="space-y-6 font-sans text-[#1C1C1E]">
       {/* Header Banner */}
-      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-[#C92C1E]">
-              <HelpIcon className="h-6 w-6" />
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
+        <div className="flex flex-col items-start justify-between gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+              <span>Menu</span>
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={3}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+              <span className="text-[#C92C1E]">Pusat Bantuan</span>
             </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-[#C92C1E]">
-                Pusat Informasi & Bantuan
-              </p>
-              <h1 className="text-2xl font-black text-gray-950">
-                Pusat Bantuan Piposmart
-              </h1>
-            </div>
+
+            <h1 className="text-2xl font-black tracking-tight text-gray-900">
+              Pusat Informasi & Bantuan
+            </h1>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Temukan alur bisnis, tutorial, glosarium, dan diskusikan pertanyaan Anda di sini.
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* 4 Main Sub-Menus / Tabs */}
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
-          <button
-            type="button"
-            onClick={() => setActiveTab("business-flow")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
-              activeTab === "business-flow"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <FlowChartIcon className="h-4 w-4" />
-            <span>1. Alur Bisnis Framework</span>
-          </button>
+      {/* 4 Main Sub-Menus / Tabs */}
+      <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <button
+          onClick={() => setActiveTab("business-flow")}
+          className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
+            activeTab === "business-flow"
+              ? "bg-white text-[#C92C1E] shadow-sm"
+              : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+          }`}
+        >
+          <FlowChartIcon className="h-4 w-4" />
+          <span>Alur Bisnis Framework</span>
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("tutorials")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
-              activeTab === "tutorials"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <LightBulbIcon className="h-4 w-4" />
-            <span>2. Tutorial Menu</span>
-          </button>
+        <button
+          onClick={() => setActiveTab("tutorials")}
+          className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
+            activeTab === "tutorials"
+              ? "bg-white text-[#C92C1E] shadow-sm"
+              : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+          }`}
+        >
+          <LightBulbIcon className="h-4 w-4" />
+          <span>Tutorial Menu</span>
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("glosarium")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
-              activeTab === "glosarium"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <BookOpenIcon className="h-4 w-4" />
-            <span>3. Glosarium CRM</span>
-          </button>
+        <button
+          onClick={() => setActiveTab("glosarium")}
+          className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
+            activeTab === "glosarium"
+              ? "bg-white text-[#C92C1E] shadow-sm"
+              : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+          }`}
+        >
+          <BookOpenIcon className="h-4 w-4" />
+          <span>Glosarium CRM</span>
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("discussion")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
-              activeTab === "discussion"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <ChatBubbleIcon className="h-4 w-4" />
-            <span>4. Diskusi Thread</span>
-          </button>
-        </div>
-      </section>
+        <button
+          onClick={() => setActiveTab("discussion")}
+          className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
+            activeTab === "discussion"
+              ? "bg-white text-[#C92C1E] shadow-sm"
+              : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+          }`}
+        >
+          <ChatBubbleIcon className="h-4 w-4" />
+          <span>Diskusi Thread</span>
+        </button>
+      </div>
 
       {/* ======================================================================== */}
       {/* TAB 1: ALUR BISNIS FRAMEWORK */}
