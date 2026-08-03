@@ -44,13 +44,9 @@ export default function AutoTableColumnVisibilityEnhancer() {
 
     const cleanupMountedControls = () => {
       mountedControlsRef.current.forEach(({ root, host, table }) => {
-<<<<<<< HEAD
-        setTimeout(() => root.unmount(), 0);
-=======
         setTimeout(() => {
           root.unmount();
         }, 0);
->>>>>>> satria
         host.remove();
         delete table.dataset.columnVisibilityEnhanced;
       });
@@ -61,13 +57,9 @@ export default function AutoTableColumnVisibilityEnhancer() {
       mountedControlsRef.current.forEach((mountedControl, tableId) => {
         const { root, host, table } = mountedControl;
         if (!table.isConnected || !isTableVisible(table)) {
-<<<<<<< HEAD
-          setTimeout(() => root.unmount(), 0);
-=======
           setTimeout(() => {
             root.unmount();
           }, 0);
->>>>>>> satria
           host.remove();
           delete table.dataset.columnVisibilityEnhanced;
           mountedControlsRef.current.delete(tableId);
