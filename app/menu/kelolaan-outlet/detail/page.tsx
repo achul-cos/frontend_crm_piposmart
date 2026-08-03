@@ -153,16 +153,16 @@ function OutletDetailPageInner() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
               <div className="relative z-10">
-                <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Saldo Owner</p>
+                <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Saldo Aplikasi</p>
                 <p className="text-xs font-semibold text-red-100/90 mt-1 mb-2">
-                  Saldo sekarang tercatat di level Owner (dipakai bersama seluruh outlet), bukan per outlet.
+                  Saldo aplikasi sekarang tercatat di level Owner (dipakai bersama seluruh outlet), bukan per outlet.
                 </p>
                 {detail.owner.id ? (
                   <Link
                     href={`/menu/owner-outlet/${detail.owner.id}`}
                     className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-xs font-black text-white hover:bg-white/25 transition-colors"
                   >
-                    Lihat saldo di halaman Owner →
+                    Lihat saldo aplikasi di halaman Owner →
                   </Link>
                 ) : null}
               </div>

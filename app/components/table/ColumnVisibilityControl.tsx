@@ -27,7 +27,7 @@ function shouldHideByDefault(label: string) {
     return false;
   }
 
-  if (["payment", "wallet", "ledger", "saldo owner"].includes(normalized)) {
+  if (["payment", "wallet", "ledger", "saldo owner", "saldo aplikasi"].includes(normalized)) {
     return true;
   }
 

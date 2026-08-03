@@ -405,7 +405,7 @@ export default function SubscriptionDetailPage({ params }: { params: Promise<{ i
             {order?.balance_shortfall_amount && (
               <FieldBox label="Balance Shortfall" span>
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">
-                  Order melebihi saldo owner sebesar {formatRupiah(order.balance_shortfall_amount)}
+                  Order melebihi saldo aplikasi sebesar {formatRupiah(order.balance_shortfall_amount)}
                 </span>
               </FieldBox>
             )}

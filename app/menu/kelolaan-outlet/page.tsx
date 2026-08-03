@@ -646,7 +646,7 @@ function OverviewTable({
           <th className="px-4 py-4 font-bold">Nama Outlet</th>
           <th className="px-4 py-4 font-bold">Owner</th>
           <th className="px-4 py-4 font-bold">Kota / Provinsi</th>
-          <th className="px-4 py-4 font-bold">Saldo Owner</th>
+          <th className="px-4 py-4 font-bold">Saldo Aplikasi</th>
           <th className="px-4 py-4 text-center font-bold">Status</th>
           <th className="px-4 py-4 text-center font-bold">Aksi</th>
         </tr>
@@ -689,7 +689,7 @@ function OverviewTable({
                   href={`/menu/owner-outlet/${item.owner.id}`}
                   className="text-[#C92C1E] underline decoration-dotted underline-offset-2 hover:text-red-700"
                 >
-                  Lihat saldo owner
+                  Lihat saldo aplikasi
                 </Link>
               ) : (
                 "—"

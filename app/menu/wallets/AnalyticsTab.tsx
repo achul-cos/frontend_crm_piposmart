@@ -7,9 +7,9 @@ import Sprint14g1Board, {
 const sections: Sprint14g1Section[] = [
   {
     id: "wallet-revenue",
-    title: "Topup dan Kesiapan Saldo Owner",
+    title: "Topup dan Kesiapan Saldo Aplikasi",
     description:
-      "Membaca omset topup, frekuensi transaksi, dan distribusi saldo owner agar tim bisa melihat kesiapan transaksi secara lebih jelas.",
+      "Membaca omset topup, frekuensi transaksi, dan distribusi saldo aplikasi agar tim bisa melihat kesiapan transaksi secara lebih jelas.",
     diagrams: [
       { module: "wallets", key: "topup-revenue-trend" },
       { module: "wallets", key: "topup-transaction-count" },
@@ -33,8 +33,8 @@ export default function WalletAnalyticsTab() {
   return (
     <Sprint14g1Board
       heroLabel="Analytics Wallet"
-      title="Analitik Wallet, Topup, dan Saldo Owner"
-      description="Halaman ini fokus pada kesehatan cash-in topup dan kesiapan saldo owner. Diagram-diagramnya membantu membaca apakah topup sudah berubah menjadi transaksi langganan atau masih banyak saldo yang tertahan."
+      title="Analitik Wallet, Topup, dan Saldo Aplikasi"
+      description="Halaman ini fokus pada kesehatan cash-in topup dan kesiapan saldo aplikasi. Diagram-diagramnya membantu membaca apakah topup sudah berubah menjadi transaksi langganan atau masih banyak saldo yang tertahan."
       sections={sections}
     />
   );

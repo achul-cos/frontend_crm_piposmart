@@ -642,7 +642,7 @@ export default function MitraSalesPage() {
                 <option value="ALL">Semua Type</option>
                 {partnerTypes.map((item) => (
                   <option key={item.id} value={item.code}>
-                    {item.code}
+                    {item.name || item.code}
                   </option>
                 ))}
               </select>

@@ -146,7 +146,7 @@ export default function MitraSalesFormModal({
                     <option value="">Pilih jenis mitra</option>
                     {partnerTypes.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.code} - {item.name}
+                        {item.name || item.code}
                       </option>
                     ))}
                   </select>

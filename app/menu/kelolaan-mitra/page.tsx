@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import {
@@ -1014,7 +1014,7 @@ export default function KelolaanMitraPage() {
                 <option value="ALL">Semua Type</option>
                 {partnerTypes.map((item) => (
                   <option key={item.id} value={item.code}>
-                    {item.code}
+                    {item.name || item.code}
                   </option>
                 ))}
               </select>
@@ -1267,7 +1267,7 @@ export default function KelolaanMitraPage() {
                       <option value="">Pilih jenis mitra</option>
                       {partnerTypes.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {item.code} - {item.name}
+                          {item.name || item.code}
                         </option>
                       ))}
                     </select>

@@ -1914,7 +1914,7 @@ export default function SubscriptionPage() {
 
               {selectedOrderDetail.order.balance_shortfall_amount && (
                 <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-black text-amber-700">
-                  Order melebihi saldo owner sebesar{" "}
+                  Order melebihi saldo aplikasi sebesar{" "}
                   {formatRupiah(selectedOrderDetail.order.balance_shortfall_amount)}
                 </p>
               )}
