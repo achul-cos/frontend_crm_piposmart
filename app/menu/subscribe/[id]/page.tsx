@@ -171,6 +171,7 @@ export default function SubscriptionDetailPage({ params }: { params: Promise<{ i
   usePageTitle("Detail Subscribe");
   const resolvedParams = use(params);
   const subscriptionId = Number(resolvedParams.id);
+  const isInvalidSubscriptionId = !subscriptionId || Number.isNaN(subscriptionId);
 
   const [detail, setDetail] = useState<SubscriptionDetailData | null>(null);
   const [outlet, setOutlet] = useState<OutletDetail | null>(null);
@@ -178,40 +179,45 @@ export default function SubscriptionDetailPage({ params }: { params: Promise<{ i
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!subscriptionId || Number.isNaN(subscriptionId)) {
-      setError("ID subscription tidak valid.");
-      setIsLoading(false);
-      return;
+    if (isInvalidSubscriptionId) {
+      const timer = window.setTimeout(() => {
+        setError("ID subscription tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
+          const result = await getSubscriptionDetail(subscriptionId);
+          const subscription = result.subscription;
+          const outletDetail = subscription?.outlet_id
+            ? await getGlobalOutlet(subscription.outlet_id).catch(() => null)
+            : null;
 
-    (async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const result = await getSubscriptionDetail(subscriptionId);
-        const subscription = result.subscription;
-        const outletDetail = subscription?.outlet_id
-          ? await getGlobalOutlet(subscription.outlet_id).catch(() => null)
-          : null;
-
-        if (cancelled) return;
-        setDetail(result);
-        setOutlet(outletDetail);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Gagal memuat detail subscription.");
+          if (cancelled) return;
+          setDetail(result);
+          setOutlet(outletDetail);
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Gagal memuat detail subscription.");
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
+      })();
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [subscriptionId]);
+  }, [isInvalidSubscriptionId, subscriptionId]);
 
   const subscription = detail?.subscription;
   const order = detail?.order;

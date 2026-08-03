@@ -139,7 +139,7 @@ export const GLOSARIUM_DATA: GlosariumItem[] = [
     category: "account",
     categoryLabel: "Manajemen Akun & Lisensi",
     technicalDef: "Tingkat kewenangan akun pengguna dalam sistem: Admin (Akses Penuh), Supervisor (Manajemen Tim & Target), Sales (Operasional Prospek).",
-    analogy: "Pangkat dalam organisasi: Direktur (Admin), Manajer Lapangan (Supervisor), dan Staf Lapangan (Sales).",
+    analogy: "Pangkat dalam organisasi: Admin kantor, Supervisor lapangan, dan Staf Sales.",
     location: "Menu Kelola User (/menu/kelola-user)",
   },
 ];

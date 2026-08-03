@@ -246,20 +246,11 @@ function PhoneInput({
 }) {
   const initialCountry = getPhoneCountryByDialCode(value);
   const [selectedCountryCode, setSelectedCountryCode] = useState(initialCountry.code);
-
+  const detectedCountry = value ? getPhoneCountryByDialCode(value) : null;
   const selectedCountry =
+    detectedCountry ||
     PHONE_COUNTRY_OPTIONS.find((country) => country.code === selectedCountryCode) ||
     initialCountry;
-
-  useEffect(() => {
-    if (!value) return;
-
-    const detectedCountry = getPhoneCountryByDialCode(value);
-
-    if (value.startsWith(detectedCountry.dialCode)) {
-      setSelectedCountryCode((currentCode) => currentCode || detectedCountry.code);
-    }
-  }, [value]);
 
   const nationalNumber = stripDialCode(value, selectedCountry.dialCode);
   const formattedNationalNumber = formatNationalPhoneByCountry(
@@ -386,20 +377,24 @@ function OutletNamesEditor<T extends EditProfileItem>({
   const [initialOutletCount, setInitialOutletCount] = useState(0);
 
   useEffect(() => {
-    const rows: OutletRow[] =
-      item.outlets && item.outlets.length > 0
-        ? item.outlets.map((outletItem) => ({
-            namaOutlet: outletItem.namaOutlet || "",
-            noHpOutlet: outletItem.noHpOutlet || item.noHpOutlet || "",
-          }))
-        : item.outlet
-          ? [{ namaOutlet: item.outlet, noHpOutlet: item.noHpOutlet || "" }]
-          : [];
+    const timer = window.setTimeout(() => {
+      const rows: OutletRow[] =
+        item.outlets && item.outlets.length > 0
+          ? item.outlets.map((outletItem) => ({
+              namaOutlet: outletItem.namaOutlet || "",
+              noHpOutlet: outletItem.noHpOutlet || item.noHpOutlet || "",
+            }))
+          : item.outlet
+            ? [{ namaOutlet: item.outlet, noHpOutlet: item.noHpOutlet || "" }]
+            : [];
 
-    setOutletRows(rows);
-    setInitialOutletCount(rows.length);
-    setIsOutletListOpen(false);
-  }, [item.no]);
+      setOutletRows(rows);
+      setInitialOutletCount(rows.length);
+      setIsOutletListOpen(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [item.no, item.noHpOutlet, item.outlet, item.outlets]);
 
   const syncOutlets = (nextOutlets: OutletRow[]) => {
     const cleanedOutlets = nextOutlets.map((outletItem) => ({

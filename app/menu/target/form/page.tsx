@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePageTitle } from '@/app/lib/hooks/usePageTitle';
+import { authFetchJson } from '@/app/lib/api';
 
 export type TargetFormMode = "TARGET_BULK" | "KPI_DEFINITION" | "RECOMPUTE";
 
@@ -193,8 +194,6 @@ function TargetFormModal({
   );
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
 const DEFAULT_PERIOD = {
   periodYear: new Date().getFullYear(),
   periodMonth: new Date().getMonth() + 1,
@@ -211,44 +210,13 @@ const EMPTY_FORM: TargetFormState = {
   thresholdNear: "80.00",
 };
 
-function getAccessToken() {
-  if (typeof window === "undefined") return "";
-  return (
-    localStorage.getItem("piposmart_access_token") ||
-    localStorage.getItem("piposmart_token") ||
-    ""
-  );
-}
-
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   return "Terjadi kesalahan yang tidak diketahui.";
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAccessToken();
-
-  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    credentials: "include",
-  });
-
-  const json = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      json?.error?.message ||
-        json?.message ||
-        `Request gagal dengan status ${response.status}`,
-    );
-  }
-
-  return json as T;
+  return authFetchJson<T>(path, options);
 }
 
 function unwrapList<T>(response: { data?: T[] | { items?: T[] } }) {
@@ -448,7 +416,7 @@ export default function TargetPage() {
       .reduce((total, item) => total + Number(item.weight || 0), 0);
   }, [definitions]);
 
-  const loadData = async (showLoading = true) => {
+  const loadData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setPageError("");
 
@@ -482,10 +450,12 @@ export default function TargetPage() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  };
+  }, [periodMonth, periodYear]);
 
   useEffect(() => {
-    void loadData();
+    const initialTimer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
 
     const interval = window.setInterval(() => {
       void loadData(false);
@@ -498,10 +468,11 @@ export default function TargetPage() {
     window.addEventListener("focus", handleFocus);
 
     return () => {
+      window.clearTimeout(initialTimer);
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [periodYear, periodMonth]);
+  }, [loadData]);
 
   const openModal = (mode: TargetFormMode) => {
     setFormMode(mode);
@@ -1143,3 +1114,4 @@ export default function TargetPage() {
     </div>
   );
 }
+

@@ -542,10 +542,13 @@ function SummaryCard({ card }: { card: BoardSummaryCard }) {
 }
 
 function AnalyticsProvinceMap({ result, metricLabel }: { result?: AnalyticsQueryResult; metricLabel: string }) {
-  const rows = (result?.extra?.regions as Record<string, unknown>[] | undefined) || result?.table || [];
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
 
   const { countByProvince, unmatchedCount } = useMemo(() => {
+    const rows =
+      (result?.extra?.regions as Record<string, unknown>[] | undefined) ||
+      result?.table ||
+      [];
     const counts = new Map<string, number>();
     let unmatched = 0;
 
@@ -567,7 +570,7 @@ function AnalyticsProvinceMap({ result, metricLabel }: { result?: AnalyticsQuery
     }
 
     return { countByProvince: counts, unmatchedCount: unmatched };
-  }, [rows]);
+  }, [result?.extra?.regions, result?.table]);
 
   const maxCount = Math.max(1, ...Array.from(countByProvince.values(), (value) => value || 0));
 
@@ -1027,13 +1030,10 @@ function DiagramCard({
   const chartCaptureRef = useRef<HTMLDivElement | null>(null);
   const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  if (!item) return null;
-  const allowMetricSelector =
-    Boolean(item.supported_metrics?.length) && !usesAllMetricsByDefault(item);
-  const supportedMetrics = item.supported_metrics || [];
 
   const handleExport = useCallback(
     async (format: ExportFormat) => {
+      if (!item) return;
       setExportError(null);
       setExportingFormat(format);
       try {
@@ -1059,6 +1059,12 @@ function DiagramCard({
     },
     [activeFilterLabel, item, result],
   );
+
+  if (!item) return null;
+
+  const allowMetricSelector =
+    Boolean(item.supported_metrics?.length) && !usesAllMetricsByDefault(item);
+  const supportedMetrics = item.supported_metrics || [];
 
   return (
     <div className="overflow-hidden rounded-[30px] border border-gray-200/70 bg-white shadow-sm">
@@ -1328,12 +1334,20 @@ export default function Sprint14g1Board({
   );
 
   useEffect(() => {
-    loadCatalog();
+    const timer = window.setTimeout(() => {
+      void loadCatalog();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadCatalog]);
 
   useEffect(() => {
     if (!isCatalogLoading && !catalogError && Object.keys(catalogMap).length > 0) {
-      runQueries(appliedFilters);
+      const timer = window.setTimeout(() => {
+        void runQueries(appliedFilters);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
   }, [appliedFilters, catalogError, catalogMap, isCatalogLoading, runQueries]);
 

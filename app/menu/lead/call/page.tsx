@@ -292,41 +292,52 @@ export default function CallPage({
 
   // Load catalog packages & all plans once on mount
   useEffect(() => {
-    getCatalogPackages().then(setCatalogPackages).catch(console.error);
-    getCatalogPlans().then((plans) => {
-      setCatalogPlans(plans);
-      // Pre-select first plan
-      if (plans.length > 0) {
-        setSalesPayload(prev => ({ ...prev, planId: prev.planId ?? plans[0].id }));
-      }
-    }).catch(console.error);
+    const timer = window.setTimeout(() => {
+      getCatalogPackages().then(setCatalogPackages).catch(console.error);
+      getCatalogPlans()
+        .then((plans) => {
+          setCatalogPlans(plans);
+          if (plans.length > 0) {
+            setSalesPayload((prev) => ({ ...prev, planId: prev.planId ?? plans[0].id }));
+          }
+        })
+        .catch(console.error);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   // When planId changes, reload eligible promotions
   useEffect(() => {
-    if (salesPayload.planId) {
-      getEligiblePromotions(salesPayload.planId)
-        .then(setEligiblePromotions)
-        .catch(() => setEligiblePromotions([]));
-    } else {
-      setEligiblePromotions([]);
-    }
+    const timer = window.setTimeout(() => {
+      if (salesPayload.planId) {
+        getEligiblePromotions(salesPayload.planId)
+          .then(setEligiblePromotions)
+          .catch(() => setEligiblePromotions([]));
+      } else {
+        setEligiblePromotions([]);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [salesPayload.planId]);
 
   useEffect(() => {
     if (!customer) return;
 
-    // Setiap popup call dibuka, status harus mulai dari none.
-    // Jangan ambil callStatus/chatStatus lama dari customer, supaya remarks belum terbuka.
-    setCallStatus("");
-    setChatStatus("");
-    setFollowUpDate(getTodayInputDate());
-    setCallTime(getCurrentDateTimeLocal());
-    setSelectedRemark("");
-    setConclusion("");
-    setCurrentStep(1);
-    setTrainingPayload(getDefaultTrainingPayload());
-    setSalesPayload(getDefaultSalesPayload());
+    const timer = window.setTimeout(() => {
+      setCallStatus("");
+      setChatStatus("");
+      setFollowUpDate(getTodayInputDate());
+      setCallTime(getCurrentDateTimeLocal());
+      setSelectedRemark("");
+      setConclusion("");
+      setCurrentStep(1);
+      setTrainingPayload(getDefaultTrainingPayload());
+      setSalesPayload(getDefaultSalesPayload());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [customer]);
 
   useEffect(() => {
@@ -354,7 +365,9 @@ export default function CallPage({
   const selectedRemarkScore = getRemarkScoreFromValue(selectedRemark);
   const selectedRemarkLabel = getRemarkLabelFromValue(selectedRemark);
 
-  const isStatusComplete = callStatus.trim() !== "" && chatStatus.trim() !== "";
+  const hasCallStatus = callStatus.trim() !== "";
+  const hasChatStatus = chatStatus.trim() !== "";
+  const isStatusComplete = hasCallStatus || hasChatStatus;
   const canShowRemarks = isStatusComplete;
   const canShowConclusion = canShowRemarks && selectedRemark !== "";
   const canSave =
@@ -386,7 +399,7 @@ export default function CallPage({
     event.preventDefault();
 
     if (!canSave) {
-      alert("Lengkapi Status Call, Status Chat, Remarks, dan Kesimpulan terlebih dahulu.");
+      alert("Lengkapi minimal salah satu Status Call atau Status Chat, lalu Remarks dan Kesimpulan.");
       return;
     }
 
@@ -627,6 +640,7 @@ export default function CallPage({
                     <input
                       type="datetime-local"
                       value={callTime}
+                      max={new Date().toISOString().slice(0, 16)}
                       onChange={(event) => setCallTime(event.target.value)}
                       className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
                     />

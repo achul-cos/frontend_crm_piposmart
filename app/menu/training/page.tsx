@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
   fetchTrainings,
   getSalesList,
+  getProfile,
   type TrainingItem,
   type UserResponse,
 } from "@/app/lib/api";
@@ -21,6 +22,11 @@ export default function TrainingPage() {
   const [trainings, setTrainings] = useState<TrainingItem[]>([]);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentRole, setCurrentRole] = useState(() =>
+    typeof window !== "undefined"
+      ? localStorage.getItem("piposmart_user_role") || ""
+      : ""
+  );
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [salesFilter, setSalesFilter] = useState("");
@@ -29,6 +35,22 @@ export default function TrainingPage() {
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const limit = 20;
+  const isSales = currentRole.toUpperCase() === "SALES";
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        if (profile.role) {
+          setCurrentRole(profile.role);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("piposmart_user_role", profile.role);
+          }
+        }
+      })
+      .catch(() => {
+        // pakai fallback localStorage
+      });
+  }, []);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -39,14 +61,16 @@ export default function TrainingPage() {
           limit,
           status: statusFilter || undefined,
           training_type: typeFilter || undefined,
-          sales_id: salesFilter ? Number(salesFilter) : undefined,
+          sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
           scheduled_from: dateFrom || undefined,
           scheduled_to: dateTo || undefined,
         }),
-        getSalesList().catch((err) => {
-          console.warn("Failed to fetch sales list, user might not have permission:", err);
-          return [];
-        }),
+        isSales
+          ? Promise.resolve<UserResponse[]>([])
+          : getSalesList().catch((err) => {
+              console.warn("Failed to fetch sales list, user might not have permission:", err);
+              return [];
+            }),
       ]);
 
       setTrainings(trainingData.items || []);
@@ -66,9 +90,10 @@ export default function TrainingPage() {
 
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, typeFilter, salesFilter, dateFrom, dateTo]);
+  }, [page, statusFilter, typeFilter, salesFilter, dateFrom, dateTo, isSales]);
 
   const totalPages = Math.ceil(totalItems / limit) || 1;
+  const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
 
   const formatDateTime = (str?: string) => {
     if (!str) return "-";
@@ -92,7 +117,7 @@ export default function TrainingPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 font-sans text-[#1C1C1E]">
+    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden space-y-6 font-sans text-[#1C1C1E]">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
@@ -109,8 +134,9 @@ export default function TrainingPage() {
         </div>
       </div>
 
-      <div className="flex w-max flex-wrap rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
-        <button
+      <div className="max-w-full overflow-x-auto">
+        <div className="inline-flex min-w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+          <button
           onClick={() => setActiveTab("list")}
           className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "list"
@@ -119,21 +145,21 @@ export default function TrainingPage() {
           }`}
         >
           Daftar Training
-        </button>
-        <button
+          </button>
+          <button
           onClick={() => setActiveTab("calendar")}
           className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "calendar"
               ? "bg-white text-[#C92C1E] shadow-sm"
               : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
           }`}
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Kalender
-        </button>
-        <button
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Kalender
+          </button>
+          <button
           onClick={() => setActiveTab("analytics")}
           className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "analytics"
@@ -142,7 +168,8 @@ export default function TrainingPage() {
           }`}
         >
           Analitik
-        </button>
+          </button>
+        </div>
       </div>
 
       {activeTab === "analytics" ? (
@@ -203,26 +230,32 @@ export default function TrainingPage() {
                 <option value="ONLINE">Online (Virtual)</option>
               </select>
 
-              <select
-                value={salesFilter}
-                onChange={(e) => {
-                  setSalesFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
-              >
-                <option value="">Semua PIC Sales</option>
-                {salesList.map((sales) => (
-                  <option key={sales.id} value={sales.id}>
-                    {sales.name}
-                  </option>
-                ))}
-              </select>
+              {visibleSalesFilter ? (
+                <select
+                  value={salesFilter}
+                  onChange={(e) => {
+                    setSalesFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
+                >
+                  <option value="">Semua PIC Sales</option>
+                  {salesList.map((sales) => (
+                    <option key={sales.id} value={sales.id}>
+                      {sales.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm">
+                  Menampilkan riwayat training milik Anda
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full min-w-[1200px] text-left text-sm text-gray-600">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4">Jadwal Training</th>

@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
   fetchCustomerInteractions,
   getSalesList,
+  getProfile,
   type InteractionItem,
   type UserResponse,
 } from "@/app/lib/api";
@@ -17,6 +18,11 @@ export default function InteractPage() {
   const [interactions, setInteractions] = useState<InteractionItem[]>([]);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentRole, setCurrentRole] = useState(() =>
+    typeof window !== "undefined"
+      ? localStorage.getItem("piposmart_user_role") || ""
+      : ""
+  );
   const [typeFilter, setTypeFilter] = useState("");
   const [salesFilter, setSalesFilter] = useState("");
   const [scoreFilter, setScoreFilter] = useState("");
@@ -25,6 +31,22 @@ export default function InteractPage() {
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const limit = 20;
+  const isSales = currentRole.toUpperCase() === "SALES";
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        if (profile.role) {
+          setCurrentRole(profile.role);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("piposmart_user_role", profile.role);
+          }
+        }
+      })
+      .catch(() => {
+        // pakai fallback localStorage bila profile gagal dimuat
+      });
+  }, []);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -34,12 +56,17 @@ export default function InteractPage() {
           page,
           limit,
           type: typeFilter || undefined,
-          sales_id: salesFilter ? Number(salesFilter) : undefined,
+          sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
           score: scoreFilter ? Number(scoreFilter) : undefined,
           interaction_from: dateFrom || undefined,
           interaction_to: dateTo || undefined,
         }),
-        getSalesList(),
+        isSales
+          ? Promise.resolve<UserResponse[]>([])
+          : getSalesList().catch((err) => {
+              console.warn("Failed to fetch sales list, user might not have permission:", err);
+              return [];
+            }),
       ]);
 
       setInteractions(interactData.items || []);
@@ -59,9 +86,11 @@ export default function InteractPage() {
 
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, typeFilter, salesFilter, scoreFilter, dateFrom, dateTo]);
+  }, [page, typeFilter, salesFilter, scoreFilter, dateFrom, dateTo, isSales]);
 
   const totalPages = Math.ceil(totalItems / limit) || 1;
+
+  const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
 
   const formatDateTime = (str?: string) => {
     if (!str) return "-";
@@ -85,8 +114,21 @@ export default function InteractPage() {
     return <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">0 (Tidak Potensial)</span>;
   };
 
+  const getTypeBadgeClass = (type: string) => {
+    switch (type) {
+      case "CALL":
+        return "bg-blue-100 text-blue-700";
+      case "CHAT":
+        return "bg-emerald-100 text-emerald-700";
+      case "CALL_CHAT":
+        return "bg-violet-100 text-violet-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-7xl space-y-6 font-sans text-[#1C1C1E]">
+    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden space-y-6 font-sans text-[#1C1C1E]">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
@@ -103,8 +145,9 @@ export default function InteractPage() {
         </div>
       </div>
 
-      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
-        <button
+      <div className="max-w-full overflow-x-auto">
+        <div className="inline-flex min-w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+          <button
           onClick={() => setActiveTab("list")}
           className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "list"
@@ -113,8 +156,8 @@ export default function InteractPage() {
           }`}
         >
           Data Interaksi
-        </button>
-        <button
+          </button>
+          <button
           onClick={() => setActiveTab("analytics")}
           className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "analytics"
@@ -123,7 +166,8 @@ export default function InteractPage() {
           }`}
         >
           Analitik
-        </button>
+          </button>
+        </div>
       </div>
 
       {activeTab === "analytics" ? (
@@ -166,23 +210,30 @@ export default function InteractPage() {
                 <option value="">Semua Tipe (Call/Chat)</option>
                 <option value="CALL">Call Saja</option>
                 <option value="CHAT">Chat Saja</option>
+                <option value="CALL_CHAT">Call + Chat</option>
               </select>
 
-              <select
-                value={salesFilter}
-                onChange={(e) => {
-                  setSalesFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
-              >
-                <option value="">Semua PIC Sales</option>
-                {salesList.map((sales) => (
-                  <option key={sales.id} value={sales.id}>
-                    {sales.name}
-                  </option>
-                ))}
-              </select>
+              {visibleSalesFilter ? (
+                <select
+                  value={salesFilter}
+                  onChange={(e) => {
+                    setSalesFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
+                >
+                  <option value="">Semua PIC Sales</option>
+                  {salesList.map((sales) => (
+                    <option key={sales.id} value={sales.id}>
+                      {sales.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm">
+                  Menampilkan riwayat interaksi milik Anda
+                </div>
+              )}
 
               <select
                 value={scoreFilter}
@@ -201,8 +252,8 @@ export default function InteractPage() {
             </div>
           </div>
 
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full min-w-[1200px] text-left text-sm text-gray-600">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table className="w-full min-w-[960px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4">Waktu Interaksi</th>
@@ -247,12 +298,22 @@ export default function InteractPage() {
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span
-                          className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-                            row.type === "CALL" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
-                          }`}
+                          className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${getTypeBadgeClass(row.type)}`}
                         >
                           {row.type}
                         </span>
+                        <div className="mt-2 flex flex-col items-center gap-1 text-[10px] font-bold">
+                          {row.call_status ? (
+                            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">
+                              Call: {row.call_status}
+                            </span>
+                          ) : null}
+                          {row.chat_status ? (
+                            <span className="rounded-full bg-fuchsia-50 px-2 py-0.5 text-fuchsia-700">
+                              Chat: {row.chat_status}
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="mt-1 text-[10px] font-bold text-gray-500">{row.status_after}</div>
                       </td>
                       <td className="px-4 py-4 text-center">

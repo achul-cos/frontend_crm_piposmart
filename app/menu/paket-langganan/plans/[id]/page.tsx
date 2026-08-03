@@ -208,6 +208,7 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
   usePageTitle("Detail Plan");
   const resolvedParams = use(params);
   const planId = Number(resolvedParams.id);
+  const isInvalidPlanId = !planId || Number.isNaN(planId);
 
   const [item, setItem] = useState<CatalogPlanItem | null>(null);
   const [pkg, setPkg] = useState<CatalogPackageItem | null>(null);
@@ -216,43 +217,48 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!planId || Number.isNaN(planId)) {
-      setError("ID plan tidak valid.");
-      setIsLoading(false);
-      return;
+    if (isInvalidPlanId) {
+      const timer = window.setTimeout(() => {
+        setError("ID plan tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
 
-    (async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+          const detail = await planApi.get(planId);
+          const [packageDetail, eligiblePromotions] = await Promise.all([
+            packageApi.get(detail.package.id).catch(() => null),
+            getEligiblePromotions(planId).catch(() => []),
+          ]);
 
-        const detail = await planApi.get(planId);
-        const [packageDetail, eligiblePromotions] = await Promise.all([
-          packageApi.get(detail.package.id).catch(() => null),
-          getEligiblePromotions(planId).catch(() => []),
-        ]);
+          if (cancelled) return;
 
-        if (cancelled) return;
-
-        setItem(detail);
-        setPkg(packageDetail);
-        setPromotions(eligiblePromotions);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Gagal memuat detail plan.");
+          setItem(detail);
+          setPkg(packageDetail);
+          setPromotions(eligiblePromotions);
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Gagal memuat detail plan.");
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
+      })();
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [planId]);
+  }, [isInvalidPlanId, planId]);
 
   return (
     <div className="min-h-screen bg-[#f6f9fc] p-6">

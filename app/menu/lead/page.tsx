@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 import {
@@ -30,6 +30,9 @@ import {
   commitImportBatch,
   getImportErrorRows,
   getImportValidRows,
+  isAdminRole,
+  isSupervisorRole,
+  isSalesRole,
   type ImportBatchResponse,
   type ImportRowError,
 } from "@/app/lib/api";
@@ -38,6 +41,7 @@ import CallPage, { CallFormResult } from "./call/page";
 import ActionButtons, { EditProfileModal } from "./action/page";
 import AnalyticsTab from "./AnalyticsTab";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
+import LeadFormModal from "./LeadFormModal";
 
 interface NasabahItem {
   totalFu: number;
@@ -422,6 +426,7 @@ function SummaryMetricCard({
 export default function DataKelolaanPage() {
   usePageTitle("Lead");
   const router = useRouter();
+  const searchParams = useSearchParams();
 
 
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
@@ -430,6 +435,7 @@ export default function DataKelolaanPage() {
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
+  const [isManualAddModalOpen, setIsManualAddModalOpen] = useState(false);
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
@@ -447,6 +453,20 @@ export default function DataKelolaanPage() {
   // Ref untuk combobox input PIC — dipakai menghitung posisi dropdown fixed
   const picSearchRef = useRef<HTMLInputElement>(null);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "create") {
+      setIsManualAddModalOpen(true);
+    }
+  }, [searchParams]);
+
+  const closeManualAddModal = useCallback(() => {
+    setIsManualAddModalOpen(false);
+
+    if (searchParams.get("action") === "create") {
+      router.replace("/menu/lead");
+    }
+  }, [router, searchParams]);
 
   const openDropdownWithPosition = () => {
     if (picSearchRef.current) {
@@ -537,7 +557,7 @@ export default function DataKelolaanPage() {
 
 
   const [loggedInUser, setLoggedInUser] = useState("Satria");
-  const [loggedInRole, setLoggedInRole] = useState("Developer");
+  const [loggedInRole, setLoggedInRole] = useState("SALES");
   const [isAdminState, setIsAdminState] = useState(false);
   const [isSupervisorState, setIsSupervisorState] = useState(false);
   const [isSalesState, setIsSalesState] = useState(false);
@@ -580,16 +600,62 @@ export default function DataKelolaanPage() {
 
   const loadOwnersFromBackend = useCallback(() => {
     setIsLoading(true);
-    getLeadsWithTotal()
+
+    const q = [searchKodeOwner, searchNamaOwner, searchNamaBrand]
+      .filter(Boolean)
+      .join(" ");
+
+    const params: any = {
+      page: currentPage,
+      limit: rowsPerPage,
+      q: q || undefined,
+    };
+
+    if (picFilter !== "Semua") {
+      if (picFilter === "No PIC") {
+        params.status = "OPEN"; // Assuming No PIC means unassigned or open stage
+      } else if (picFilter.startsWith("ROLE:")) {
+        params.ownership = picFilter.replace("ROLE:", "");
+      } else {
+        // If it's a specific PIC name, append to search query
+        params.q = params.q ? `${params.q} ${picFilter}` : picFilter;
+      }
+    }
+
+    if (skorFilter !== "Semua") {
+      params.score = skorFilter;
+    }
+
+    if (filterMode === "harian") {
+      // Temporarily disabled to avoid hiding all leads by default since backend only checks next_follow_up_at
+      // if (startDateFilter) params.follow_up_from = startDateFilter;
+      // if (endDateFilter) params.follow_up_to = endDateFilter;
+    }
+
+    if (sort && sort !== "no" && sort !== "-no") {
+      // Map frontend sort keys to backend sort keys
+      let backendSort = sort;
+      const isDesc = sort.startsWith("-");
+      const key = sort.replace("-", "");
+      
+      let mappedKey = "";
+      if (key === "kodeOwner") mappedKey = "code";
+      else if (key === "namaOwner") mappedKey = "owner_name";
+      else if (key === "skor") mappedKey = "score";
+      else if (key === "status") mappedKey = "status";
+      else if (key === "stage") mappedKey = "stage";
+      else if (key === "tanggalFu") mappedKey = "next_follow_up_at";
+      
+      if (mappedKey) {
+        params.sort = isDesc ? `-${mappedKey}` : mappedKey;
+      }
+    }
+
+    getLeadsWithTotal(params)
       .then(({ items, total }) => {
         const mappedData = items.map(mapBackendLeadToNasabahItem);
         setDataNasabah(mappedData);
         setBackendTotal(total);
-        try {
-          localStorage.setItem("piposmart_nasabah_data", JSON.stringify(mappedData));
-        } catch (e) {
-          console.warn("localStorage quota exceeded for piposmart_nasabah_data");
-        }
       })
       .catch((err) => {
         console.error("Gagal memuat lead dari backend:", err);
@@ -597,18 +663,30 @@ export default function DataKelolaanPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [mapBackendLeadToNasabahItem]);
+  }, [
+    mapBackendLeadToNasabahItem,
+    currentPage,
+    rowsPerPage,
+    searchKodeOwner,
+    searchNamaOwner,
+    searchNamaBrand,
+    skorFilter,
+    filterMode,
+    startDateFilter,
+    endDateFilter,
+    sort
+  ]);
 
   useEffect(() => {
     const userName = localStorage.getItem("piposmart_user_name");
-    const currentUserRole = localStorage.getItem("piposmart_user_role");
+    const currentUserRole = localStorage.getItem("piposmart_user_role") || "SALES";
 
     if (userName) setLoggedInUser(userName);
     if (currentUserRole) setLoggedInRole(currentUserRole);
 
-    const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(currentUserRole || "");
-    const isSupervisor = ["Supervisor", "SUPERVISOR"].includes(currentUserRole || "");
-    const isSales = ["Sales", "SALES"].includes(currentUserRole || "");
+    const isAdmin = isAdminRole(currentUserRole);
+    const isSupervisor = isSupervisorRole(currentUserRole);
+    const isSales = isSalesRole(currentUserRole);
 
     setIsAdminState(isAdmin);
     setIsSupervisorState(isSupervisor);
@@ -676,11 +754,6 @@ export default function DataKelolaanPage() {
 
   const saveDataNasabah = (nextData: NasabahItem[]) => {
     setDataNasabah(nextData);
-    try {
-      localStorage.setItem("piposmart_nasabah_data", JSON.stringify(nextData));
-    } catch (e) {
-      console.warn("localStorage quota exceeded for piposmart_nasabah_data");
-    }
   };
 
   const handleExportExcel = () => {
@@ -923,7 +996,7 @@ export default function DataKelolaanPage() {
 
   const prepareDeleteTarget = () => {
     setDeleteTargetMode(selectedIds.length > 0 ? "selected" : "filtered");
-    setDeleteCustomLimit(String(Math.min(rowsPerPage, filteredData.length || 1)));
+    setDeleteCustomLimit(String(Math.min(rowsPerPage, backendTotal || 1)));
   };
 
   const getCustomDeleteLimit = () => {
@@ -933,7 +1006,7 @@ export default function DataKelolaanPage() {
       return 0;
     }
 
-    return Math.min(Math.floor(parsedLimit), filteredData.length);
+    return Math.min(Math.floor(parsedLimit), backendTotal);
   };
 
   const getDeleteTargetItems = () => {
@@ -948,10 +1021,10 @@ export default function DataKelolaanPage() {
     }
 
     if (deleteTargetMode === "custom") {
-      return filteredData.slice(0, getCustomDeleteLimit());
+      return dataNasabah.slice(0, getCustomDeleteLimit());
     }
 
-    return filteredData;
+    return dataNasabah;
   };
 
   const handleConfirmDeleteBulk = () => {
@@ -1054,7 +1127,8 @@ export default function DataKelolaanPage() {
           discount_amount: String(rawPayload.salesPayload.discount || 0),
           unique_transfer_code: rawPayload.salesPayload.transferCode || 0,
           closed_at: new Date(rawPayload.callTime).toISOString(),
-          interaction_type: "CALL",
+          call_status: rawPayload.callStatus || undefined,
+          chat_status: rawPayload.chatStatus || undefined,
           contact_name: result.nextCustomer?.namaOwner || "-",
           contact_phone: result.nextCustomer?.noHpOwner || "-",
           customer_response: rawPayload.conclusion || "-",
@@ -1066,7 +1140,8 @@ export default function DataKelolaanPage() {
         rawPayload.selectedRemarkScore !== "3"
       ) {
         await createInteraction(customerId, {
-          type: "CALL", // default to call
+          call_status: rawPayload.callStatus || undefined,
+          chat_status: rawPayload.chatStatus || undefined,
           remark_score: Number(rawPayload.selectedRemarkScore),
           note: `Call: ${rawPayload.callStatus}, Chat: ${rawPayload.chatStatus} - ${rawPayload.conclusion}`,
           follow_up_at: rawPayload.followUpDate ? rawPayload.followUpDate + "T00:00:00Z" : undefined,
@@ -1288,123 +1363,12 @@ export default function DataKelolaanPage() {
     };
   }, [dataNasabah, backendTotal]);
 
-  const filteredData = useMemo(() => {
-    let result = dataNasabah.filter((item) => {
-      const kodeKeyword = searchKodeOwner.toLowerCase().trim();
-      const namaKeyword = searchNamaOwner.toLowerCase().trim();
-      const brandKeyword = searchNamaBrand.toLowerCase().trim();
-
-      const matchesSearch =
-        (kodeKeyword === "" ||
-          item.kodeOwner?.toLowerCase().includes(kodeKeyword)) &&
-        (namaKeyword === "" ||
-          item.namaOwner?.toLowerCase().includes(namaKeyword)) &&
-        (brandKeyword === "" ||
-          item.projectBrand?.toLowerCase().includes(brandKeyword));
-
-      const matchesPic = () => {
-        if (picFilter === "Semua") return true;
-        if (picFilter === "No PIC") return isInvalidPic(item.pic);
-        if (picFilter === "ROLE:ADMIN") {
-          return item.picRole === "ADMIN" || item.picRole === "Admin" || item.picRole === "Developer" || item.picRole === "Direktur";
-        }
-        if (picFilter === "ROLE:SUPERVISOR") {
-          return item.picRole === "SUPERVISOR" || item.picRole === "Supervisor";
-        }
-        if (picFilter === "ROLE:SALES") {
-          return item.picRole === "SALES" || item.picRole === "Sales";
-        }
-        return item.pic === picFilter;
-      };
-
-      const matchesSkor =
-        skorFilter === "Semua" ||
-        String(item.remarks ?? item.scor ?? "0") === skorFilter;
-
-      let matchesFilter = matchesPic();
-
-      if (filterMode === "harian") {
-        const itemDate = getOwnerFilterDate(item);
-        const today = getTodayInputDate();
-        const activeStartDate = startDateFilter || today;
-        const activeEndDate = endDateFilter || activeStartDate;
-
-        if (!itemDate) {
-          return false;
-        }
-
-        if (activeStartDate && itemDate < activeStartDate) {
-          return false;
-        }
-
-        if (activeEndDate && itemDate > activeEndDate) {
-          return false;
-        }
-      } else {
-        if (startMonthFilter || endMonthFilter) {
-          const itemMonth = getOwnerFilterMonth(item);
-          const itemMonthIndex = LIST_BULAN.indexOf(itemMonth);
-
-          const startIndex = startMonthFilter
-            ? LIST_BULAN.indexOf(startMonthFilter)
-            : 0;
-
-          const endIndex = endMonthFilter
-            ? LIST_BULAN.indexOf(endMonthFilter)
-            : 11;
-
-          if (itemMonthIndex === -1) {
-            return false;
-          }
-
-          if (itemMonthIndex < startIndex || itemMonthIndex > endIndex) {
-            matchesFilter = false;
-          }
-        }
-      }
-
-      return matchesSearch && matchesFilter && matchesSkor;
-    });
-
-    const isDesc = sort.startsWith("-");
-    const key = sort.replace("-", "");
-
-    return result.sort((a, b) => {
-      let valA: any = a.no;
-      let valB: any = b.no;
-
-      if (key === "kodeOwner") { valA = a.kodeOwner; valB = b.kodeOwner; }
-      else if (key === "namaOwner") { valA = a.namaOwner; valB = b.namaOwner; }
-      else if (key === "projectBrand") { valA = a.projectBrand; valB = b.projectBrand; }
-      else if (key === "noHpOwner") { valA = a.noHpOwner; valB = b.noHpOwner; }
-
-      if (typeof valA === "string") valA = valA.toLowerCase();
-      if (typeof valB === "string") valB = valB.toLowerCase();
-
-      if (valA < valB) return isDesc ? 1 : -1;
-      if (valA > valB) return isDesc ? -1 : 1;
-      return 0;
-    });
-  }, [
-    dataNasabah,
-    searchKodeOwner,
-    searchNamaOwner,
-    searchNamaBrand,
-    picFilter,
-    skorFilter,
-    startDateFilter,
-    endDateFilter,
-    startMonthFilter,
-    endMonthFilter,
-    filterMode,
-    sort
-  ]);
 
 
   const displayData = useMemo(() => {
     const groupedMap = new Map<string, NasabahItem>();
 
-    filteredData.forEach((item) => {
+    dataNasabah.forEach((item) => {
       const groupKey = [
         String(item.kodeOwner || "").trim(),
         String(item.projectBrand || "").trim().toLowerCase(),
@@ -1460,7 +1424,7 @@ export default function DataKelolaanPage() {
     });
 
     return Array.from(groupedMap.values());
-  }, [filteredData, dataNasabah]);
+  }, [dataNasabah]);
 
 
   useEffect(() => {
@@ -1479,14 +1443,13 @@ export default function DataKelolaanPage() {
     rowsPerPage,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(displayData.length / rowsPerPage));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const totalPages = Math.max(1, Math.ceil(backendTotal / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages) || 1;
   const startDataIndex = (safeCurrentPage - 1) * rowsPerPage;
-  const endDataIndex = Math.min(startDataIndex + rowsPerPage, displayData.length);
 
   const paginatedData = useMemo(
-    () => displayData.slice(startDataIndex, endDataIndex),
-    [displayData, startDataIndex, endDataIndex],
+    () => displayData,
+    [displayData],
   );
 
   const currentPageIds = useMemo(
@@ -1987,15 +1950,15 @@ export default function DataKelolaanPage() {
             Import Excel
           </button>
 
-          <Link
-            href="/menu/lead/form"
+          <button
+            onClick={() => setIsManualAddModalOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700 shadow-sm shadow-red-200"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Tambah Data Manual
-          </Link>
+          </button>
         </div>
       </div>
       {/* TABLE HEADER ACTIONS */}
@@ -2079,7 +2042,7 @@ export default function DataKelolaanPage() {
                         Halaman ini ({currentPageIds.length})
                       </option>
                       <option value="filtered">
-                        Semua hasil filter ({filteredData.length})
+                        Semua hasil filter ({backendTotal})
                       </option>
                       <option value="custom">
                         Jumlah tertentu
@@ -2090,7 +2053,7 @@ export default function DataKelolaanPage() {
                       <input
                         type="number"
                         min={1}
-                        max={filteredData.length}
+                        max={backendTotal}
                         value={deleteCustomLimit}
                         onFocus={(event) => event.currentTarget.select()}
                         onChange={(event) => {
@@ -2108,7 +2071,7 @@ export default function DataKelolaanPage() {
 
                     <button
                       onClick={handleConfirmDeleteBulk}
-                      disabled={filteredData.length === 0 || getDeleteTargetItems().length === 0}
+                      disabled={dataNasabah.length === 0 || getDeleteTargetItems().length === 0}
                       className="px-3.5 py-2 bg-red-600 border border-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Hapus {getDeleteTargetItems().length} Data
@@ -2935,6 +2898,7 @@ export default function DataKelolaanPage() {
           </div>
         </div>
       )}
+      <LeadFormModal isOpen={isManualAddModalOpen} onClose={closeManualAddModal} onSuccess={loadOwnersFromBackend} />
     </div>
   );
 }

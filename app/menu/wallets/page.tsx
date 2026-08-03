@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -13,9 +14,11 @@ import AnalyticsTab from "./AnalyticsTab";
 import {
   createTransfer,
   listOwnerTransfers,
+  listTransfers,
   getTransferSuggestions,
   confirmTransferMatch,
   rejectTransferMatch,
+  authFetchJson,
   type TransferItem,
   type TransferMatchSuggestion,
 } from "@/app/lib/api";
@@ -279,7 +282,11 @@ const normalizeList = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) return payload as T[];
 
   if (payload && typeof payload === "object") {
-    const data = payload as any;
+    const data = payload as {
+      items?: unknown;
+      rows?: unknown;
+      data?: unknown;
+    };
 
     if (Array.isArray(data.items)) return data.items as T[];
     if (Array.isArray(data.rows)) return data.rows as T[];
@@ -416,44 +423,22 @@ export default function WalletsPage() {
   const [detailTitle, setDetailTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const apiUrl =
-    typeof window !== "undefined"
-      ? process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-      : "http://localhost:8080";
-
   const [isMounted, setIsMounted] = useState(false);
   const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
-    setIsMounted(true);
-    setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    const timer = window.setTimeout(() => {
+      setIsMounted(true);
+      setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const isAdmin = isMounted && userRole.toLowerCase() === "admin";
 
   const authFetch = async <T,>(path: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem("piposmart_access_token");
-
-    const response = await fetch(`${apiUrl}/api/v1${path}`, {
-      ...options,
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {}),
-      },
-    });
-
-    const json = (await response.json().catch(() => ({}))) as ApiResponse<T>;
-
-    if (!response.ok) {
-      throw new Error(
-        json.error?.message || `Request gagal (${response.status})`,
-      );
-    }
-
-    return json;
+    return authFetchJson<ApiResponse<T>>(path, options);
   };
 
   const buildQuery = (params: Record<string, string>) => {
@@ -467,7 +452,7 @@ export default function WalletsPage() {
     return text ? `?${text}` : "";
   };
 
-  const loadTopUpData = async () => {
+  const loadTopUpData = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
 
@@ -569,7 +554,7 @@ export default function WalletsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, channelFilter, paidFrom, paidTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -580,25 +565,26 @@ export default function WalletsPage() {
   }, [search]);
 
   useEffect(() => {
-    loadTopUpData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, channelFilter, paidFrom, paidTo, reloadKey]);
+    const timer = window.setTimeout(() => {
+      void loadTopUpData();
+    }, 0);
 
-  const loadTransferData = async (ownerId: string) => {
-    if (!ownerId) {
-      setTransferItems([]);
-      setTransferSuggestions([]);
-      return;
-    }
+    return () => window.clearTimeout(timer);
+  }, [loadTopUpData, reloadKey]);
 
+  const loadTransferData = useCallback(async (ownerId: string) => {
     setTransferLoading(true);
     setTransferError("");
 
     try {
-      const [listResult, suggestionResult] = await Promise.allSettled([
-        listOwnerTransfers(Number(ownerId), { all: true }),
-        getTransferSuggestions(Number(ownerId)),
-      ]);
+      const [listResult, suggestionResult] = await Promise.allSettled(
+        ownerId
+          ? [
+              listOwnerTransfers(Number(ownerId), { all: true }),
+              getTransferSuggestions(Number(ownerId)),
+            ]
+          : [listTransfers({ all: true }), Promise.resolve([] as TransferMatchSuggestion[])],
+      );
 
       if (listResult.status === "fulfilled") {
         setTransferItems(listResult.value.items || []);
@@ -630,14 +616,17 @@ export default function WalletsPage() {
     } finally {
       setTransferLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (activeTab === "transfer") {
-      loadTransferData(transferOwnerId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, transferOwnerId]);
+    if (activeTab !== "transfer") return;
+
+    const timer = window.setTimeout(() => {
+      void loadTransferData(transferOwnerId);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [activeTab, loadTransferData, transferOwnerId]);
 
   const handleCreateTransferSubmit = async (event: FormEvent) => {
     event.preventDefault();

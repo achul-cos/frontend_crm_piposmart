@@ -117,22 +117,22 @@ export const TUTORIAL_DATA: MenuTutorial[] = [
     tips: "Satu Owner dapat memiliki multiple gerai outlet di sistem CRM Piposmart.",
   },
   {
-    menuKey: "laporan-penjualan",
-    menuName: "Menu Laporan Penjualan",
+    menuKey: "closing",
+    menuName: "Menu Closing",
     category: "Laporan & Sistem",
-    summary: "Analisis grafik performa omset bulanan, tren closing, dan ringkasan pengeluaran komisi mitra.",
-    targetRole: "Admin, Supervisor",
+    summary: "Memantau data closing penjualan, status verifikasi, paket yang diambil customer, dan nilai omset closing yang sudah tersimpan statis.",
+    targetRole: "Admin, Supervisor, Sales",
     steps: [
       {
-        stepTitle: "1. Memilih Periode Tanggal Laporan",
-        stepDescription: "Gunakan filter tanggal di bagian atas halaman untuk menampilkan laporan omset harian, mingguan, atau bulanan.",
+        stepTitle: "1. Membuka Daftar Closing",
+        stepDescription: "Gunakan filter tanggal, status, dan sales untuk meninjau closing yang sedang pending, confirmed, atau rejected.",
       },
       {
-        stepTitle: "2. Eksport Laporan Excel / PDF",
-        stepDescription: "Klik tombol 'Export Laporan' untuk mengunduh rekapitulasi angka omset dan komisi dalam format file dokumen.",
+        stepTitle: "2. Meninjau Detail Closing",
+        stepDescription: "Buka tombol detail untuk melihat snapshot paket, promo, nominal closing, dan kaitannya dengan proses follow-up lead.",
       },
     ],
-    tips: "Gunakan laporan ini saat evaluasi bulanan tim Sales untuk penentuan bonus dan insentif.",
+    tips: "Untuk kebutuhan evaluasi omset penjualan, gunakan modul Closing dan Subscribe sebagai pengganti modul laporan penjualan lama.",
   },
   {
     menuKey: "kelola-user",

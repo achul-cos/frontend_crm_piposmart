@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import SalesFormModal, {
   type SalesFormState,
   type SalesItem,
   type SalesStatus,
 } from "./SalesFormModal";
-import AnalyticsTab from "./AnalyticsTab";
+import AnalyticsTab from './AnalyticsTab';
+import { authFetchJson } from '@/app/lib/api';
 
 const EMPTY_FORM: SalesFormState = {
   name: "",
@@ -15,46 +16,13 @@ const EMPTY_FORM: SalesFormState = {
   phone: "",
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-function getAccessToken() {
-  if (typeof window === "undefined") return "";
-  return (
-    localStorage.getItem("piposmart_access_token") ||
-    localStorage.getItem("piposmart_token") ||
-    ""
-  );
-}
-
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   return "Terjadi kesalahan yang tidak diketahui.";
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAccessToken();
-
-  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    credentials: "include",
-  });
-
-  const json = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      json?.error?.message ||
-        json?.message ||
-        `Request gagal dengan status ${response.status}`,
-    );
-  }
-
-  return json as T;
+  return authFetchJson<T>(path, options);
 }
 
 async function listSales() {
@@ -212,7 +180,7 @@ export default function SalesPage() {
     });
   }, [sales, search]);
 
-  const loadSales = async (showLoading = true) => {
+  const loadSales = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setPageError("");
 
@@ -225,10 +193,12 @@ export default function SalesPage() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadSales();
+    const initialTimer = window.setTimeout(() => {
+      void loadSales();
+    }, 0);
 
     const interval = window.setInterval(() => {
       void loadSales(false);
@@ -241,10 +211,11 @@ export default function SalesPage() {
     window.addEventListener("focus", handleFocus);
 
     return () => {
+      window.clearTimeout(initialTimer);
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [loadSales]);
 
   const openCreateModal = () => {
     setEditingSales(null);
@@ -466,7 +437,7 @@ export default function SalesPage() {
             Kelola Mitra Sales →
           </Link>
           <Link
-            href="/menu/lead/form"
+            href="/menu/lead?action=create"
             className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-black text-gray-700 shadow-xs transition-all hover:bg-gray-50 hover:text-[#C92C1E]"
           >
             + Tambah Lead Baru
@@ -717,3 +688,5 @@ export default function SalesPage() {
     </div>
   );
 }
+
+

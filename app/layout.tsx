@@ -3,6 +3,13 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import AutoTableColumnVisibilityEnhancer from "@/app/components/table/AutoTableColumnVisibilityEnhancer";
+import {
+  clearStoredAuth,
+  getRoleLabel,
+  readStoredUserSession,
+  type StoredUserSession,
+} from "@/app/lib/api";
 import "./globals.css";
 
 const ProfileTagIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -68,10 +75,12 @@ export default function RootLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [session, setSession] = useState<StoredUserSession>(() =>
+    readStoredUserSession(),
+  );
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [loggedInUser, setLoggedInUser] = useState("User");
-  const [loggedInRole, setLoggedInRole] = useState("Guest");
+  const [authChecked, setAuthChecked] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     Umum: true,
     "Data Admin": true,
@@ -84,21 +93,12 @@ export default function RootLayout({
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const isAuthPage = pathname.startsWith("/auth");
+  const loggedInUser = session.name || "User";
+  const loggedInRole = getRoleLabel(session.role);
+  const isAuthenticated = session.isAuthenticated;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const isLoggedIn = localStorage.getItem("piposmart_is_logged_in");
-    const userName = localStorage.getItem("piposmart_user_name");
-    const userRole = localStorage.getItem("piposmart_user_role");
-
-    if (!isAuthPage && isLoggedIn !== "true") {
-      router.replace("/auth/login");
-      return;
-    }
-
-    if (userName) setLoggedInUser(userName);
-    if (userRole) setLoggedInRole(userRole);
 
     const applyTheme = () => {
       const savedTheme = localStorage.getItem("piposmart_theme");
@@ -115,17 +115,56 @@ export default function RootLayout({
       document.body?.classList.remove("light", "dark");
       document.body?.classList.add(shouldUseDark ? "dark" : "light");
     };
+    const syncSession = () => {
+      setSession(readStoredUserSession());
+      setAuthChecked(true);
+    };
 
     applyTheme();
+    syncSession();
 
     window.addEventListener("storage", applyTheme);
     window.addEventListener("piposmart-theme-change", applyTheme);
+    window.addEventListener("storage", syncSession);
 
     return () => {
       window.removeEventListener("storage", applyTheme);
       window.removeEventListener("piposmart-theme-change", applyTheme);
+      window.removeEventListener("storage", syncSession);
     };
-  }, [isAuthPage, router]);
+  }, []);
+
+  useEffect(() => {
+    if (!authChecked) return;
+
+    if (!isAuthPage && !isAuthenticated) {
+      console.warn("[AUTH] Redirecting to /auth/login because !isAuthenticated", { pathname });
+      router.replace("/auth/login");
+      return;
+    }
+
+    if (isAuthPage && isAuthenticated && pathname !== "/auth/logout") {
+      console.warn("[AUTH] Redirecting to / because isAuthPage && isAuthenticated", { pathname });
+      router.replace("/");
+      return;
+    }
+  }, [authChecked, isAuthPage, isAuthenticated, pathname, router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncSession = () => {
+      setSession(readStoredUserSession());
+      setAuthChecked(true);
+    };
+
+    syncSession();
+    window.addEventListener("piposmart-auth-change", syncSession);
+
+    return () => {
+      window.removeEventListener("piposmart-auth-change", syncSession);
+    };
+  }, []);
 
   const iconBuilding = (className: string) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -379,15 +418,7 @@ export default function RootLayout({
         localStorage.getItem("piposmart_user_name") || "User";
 
       sessionStorage.removeItem(`piposmart_sop_seen_${savedUserName}`);
-
-      localStorage.removeItem("piposmart_is_logged_in");
-      localStorage.removeItem("piposmart_user_name");
-      localStorage.removeItem("piposmart_user_role");
-      localStorage.removeItem("piposmart_user_username");
-      localStorage.removeItem("piposmart_user");
-      localStorage.removeItem("piposmart_access_token");
-      localStorage.removeItem("piposmart_token");
-      localStorage.removeItem("isLoggedIn");
+      clearStoredAuth();
     }
 
     router.push("/auth/logout");
@@ -407,7 +438,32 @@ export default function RootLayout({
               : "bg-[#FAF9F6] text-[#2C2C2E]"
           }`}
         >
+          <AutoTableColumnVisibilityEnhancer />
           {children}
+        </body>
+      </html>
+    );
+  }
+
+  if (!authChecked || !isAuthenticated) {
+    return (
+      <html
+        lang="id"
+        className={isDarkMode ? "dark" : "light"}
+        suppressHydrationWarning
+      >
+        <body
+          className={`antialiased font-sans transition-colors duration-300 ${
+            isDarkMode
+              ? "bg-[#0F172A] text-gray-100"
+              : "bg-[#FAF9F6] text-[#2C2C2E]"
+          }`}
+        >
+          <div className="flex min-h-screen items-center justify-center">
+            <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm font-bold text-gray-500 shadow-sm">
+              Memeriksa sesi login...
+            </div>
+          </div>
         </body>
       </html>
     );
@@ -426,6 +482,7 @@ export default function RootLayout({
             : "bg-[#FAF9F6] text-[#2C2C2E]"
         }`}
       >
+        <AutoTableColumnVisibilityEnhancer />
         <div className="flex min-h-screen">
           <aside
             className={`fixed z-30 flex h-full flex-col justify-between border-r p-4 transition-all duration-300 ${

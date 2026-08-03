@@ -532,7 +532,7 @@ function MitraSalesDetailPageInner() {
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C92C1E] text-xs font-black text-white">2</span>
                 <p className="text-xs font-black text-slate-950">Tambah Lead Afiliasi Mitra</p>
               </div>
-              <Link href="/menu/lead/form" className="text-[10px] font-bold text-[#C92C1E] underline hover:text-red-700">+ Lead Baru</Link>
+              <Link href="/menu/lead?action=create" className="text-[10px] font-bold text-[#C92C1E] underline hover:text-red-700">+ Lead Baru</Link>
             </div>
             <p className="mt-2 text-[11px] font-medium text-slate-500">Daftarkan Lead yang berafiliasi dengan Mitra untuk pelacakan komisi.</p>
             <div className="mt-4 space-y-3">
@@ -567,7 +567,7 @@ function MitraSalesDetailPageInner() {
                 <option value="CALL">CALL (Telepon)</option>
                 <option value="CHAT">CHAT (WhatsApp / Message)</option>
               </select>
-              <input type="datetime-local" value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+              <input type="datetime-local" max={new Date().toISOString().slice(0, 16)} value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
               <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={2} placeholder="Hasil pembahasan dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
               <button type="submit" disabled={saving} className="w-full rounded-2xl border border-slate-900 bg-white px-5 py-3 text-xs font-black text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed">Simpan Log Interaksi</button>
             </div>

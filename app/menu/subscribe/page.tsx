@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -11,6 +12,7 @@ import {
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTab from "./AnalyticsTab";
 import {
+  authFetchJson,
   getEligiblePromotions,
   type CatalogPromotion,
 } from "@/app/lib/api";
@@ -163,6 +165,16 @@ type CreateOrderForm = {
   promotionIds: number[];
 };
 
+type UpgradeOrderForm = {
+  planId: string;
+  closingId: string;
+  externalReference: string;
+  idempotencyKey: string;
+  purchasedAt: string;
+  effectiveStartDate: string;
+  note: string;
+};
+
 type ReconcileForm = {
   orderId: string;
   action: "CONFIRM" | "REJECT" | "PARTIAL_CONFIRM";
@@ -202,6 +214,16 @@ const emptyCreateOrderForm: CreateOrderForm = {
   subscriptionStartDate: getTodayDate(),
   note: "",
   promotionIds: [],
+};
+
+const emptyUpgradeOrderForm: UpgradeOrderForm = {
+  planId: "",
+  closingId: "",
+  externalReference: "",
+  idempotencyKey: "",
+  purchasedAt: getTodayDatetimeLocal(),
+  effectiveStartDate: getTodayDate(),
+  note: "",
 };
 
 const emptyReconcileForm: ReconcileForm = {
@@ -262,7 +284,11 @@ const normalizeList = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) return payload as T[];
 
   if (payload && typeof payload === "object") {
-    const data = payload as any;
+    const data = payload as {
+      items?: unknown;
+      rows?: unknown;
+      data?: unknown;
+    };
 
     if (Array.isArray(data.items)) return data.items as T[];
     if (Array.isArray(data.rows)) return data.rows as T[];
@@ -380,6 +406,7 @@ export default function SubscriptionPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua");
+  const [orderTypeFilter, setOrderTypeFilter] = useState("Semua");
   const [purchasedFrom, setPurchasedFrom] = useState("");
   const [purchasedTo, setPurchasedTo] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -393,6 +420,12 @@ export default function SubscriptionPage() {
   const [reconcileForm, setReconcileForm] =
     useState<ReconcileForm>(emptyReconcileForm);
 
+  // Upgrade State
+  const [upgradeMode, setUpgradeMode] = useState(false);
+  const [selectedUpgradeSub, setSelectedUpgradeSub] = useState<SubscriptionItem | null>(null);
+  const [upgradeForm, setUpgradeForm] = useState<UpgradeOrderForm>(emptyUpgradeOrderForm);
+  const [catalogPlans, setCatalogPlans] = useState<Plan[]>([]);
+
   // Sprint 15a â€” daftar promotion yang eligible untuk plan yang dipilih di form create order.
   const [eligiblePromotions, setEligiblePromotions] = useState<
     CatalogPromotion[]
@@ -404,26 +437,33 @@ export default function SubscriptionPage() {
     const planIdNumber = Number(createForm.planId);
 
     if (!createForm.planId || Number.isNaN(planIdNumber)) {
-      setEligiblePromotions([]);
-      return;
+      const timer = window.setTimeout(() => {
+        setEligiblePromotions([]);
+        setEligiblePromotionsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
-    setEligiblePromotionsLoading(true);
+    const timer = window.setTimeout(() => {
+      setEligiblePromotionsLoading(true);
 
-    getEligiblePromotions(planIdNumber)
-      .then((result) => {
-        if (!cancelled) setEligiblePromotions(result);
-      })
-      .catch(() => {
-        if (!cancelled) setEligiblePromotions([]);
-      })
-      .finally(() => {
-        if (!cancelled) setEligiblePromotionsLoading(false);
-      });
+      getEligiblePromotions(planIdNumber)
+        .then((result) => {
+          if (!cancelled) setEligiblePromotions(result);
+        })
+        .catch(() => {
+          if (!cancelled) setEligiblePromotions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setEligiblePromotionsLoading(false);
+        });
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [createForm.planId]);
 
@@ -438,14 +478,13 @@ export default function SubscriptionPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [userRole, setUserRole] = useState("");
 
-  const apiUrl =
-    typeof window !== "undefined"
-      ? process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-      : "http://localhost:8080";
-
   useEffect(() => {
-    setIsMounted(true);
-    setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    const timer = window.setTimeout(() => {
+      setIsMounted(true);
+      setUserRole(localStorage.getItem("piposmart_user_role") || "");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const normalizedRole = userRole.toLowerCase();
@@ -454,28 +493,7 @@ export default function SubscriptionPage() {
   const canReconcile = isAdmin || isSupervisor;
 
   const authFetch = async <T,>(path: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem("piposmart_access_token");
-
-    const response = await fetch(`${apiUrl}/api/v1${path}`, {
-      ...options,
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {}),
-      },
-    });
-
-    const json = (await response.json().catch(() => ({}))) as ApiResponse<T>;
-
-    if (!response.ok) {
-      throw new Error(
-        json.error?.message || `Request gagal (${response.status})`,
-      );
-    }
-
-    return json;
+    return authFetchJson<ApiResponse<T>>(path, options);
   };
 
   const buildQuery = (params: Record<string, string>) => {
@@ -489,7 +507,7 @@ export default function SubscriptionPage() {
     return text ? `?${text}` : "";
   };
 
-  const loadSubscriptionData = async () => {
+  const loadSubscriptionData = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
 
@@ -497,6 +515,7 @@ export default function SubscriptionPage() {
       const orderQuery = buildQuery({
         q: debouncedSearch,
         status: statusFilter,
+        order_type: orderTypeFilter === "Semua" ? "" : orderTypeFilter,
         purchased_from: purchasedFrom,
         purchased_to: purchasedTo,
         sort: "-purchased_at",
@@ -549,6 +568,7 @@ export default function SubscriptionPage() {
         issueResult,
         walletResult,
         ownerResult,
+        catalogPlanResult,
       ] = await Promise.allSettled([
         authFetch<
           | SubscriptionOrderItem[]
@@ -572,7 +592,16 @@ export default function SubscriptionPage() {
         authFetch<Owner[] | { items?: Owner[]; rows?: Owner[] }>(
           `/owners${ownersQuery}`,
         ),
+        authFetch<Plan[] | { items?: Plan[]; rows?: Plan[] }>(
+          `/catalog/plans/all`,
+        ),
       ]);
+
+      if (catalogPlanResult.status === "fulfilled") {
+        setCatalogPlans(normalizeList<Plan>(catalogPlanResult.value.data));
+      } else {
+        setCatalogPlans([]);
+      }
 
       if (orderResult.status === "fulfilled") {
         setOrders(normalizeList<SubscriptionOrderItem>(orderResult.value.data));
@@ -643,7 +672,7 @@ export default function SubscriptionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, statusFilter, orderTypeFilter, purchasedFrom, purchasedTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -654,9 +683,12 @@ export default function SubscriptionPage() {
   }, [search]);
 
   useEffect(() => {
-    loadSubscriptionData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, purchasedFrom, purchasedTo, reloadKey]);
+    const timer = window.setTimeout(() => {
+      void loadSubscriptionData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadSubscriptionData, reloadKey]);
 
   const summary = useMemo(() => {
     const totalOrderAmount = orders.reduce(
@@ -683,18 +715,18 @@ export default function SubscriptionPage() {
   }, [orders, subscriptions, reconciliations, issues]);
 
   const planOptions = useMemo(() => {
-    const fromOrders = orders
-      .map((item) => item.plan)
-      .filter((item): item is Plan => Boolean(item?.id));
-
     const unique = new Map<number, Plan>();
 
-    fromOrders.forEach((plan) => {
+    catalogPlans.forEach((plan) => {
       if (plan.id) unique.set(plan.id, plan);
     });
 
+    orders.forEach((item) => {
+      if (item.plan?.id) unique.set(item.plan.id, item.plan);
+    });
+
     return Array.from(unique.values());
-  }, [orders]);
+  }, [catalogPlans, orders]);
 
   const ownerOptions = useMemo(() => {
     const walletByOwnerId = new Map<number, WalletItem>();
@@ -740,6 +772,53 @@ export default function SubscriptionPage() {
 
     return Array.from(ownerMap.values());
   }, [owners, wallets]);
+
+  const handleOpenUpgrade = (sub: SubscriptionItem) => {
+    setSelectedUpgradeSub(sub);
+    setUpgradeForm({
+      ...emptyUpgradeOrderForm,
+      idempotencyKey: `sub-upgrade-${sub.id}-${Date.now()}`,
+    });
+    setUpgradeMode(true);
+  };
+
+  const handleUpgradeOrder = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isAdmin) {
+      alert("Hanya Admin yang bisa melakukan upgrade subscription.");
+      return;
+    }
+    if (!selectedUpgradeSub?.id) return;
+    if (!upgradeForm.planId) {
+      alert("Plan Tujuan wajib dipilih.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authFetch(`/subscriptions/${selectedUpgradeSub.id}/upgrades`, {
+        method: "POST",
+        body: JSON.stringify({
+          plan_id: Number(upgradeForm.planId),
+          closing_id: upgradeForm.closingId ? Number(upgradeForm.closingId) : undefined,
+          external_reference: upgradeForm.externalReference || undefined,
+          idempotency_key: upgradeForm.idempotencyKey,
+          purchased_at: toIsoFromDatetimeLocal(upgradeForm.purchasedAt),
+          effective_start_date: upgradeForm.effectiveStartDate,
+          note: upgradeForm.note || undefined,
+        }),
+      });
+
+      setUpgradeMode(false);
+      setSelectedUpgradeSub(null);
+      setUpgradeForm(emptyUpgradeOrderForm);
+      setReloadKey((prev) => prev + 1);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Gagal melakukan upgrade.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateOrder = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -945,6 +1024,143 @@ export default function SubscriptionPage() {
     "REJECTED",
   ];
 
+  if (upgradeMode && selectedUpgradeSub) {
+    return (
+      <div className="space-y-6">
+        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+                <span>Menu</span>
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-gray-500">Subscribe</span>
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-[#C92C1E]">Upgrade</span>
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-gray-900">
+                Upgrade Paket Langganan
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Lakukan upgrade paket berlangganan untuk sisa masa aktif dari langganan {selectedUpgradeSub.code || selectedUpgradeSub.id}.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setUpgradeMode(false);
+                  setSelectedUpgradeSub(null);
+                }}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+              >
+                Kembali
+              </button>
+            </div>
+          </div>
+
+          <div className="p-5 md:p-6 bg-gray-50">
+            <form onSubmit={handleUpgradeOrder} className="space-y-4 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm max-w-4xl mx-auto">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Paket Tujuan (Plan) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className={selectClass}
+                    value={upgradeForm.planId}
+                    onChange={(e) => setUpgradeForm({ ...upgradeForm, planId: e.target.value })}
+                    required
+                  >
+                    <option value="">Pilih paket tujuan...</option>
+                    {planOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Nama Owner (Akun)
+                  </label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={getOwnerName(selectedUpgradeSub.owner)}
+                    disabled
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">Pemilik subscription yang akan di-upgrade.</p>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Waktu Pembelian <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className={inputClass}
+                    value={upgradeForm.purchasedAt}
+                    onChange={(e) => setUpgradeForm({ ...upgradeForm, purchasedAt: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                    Tanggal Mulai Efektif <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={upgradeForm.effectiveStartDate}
+                    onChange={(e) => setUpgradeForm({ ...upgradeForm, effectiveStartDate: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                  Referensi Eksternal
+                </label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="Contoh: INV-UPG-001"
+                  value={upgradeForm.externalReference}
+                  onChange={(e) => setUpgradeForm({ ...upgradeForm, externalReference: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-black uppercase tracking-wider text-slate-500">
+                  Catatan Admin
+                </label>
+                <textarea
+                  className={textareaClass}
+                  placeholder="Opsional..."
+                  rows={2}
+                  value={upgradeForm.note}
+                  onChange={(e) => setUpgradeForm({ ...upgradeForm, note: e.target.value })}
+                />
+              </div>
+              
+              <div className="flex justify-end pt-4 border-t border-gray-100">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded-xl border border-red-100 bg-[#C92C1E] px-6 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  {loading ? "Memproses..." : "Proses Upgrade"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
@@ -1104,6 +1320,18 @@ export default function SubscriptionPage() {
                   </option>
                 ))}
               </select>
+
+              {activeTab === "orders" && (
+                <select
+                  value={orderTypeFilter}
+                  onChange={(event) => setOrderTypeFilter(event.target.value)}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                >
+                  <option value="Semua">Semua Tipe Order</option>
+                  <option value="NEW">Baru (NEW)</option>
+                  <option value="UPGRADE">Upgrade (UPGRADE)</option>
+                </select>
+              )}
 
               <input
                 type="date"
@@ -1325,12 +1553,23 @@ export default function SubscriptionPage() {
                           className="p-3 text-center align-top"
                           onClick={(event) => event.stopPropagation()}
                         >
-                          <Link
-                            href={`/menu/subscribe/${subscription.id}`}
-                            className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                          >
-                            Detail
-                          </Link>
+                          <div className="flex flex-col gap-2 items-center">
+                            <Link
+                              href={`/menu/subscribe/${subscription.id}`}
+                              className="w-full rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            >
+                              Detail
+                            </Link>
+                            {String(subscription.status || "").toUpperCase() === "ACTIVE" && isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenUpgrade(subscription)}
+                                className="w-full rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-600 transition-colors hover:bg-amber-100 hover:text-amber-700"
+                              >
+                                Upgrade
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -2139,7 +2378,6 @@ export default function SubscriptionPage() {
               </label>
             </div>
           </div>
-
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -2159,8 +2397,6 @@ export default function SubscriptionPage() {
           </div>
         </form>
       </ModalShell>
-
-
     </div>
   );
 }
@@ -2177,4 +2413,3 @@ function InfoItem({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

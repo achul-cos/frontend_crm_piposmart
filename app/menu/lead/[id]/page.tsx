@@ -250,61 +250,73 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [closings, setClosings] = useState<ClosingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isInvalidLeadId = !leadId || Number.isNaN(leadId);
 
   useEffect(() => {
-    if (!leadId || Number.isNaN(leadId)) {
-      setError("ID lead tidak valid.");
-      setIsLoading(false);
-      return;
+    let cancelled = false;
+    let timer: number | null = null;
+
+    if (isInvalidLeadId) {
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        setError("ID lead tidak valid.");
+        setIsLoading(false);
+      }, 0);
+
+      return () => {
+        cancelled = true;
+        if (timer !== null) window.clearTimeout(timer);
+      };
     }
 
-    let cancelled = false;
+    timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
 
-    (async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+          const leadDetail = await getLead(leadId);
+          if (cancelled) return;
+          setLead(leadDetail);
 
-        const leadDetail = await getLead(leadId);
-        if (cancelled) return;
-        setLead(leadDetail);
+          const [
+            assignmentItems,
+            interactionItems,
+            stageItems,
+            trainingItems,
+            closingItems,
+            outletDetail,
+          ] = await Promise.all([
+            getAssignmentHistory(leadId),
+            getLeadInteractions(leadId),
+            getLeadStageHistory(leadId),
+            getLeadTrainings(leadId),
+            getLeadClosings(leadId),
+            leadDetail.outlet_id ? getGlobalOutlet(leadDetail.outlet_id).catch(() => null) : Promise.resolve(null),
+          ]);
 
-        const [
-          assignmentItems,
-          interactionItems,
-          stageItems,
-          trainingItems,
-          closingItems,
-          outletDetail,
-        ] = await Promise.all([
-          getAssignmentHistory(leadId),
-          getLeadInteractions(leadId),
-          getLeadStageHistory(leadId),
-          getLeadTrainings(leadId),
-          getLeadClosings(leadId),
-          leadDetail.outlet_id ? getGlobalOutlet(leadDetail.outlet_id).catch(() => null) : Promise.resolve(null),
-        ]);
-
-        if (cancelled) return;
-        setAssignmentHistory(assignmentItems);
-        setInteractions(interactionItems);
-        setStageHistory(stageItems);
-        setTrainings(trainingItems);
-        setClosings(closingItems);
-        setOutlet(outletDetail);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Gagal memuat detail lead.");
+          if (cancelled) return;
+          setAssignmentHistory(assignmentItems);
+          setInteractions(interactionItems);
+          setStageHistory(stageItems);
+          setTrainings(trainingItems);
+          setClosings(closingItems);
+          setOutlet(outletDetail);
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Gagal memuat detail lead.");
+          }
+        } finally {
+          if (!cancelled) setIsLoading(false);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
+      })();
+    }, 0);
 
     return () => {
       cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
     };
-  }, [leadId]);
+  }, [isInvalidLeadId, leadId]);
 
   const latestClosing = closings[0];
   const latestInteraction = interactions[0];
@@ -531,6 +543,12 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <Badge value={formatLabel(item.type)} className="bg-sky-50 text-sky-700 border border-sky-200" />
+                          {item.call_status ? (
+                            <Badge value={`Call: ${item.call_status}`} className="bg-emerald-50 text-emerald-700 border border-emerald-200" />
+                          ) : null}
+                          {item.chat_status ? (
+                            <Badge value={`Chat: ${item.chat_status}`} className="bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200" />
+                          ) : null}
                           {item.remark_label ? (
                             <Badge value={`${item.remark_label}${item.remark_score !== undefined && item.remark_score !== null ? ` (${item.remark_score})` : ""}`} className={getStageBadgeClass(item.remark_code || "")} />
                           ) : null}
@@ -546,6 +564,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                      <FieldBox label="Status Call" value={item.call_status || "-"} />
+                      <FieldBox label="Status Chat" value={item.chat_status || "-"} />
                       <FieldBox label="Remark Code" value={item.remark_code || "-"} />
                       <FieldBox label="Follow-up At" value={formatDateTime(item.follow_up_at)} />
                       <FieldBox label="Sales" value={item.sales?.name || "-"} />

@@ -3,12 +3,16 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getLeads, createOwner, updateOwner, bulkCreateOwnerOutlets, fetchOwnerOutlets, getSalesList, getSupervisorList, assignSalesToLead, assignSupervisorToLead, getLead, bulkForceDeleteOutlets, getProfile, type CreateLeadRequest, type UserResponse } from "@/app/lib/api";
+import { getLeads, createOwner, updateOwner, bulkCreateOwnerOutlets, fetchOwnerDetail, fetchOwnerOutlets, getSalesList, getSupervisorList, assignSalesToLead, assignSupervisorToLead, bulkForceDeleteOutlets, getProfile, isAdminRole, isSupervisorRole, type CreateLeadRequest, type UserResponse } from "@/app/lib/api";
 
 type OwnerOutletItem = {
   namaOutlet: string;
   noHpOutlet: string;
 };
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 interface NasabahItem {
   ownerId?: number;
@@ -249,54 +253,6 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
 };
 
 
-const getOwnerProfileByKodeOwner = (kodeOwner: string) => {
-  if (typeof window === "undefined") return null;
-
-  const normalizedKodeOwner = kodeOwner.trim();
-
-  if (!normalizedKodeOwner) return null;
-
-  const cached = localStorage.getItem("piposmart_nasabah_data");
-
-  if (!cached) return null;
-
-  try {
-    const list: NasabahItem[] = JSON.parse(cached);
-
-    return (
-      list.find((item) => String(item.kodeOwner || "").trim() === normalizedKodeOwner) ||
-      null
-    );
-  } catch {
-    return null;
-  }
-};
-
-
-const buildOutletRowsFromOwner = (owner?: Partial<NasabahItem> | null): OwnerOutletItem[] => {
-  const existingOutlets = owner?.outlets || [];
-
-  if (existingOutlets.length > 0) {
-    return existingOutlets
-      .map((item) => ({
-        namaOutlet: item.namaOutlet || "",
-        noHpOutlet: item.noHpOutlet || owner?.noHpOutlet || "",
-      }))
-      .filter((item) => item.namaOutlet.trim());
-  }
-
-  if (owner?.outlet && owner.outlet !== owner.projectBrand) {
-    return [
-      {
-        namaOutlet: owner.outlet,
-        noHpOutlet: owner.noHpOutlet || "",
-      },
-    ];
-  }
-
-  return [];
-};
-
 const normalizeOutletRows = (rows: OwnerOutletItem[]) => {
   return rows
     .map((item) => ({
@@ -305,44 +261,6 @@ const normalizeOutletRows = (rows: OwnerOutletItem[]) => {
     }))
     .filter((item) => item.namaOutlet);
 };
-
-const getExistingOutletsByKodeOwner = (kodeOwner?: string) => {
-  if (typeof window === "undefined") return [];
-
-  const normalizedKodeOwner = String(kodeOwner || "").trim();
-
-  if (!normalizedKodeOwner) return [];
-
-  const cached = localStorage.getItem("piposmart_nasabah_data");
-
-  if (!cached) return [];
-
-  try {
-    const list: NasabahItem[] = JSON.parse(cached);
-    const outlets = list
-      .filter((item) => String(item.kodeOwner || "").trim() === normalizedKodeOwner)
-      .flatMap((item) => {
-        if (item.outlets?.length) return item.outlets;
-        return item.outlet && item.outlet !== item.projectBrand
-          ? [{ namaOutlet: item.outlet, noHpOutlet: item.noHpOutlet || "" }]
-          : [];
-      })
-      .map((item) => ({
-        namaOutlet: item.namaOutlet.trim(),
-        noHpOutlet: item.noHpOutlet || "",
-      }))
-      .filter((item) => item.namaOutlet);
-
-    return Array.from(
-      new Map(outlets.map((item) => [item.namaOutlet.toLowerCase(), item])).values(),
-    );
-  } catch {
-    return [];
-  }
-};
-
-
-
 
 function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "phone" | "sales" }) {
   const className = "h-4 w-4 text-[#C92C1E]";
@@ -437,124 +355,93 @@ export default function FormInputDummyPage() {
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
-  const [loggedInUser, setLoggedInUser] = useState("Satria");
-  const [loggedInRole, setLoggedInRole] = useState("Developer");
-  const isAdmin = ["Developer", "Admin", "ADMIN", "Direktur"].includes(loggedInRole);
+  const [loggedInUser] = useState(() => {
+    if (typeof window === "undefined") return "User";
+    return localStorage.getItem("piposmart_user_name") || "User";
+  });
+  const [loggedInRole] = useState(() => {
+    if (typeof window === "undefined") return "SALES";
+    return localStorage.getItem("piposmart_user_role") || "SALES";
+  });
+  const isAdmin = isAdminRole(loggedInRole);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const userName = localStorage.getItem("piposmart_user_name") || "Satria";
-    const userRole = localStorage.getItem("piposmart_user_role") || "Developer";
-
-    setLoggedInUser(userName);
-    setLoggedInRole(userRole);
-
-    const isAdminUser = ["Developer", "Admin", "ADMIN", "Direktur"].includes(userRole);
-
-    if (isAdminUser) {
-      getSupervisorList().then(setSupervisorList).catch(console.error);
-
-      if (userRole === "Supervisor" || userRole === "SUPERVISOR") {
-        getProfile().then(me => {
-          if (me && me.id) {
-            setSupervisorList(prev => {
-              if (prev.find(s => s.id === me.id)) return prev;
-              return [...prev, { id: me.id, name: me.name, role: "SUPERVISOR" } as UserResponse];
-            });
-          }
-        }).catch(console.error);
-      }
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const idParam = params.get("id");
-
-    if (!idParam) {
-      // Create mode
-      if (!isAdminUser) {
-        setFormInput((prev) => ({ ...prev, pic: "No PIC" }));
-      }
-      return;
-    }
-
-    const targetNo = Number(idParam);
-    setEditId(targetNo);
-
-    const cached = localStorage.getItem("piposmart_nasabah_data");
-    if (!cached) return;
-
-    try {
-      const list: NasabahItem[] = JSON.parse(cached);
-      const targetItem = list.find((row) => row.no === targetNo);
-
-      if (targetItem) {
-        let defaultPic = targetItem.pic;
-        if (!defaultPic || defaultPic === "-") {
-          defaultPic = "No PIC";
-        }
-        setFormInput((prev) => ({
-          ...prev,
-          ...targetItem,
-          pic: defaultPic,
-        }));
-          
-        if (targetItem.ownerId) {
-          fetchOwnerOutlets(targetItem.ownerId).then(outletsData => {
-            if (outletsData && outletsData.length > 0) {
-              setOutletRows(outletsData.map(o => ({
-                namaOutlet: o.name,
-                noHpOutlet: o.phone || ""
-              })));
-            } else {
-              setOutletRows([{ namaOutlet: "", noHpOutlet: "" }]);
+    const userRole = localStorage.getItem("piposmart_user_role") || "SALES";
+    const isAdminUser = isAdminRole(userRole);
+    const isSupervisorUser = isSupervisorRole(userRole);
+    const timer = window.setTimeout(() => {
+      if (isAdminUser) {
+        getSupervisorList().then(setSupervisorList).catch(console.error);
+        getSalesList().then(setSalesList).catch(console.error);
+      } else if (isSupervisorUser) {
+        getSalesList().then(setSalesList).catch(console.error);
+        getProfile()
+          .then((me) => {
+            if (me && me.id) {
+              setSupervisorList((prev) => {
+                if (prev.find((s) => s.id === me.id)) return prev;
+                return [...prev, { id: me.id, name: me.name, role: "SUPERVISOR" } as UserResponse];
+              });
             }
-          }).catch(console.error);
-        } else {
-          const outlets = buildOutletRowsFromOwner(targetItem);
-          setOutletRows(outlets.length > 0 ? outlets : [{ namaOutlet: "", noHpOutlet: "" }]);
-        }
+          })
+          .catch(console.error);
       }
-    } catch {
-      // ignore
-    }
+
+      const params = new URLSearchParams(window.location.search);
+      const idParam = params.get("id");
+
+      if (!idParam) {
+        if (!isAdminUser) {
+          setFormInput((prev) => ({ ...prev, pic: "No PIC" }));
+        }
+        return;
+      }
+
+      const ownerId = Number(idParam);
+      if (Number.isNaN(ownerId) || ownerId <= 0) return;
+
+      setEditId(ownerId);
+
+      Promise.all([fetchOwnerDetail(ownerId), fetchOwnerOutlets(ownerId)])
+        .then(([ownerResponse, outletsData]) => {
+          const owner = ownerResponse.data;
+          setFormInput((prev) => ({
+            ...prev,
+            ownerId: owner.id,
+            kodeOwner: owner.code || "",
+            namaOwner: owner.name || "",
+            projectBrand: owner.brand_name || "",
+            noHpOwner: owner.phone || "",
+            noHpOutlet: outletsData[0]?.phone || "",
+            outlet: outletsData[0]?.name || "",
+            outlets: outletsData.map((item) => ({
+              namaOutlet: item.name,
+              noHpOutlet: item.phone || "",
+            })),
+            pic: prev.pic || "No PIC",
+          }));
+
+          setOutletRows(
+            outletsData.length > 0
+              ? outletsData.map((item) => ({
+                  namaOutlet: item.name,
+                  noHpOutlet: item.phone || "",
+                }))
+              : [{ namaOutlet: "", noHpOutlet: "" }],
+          );
+        })
+        .catch(console.error);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleInputChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = event.target;
-
-    if (name === "kodeOwner") {
-      const matchedOwner = getOwnerProfileByKodeOwner(value);
-      const matchedOutlets = buildOutletRowsFromOwner(matchedOwner);
-
-      setFormInput((prev) => ({
-        ...prev,
-        kodeOwner: value,
-        namaOwner: matchedOwner?.namaOwner || "",
-        projectBrand: matchedOwner?.projectBrand || "",
-        noHpOwner: matchedOwner?.noHpOwner || "",
-        noHpOutlet: matchedOutlets[0]?.noHpOutlet || matchedOwner?.noHpOutlet || "",
-        pic: matchedOwner?.pic || "No PIC",
-        sumberNasabah: matchedOwner?.sumberNasabah || "Instagram",
-        outlet: matchedOutlets[0]?.namaOutlet || matchedOwner?.outlet || "",
-        outlets: matchedOutlets,
-      }));
-
-      setOutletRows(matchedOutlets.length > 0 ? matchedOutlets : [{ namaOutlet: "", noHpOutlet: "" }]);
-      setValidationErrors((prev) => ({
-        ...prev,
-        kodeOwner: "",
-        namaOwner: "",
-        projectBrand: "",
-        outlet: "",
-        noHpOwner: "",
-        noHpOutlet: "",
-      }));
-
-      return;
-    }
 
     setFormInput((prev) => ({
       ...prev,
@@ -640,20 +527,11 @@ export default function FormInputDummyPage() {
     setIsSaving(true);
     
     const normalizedOutlets = normalizeOutletRows(outletRows);
-    const existingOutlets = getExistingOutletsByKodeOwner(formInput.kodeOwner);
-    const mergedOutlets = Array.from(
-      new Map(
-        [...existingOutlets, ...normalizedOutlets].map((item) => [
-          item.namaOutlet.toLowerCase(),
-          item,
-        ]),
-      ).values(),
-    );
 
     const nextFormInput: Partial<NasabahItem> = {
       ...formInput,
       outlet: normalizedOutlets[0]?.namaOutlet || "",
-      outlets: mergedOutlets,
+      outlets: normalizedOutlets,
       noHpOutlet: normalizedOutlets[0]?.noHpOutlet || "",
     };
 
@@ -681,20 +559,7 @@ export default function FormInputDummyPage() {
 
     try {
       if (editId !== null) {
-        // Cari actual Owner ID melalui data Lead
-        let actualOwnerId = null;
-        try {
-          const leadData = await getLead(editId);
-          if (leadData?.owner?.id) {
-            actualOwnerId = leadData.owner.id;
-          }
-        } catch (e) {
-          console.error("Gagal mengambil data Lead", e);
-        }
-
-        if (!actualOwnerId) {
-          throw new Error("Gagal menemukan ID Owner untuk Lead ini. Pastikan data tersinkronisasi.");
-        }
+        const actualOwnerId = editId;
 
         const payloadUpdate = {
           code: nextFormInput.kodeOwner || "",
@@ -734,7 +599,7 @@ export default function FormInputDummyPage() {
           }
         }
 
-        alert("Data profil dan outlet berhasil diperbarui di backend.");
+        alert("Data owner dan outlet berhasil diperbarui di backend.");
       } else {
         // 1. Buat Owner
         const payloadCreateOwner = {
@@ -758,7 +623,7 @@ export default function FormInputDummyPage() {
 
         // 3. Ambil Lead yang otomatis dibuat oleh backend untuk Owner ini
         const leads = await getLeads();
-        const autoCreatedLead = leads.find((l: any) => l.owner?.id === newOwnerId);
+        const autoCreatedLead = leads.find((lead) => lead.owner?.id === newOwnerId);
 
         // 4. Assign PIC jika dipilih (hanya Supervisor)
         const targetPicUser = nextFormInput.pic !== "No PIC" ? supervisorList.find(s => s.name === nextFormInput.pic) : null;
@@ -773,9 +638,9 @@ export default function FormInputDummyPage() {
       }
 
       router.push("/menu/owner-outlet");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Gagal menyimpan ke backend", err);
-      alert(`Gagal menyimpan ke backend: ${err instanceof Error ? err.message : "Unknown error"}`);
+      alert(`Gagal menyimpan ke backend: ${getErrorMessage(err, "Unknown error")}`);
     } finally {
       setIsSaving(false);
     }
@@ -1134,20 +999,11 @@ function PhoneInput({
 }) {
   const initialCountry = getPhoneCountryByDialCode(value);
   const [selectedCountryCode, setSelectedCountryCode] = useState(initialCountry.code);
-
+  const detectedCountry = value ? getPhoneCountryByDialCode(value) : null;
   const selectedCountry =
+    detectedCountry ||
     PHONE_COUNTRY_OPTIONS.find((country) => country.code === selectedCountryCode) ||
     initialCountry;
-
-  useEffect(() => {
-    if (!value) return;
-
-    const detectedCountry = getPhoneCountryByDialCode(value);
-
-    if (value.startsWith(detectedCountry.dialCode)) {
-      setSelectedCountryCode((currentCode) => currentCode || detectedCountry.code);
-    }
-  }, [value]);
 
   const nationalNumber = stripDialCode(value, selectedCountry.dialCode);
   const formattedNationalNumber = formatPhoneNumberByCountry(

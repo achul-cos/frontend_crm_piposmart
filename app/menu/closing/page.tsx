@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import Sprint14g1Board, {
   type Sprint14g1Section,
@@ -8,9 +8,59 @@ import Sprint14g1Board, {
 import {
   fetchClosings,
   getSalesList,
+  getProfile,
   type ClosingItem,
   type UserResponse,
 } from "@/app/lib/api";
+
+type ClosingColumnKey =
+  | "code"
+  | "date"
+  | "customer_pic"
+  | "package"
+  | "pricing"
+  | "status";
+
+type ClosingColumnDefinition = {
+  key: ClosingColumnKey;
+  label: string;
+  description: string;
+};
+
+const closingColumnDefinitions: ClosingColumnDefinition[] = [
+  {
+    key: "code",
+    label: "Kode",
+    description: "Kode closing transaksi",
+  },
+  {
+    key: "date",
+    label: "Tanggal",
+    description: "Waktu closing transaksi",
+  },
+  {
+    key: "customer_pic",
+    label: "Kustomer & PIC",
+    description: "Owner/lead dan PIC sales",
+  },
+  {
+    key: "package",
+    label: "Paket Langganan",
+    description: "Plan, paket, dan tenor",
+  },
+  {
+    key: "pricing",
+    label: "Rincian Harga",
+    description: "Base price, diskon, biaya tambahan, total",
+  },
+  {
+    key: "status",
+    label: "Status",
+    description: "Status closing saat ini",
+  },
+];
+
+const closingColumnStorageKey = "piposmart_closing_visible_columns";
 
 const sections: Sprint14g1Section[] = [
   {
@@ -46,6 +96,11 @@ export default function ClosingPage() {
   const [closings, setClosings] = useState<ClosingItem[]>([]);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentRole, setCurrentRole] = useState(() =>
+    typeof window !== "undefined"
+      ? localStorage.getItem("piposmart_user_role") || ""
+      : ""
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [salesFilter, setSalesFilter] = useState("");
@@ -53,7 +108,68 @@ export default function ClosingPage() {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<ClosingColumnKey[]>(() => [
+    "date",
+    "customer_pic",
+    "package",
+    "pricing",
+    "status",
+  ]);
   const limit = 20;
+  const isSales = currentRole.toUpperCase() === "SALES";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const timer = window.setTimeout(() => {
+      const stored = localStorage.getItem(closingColumnStorageKey);
+      if (!stored) return;
+
+      try {
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) return;
+
+        const allowed = new Set(closingColumnDefinitions.map((column) => column.key));
+        const sanitized = parsed.filter(
+          (item): item is ClosingColumnKey =>
+            typeof item === "string" && allowed.has(item as ClosingColumnKey)
+        );
+
+        if (sanitized.length > 0) {
+          setVisibleColumns(sanitized);
+        }
+      } catch {
+        // abaikan preference lama yang rusak
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      getProfile()
+        .then((profile) => {
+          if (profile.role) {
+            setCurrentRole(profile.role);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("piposmart_user_role", profile.role);
+            }
+          }
+        })
+        .catch(() => {
+          // pakai fallback localStorage
+        });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(closingColumnStorageKey, JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -64,11 +180,16 @@ export default function ClosingPage() {
           limit,
           q: searchQuery || undefined,
           status: statusFilter || undefined,
-          sales_id: salesFilter ? Number(salesFilter) : undefined,
+          sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
           closed_from: dateFrom || undefined,
           closed_to: dateTo || undefined,
         }),
-        getSalesList(),
+        isSales
+          ? Promise.resolve<UserResponse[]>([])
+          : getSalesList().catch((err) => {
+              console.warn("Failed to fetch sales list, user might not have permission:", err);
+              return [];
+            }),
       ]);
 
       setClosings(closingData.items || []);
@@ -88,9 +209,28 @@ export default function ClosingPage() {
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, searchQuery, statusFilter, salesFilter, dateFrom, dateTo]);
+  }, [page, searchQuery, statusFilter, salesFilter, dateFrom, dateTo, isSales]);
 
   const totalPages = Math.ceil(totalItems / limit) || 1;
+  const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
+  const visibleColumnCount = visibleColumns.length;
+
+  const isColumnVisible = (key: ClosingColumnKey) => visibleColumns.includes(key);
+
+  const toggleColumnVisibility = (key: ClosingColumnKey) => {
+    setVisibleColumns((current) => {
+      if (current.includes(key)) {
+        if (current.length === 1) {
+          return current;
+        }
+        return current.filter((item) => item !== key);
+      }
+
+      return closingColumnDefinitions
+        .map((column) => column.key)
+        .filter((columnKey) => current.includes(columnKey) || columnKey === key);
+    });
+  };
 
   const formatDateTime = (str?: string) => {
     if (!str) return "-";
@@ -126,7 +266,7 @@ export default function ClosingPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 font-sans text-[#1C1C1E]">
+    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden space-y-6 font-sans text-[#1C1C1E]">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
@@ -144,8 +284,9 @@ export default function ClosingPage() {
         </div>
       </div>
 
-      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
-        <button
+      <div className="max-w-full overflow-x-auto">
+        <div className="inline-flex min-w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+          <button
           onClick={() => setActiveTab("list")}
           className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "list"
@@ -154,8 +295,8 @@ export default function ClosingPage() {
           }`}
         >
           Data Closing
-        </button>
-        <button
+          </button>
+          <button
           onClick={() => setActiveTab("analytics")}
           className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "analytics"
@@ -164,7 +305,8 @@ export default function ClosingPage() {
           }`}
         >
           Analitik
-        </button>
+          </button>
+        </div>
       </div>
 
       {activeTab === "analytics" ? (
@@ -233,106 +375,201 @@ export default function ClosingPage() {
                 <option value="REJECTED">Ditolak (Rejected)</option>
               </select>
 
-              <select
-                value={salesFilter}
-                onChange={(e) => {
-                  setSalesFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
-              >
-                <option value="">Semua PIC Sales</option>
-                {salesList.map((sales) => (
-                  <option key={sales.id} value={sales.id}>
-                    {sales.name}
-                  </option>
-                ))}
-              </select>
+              {visibleSalesFilter ? (
+                <select
+                  value={salesFilter}
+                  onChange={(e) => {
+                    setSalesFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
+                >
+                  <option value="">Semua PIC Sales</option>
+                  {salesList.map((sales) => (
+                    <option key={sales.id} value={sales.id}>
+                      {sales.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm">
+                  Menampilkan riwayat closing milik Anda
+                </div>
+              )}
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsColumnMenuOpen((current) => !current)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm transition hover:bg-gray-50"
+                >
+                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                  Kolom
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black text-gray-500">
+                    {visibleColumnCount}/{closingColumnDefinitions.length}
+                  </span>
+                </button>
+
+                {isColumnMenuOpen ? (
+                  <div className="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-gray-200 bg-white p-3 shadow-xl">
+                    <div className="mb-3 border-b border-gray-100 pb-3">
+                      <p className="text-sm font-black text-gray-900">Atur Kolom Tabel</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Sembunyikan atau tampilkan kolom seperti di Excel. Minimal satu kolom harus tetap aktif.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {closingColumnDefinitions.map((column) => {
+                        const checked = isColumnVisible(column.key);
+                        const isLastVisible = checked && visibleColumns.length === 1;
+
+                        return (
+                          <label
+                            key={column.key}
+                            className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 transition ${
+                              checked
+                                ? "border-[#C92C1E]/20 bg-[#FFF7F5]"
+                                : "border-gray-200 bg-white hover:bg-gray-50"
+                            } ${isLastVisible ? "opacity-80" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={isLastVisible}
+                              onChange={() => toggleColumnVisibility(column.key)}
+                              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-gray-800">{column.label}</p>
+                              <p className="mt-0.5 text-[11px] text-gray-500">{column.description}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setVisibleColumns(closingColumnDefinitions.map((column) => column.key))}
+                        className="text-xs font-black text-[#C92C1E] transition hover:text-[#a92217]"
+                      >
+                        Tampilkan Semua
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsColumnMenuOpen(false)}
+                        className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-black text-white transition hover:bg-black"
+                      >
+                        Selesai
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full min-w-[1300px] text-left text-sm text-gray-600">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table data-column-visibility-manual="true" className="w-full min-w-[1040px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
-                  <th className="px-4 py-4">Kode & Tanggal</th>
-                  <th className="px-4 py-4">Kustomer & PIC</th>
-                  <th className="px-4 py-4">Paket Langganan</th>
-                  <th className="px-4 py-4">Rincian Harga</th>
-                  <th className="px-4 py-4 text-center">Status</th>
+                  {isColumnVisible("code") ? <th className="px-4 py-4">Kode</th> : null}
+                  {isColumnVisible("date") ? <th className="px-4 py-4">Tanggal</th> : null}
+                  {isColumnVisible("customer_pic") ? <th className="px-4 py-4">Kustomer & PIC</th> : null}
+                  {isColumnVisible("package") ? <th className="px-4 py-4">Paket Langganan</th> : null}
+                  {isColumnVisible("pricing") ? <th className="px-4 py-4">Rincian Harga</th> : null}
+                  {isColumnVisible("status") ? <th className="px-4 py-4 text-center">Status</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-400 italic">
+                    <td colSpan={visibleColumnCount} className="p-8 text-center text-gray-400 italic">
                       Memuat data closing...
                     </td>
                   </tr>
                 ) : closings.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-400 italic">
+                    <td colSpan={visibleColumnCount} className="p-8 text-center text-gray-400 italic">
                       Tidak ada data closing yang sesuai dengan filter.
                     </td>
                   </tr>
                 ) : (
                   closings.map((row) => (
                     <tr key={row.id} className="transition-colors hover:bg-gray-50">
-                      <td className="whitespace-nowrap px-4 py-4">
-                        <div className="font-bold text-[#C92C1E]">{row.code || "-"}</div>
-                        <div className="mt-1 text-xs text-gray-500">{formatDateTime(row.closed_at)}</div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="font-black text-gray-900">{row.owner?.name || row.lead?.name || "-"}</div>
-                        <div className="mt-0.5 text-[10px] text-gray-400">Kode: {row.owner?.code || row.lead?.code || "-"}</div>
-                        <div className="mt-1.5 flex items-center gap-1 text-xs font-bold text-gray-600">
-                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                          </svg>
-                          PIC: {row.sales?.name || "Tanpa PIC"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="font-bold text-gray-900">{row.plan?.name || "Custom Plan"}</div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          Paket: <span className="font-semibold">{row.package?.name || "-"}</span>
-                        </div>
-                        <div className="mt-0.5 text-xs text-gray-500">
-                          Tenor:{" "}
-                          <span className="font-semibold">
-                            {row.tenure_months
-                              ? `${row.tenure_months} Bulan`
-                              : row.duration_days
-                                ? `${row.duration_days} Hari`
-                                : "-"}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="min-w-[220px] px-4 py-4">
-                        <div className="mb-1 flex items-center justify-between text-[10px]">
-                          <span className="text-gray-500">Harga Dasar:</span>
-                          <span className="font-bold">{formatCurrency(row.base_price || "0")}</span>
-                        </div>
-                        <div className="mb-1 flex items-center justify-between text-[10px] text-red-500">
-                          <span>Diskon:</span>
-                          <span className="font-bold">-{formatCurrency(row.discount_amount || "0")}</span>
-                        </div>
-                        {parseFloat(row.additional_charge || "0") > 0 && (
-                          <div className="mb-1 flex items-center justify-between text-[10px]">
-                            <span className="text-gray-500">Biaya Tambahan:</span>
-                            <span className="font-bold">{formatCurrency(row.additional_charge || "0")}</span>
+                      {isColumnVisible("code") ? (
+                        <td className="whitespace-nowrap px-4 py-4">
+                          <div className="font-bold text-[#C92C1E]">{row.code || "-"}</div>
+                        </td>
+                      ) : null}
+                      {isColumnVisible("date") ? (
+                        <td className="whitespace-nowrap px-4 py-4">
+                          <div className="font-bold text-gray-900">{formatDateTime(row.closed_at)}</div>
+                        </td>
+                      ) : null}
+                      {isColumnVisible("customer_pic") ? (
+                        <td className="px-4 py-4">
+                          <div className="font-black text-gray-900">{row.owner?.name || row.lead?.name || "-"}</div>
+                          <div className="mt-0.5 text-[10px] text-gray-400">Kode: {row.owner?.code || row.lead?.code || "-"}</div>
+                          <div className="mt-1.5 flex items-center gap-1 text-xs font-bold text-gray-600">
+                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                            </svg>
+                            PIC: {row.sales?.name || "Tanpa PIC"}
                           </div>
-                        )}
-                        <div className="mb-2 flex items-center justify-between text-[10px] text-purple-600">
-                          <span>Kode Unik:</span>
-                          <span className="font-bold">+{row.unique_transfer_code || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between border-t border-gray-100 pt-1.5 text-xs">
-                          <span className="font-bold text-gray-700">Total Akhir:</span>
-                          <span className="text-sm font-black text-gray-900">{formatCurrency(row.final_amount)}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-center">{getStatusBadge(row.status)}</td>
+                        </td>
+                      ) : null}
+                      {isColumnVisible("package") ? (
+                        <td className="px-4 py-4">
+                          <div className="font-bold text-gray-900">{row.plan?.name || "Custom Plan"}</div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            Paket: <span className="font-semibold">{row.package?.name || "-"}</span>
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500">
+                            Tenor:{" "}
+                            <span className="font-semibold">
+                              {row.tenure_months
+                                ? `${row.tenure_months} Bulan`
+                                : row.duration_days
+                                  ? `${row.duration_days} Hari`
+                                  : "-"}
+                            </span>
+                          </div>
+                        </td>
+                      ) : null}
+                      {isColumnVisible("pricing") ? (
+                        <td className="min-w-[220px] px-4 py-4">
+                          <div className="mb-1 flex items-center justify-between text-[10px]">
+                            <span className="text-gray-500">Harga Dasar:</span>
+                            <span className="font-bold">{formatCurrency(row.base_price || "0")}</span>
+                          </div>
+                          <div className="mb-1 flex items-center justify-between text-[10px] text-red-500">
+                            <span>Diskon:</span>
+                            <span className="font-bold">-{formatCurrency(row.discount_amount || "0")}</span>
+                          </div>
+                          {parseFloat(row.additional_charge || "0") > 0 && (
+                            <div className="mb-1 flex items-center justify-between text-[10px]">
+                              <span className="text-gray-500">Biaya Tambahan:</span>
+                              <span className="font-bold">{formatCurrency(row.additional_charge || "0")}</span>
+                            </div>
+                          )}
+                          <div className="mb-2 flex items-center justify-between text-[10px] text-purple-600">
+                            <span>Kode Unik:</span>
+                            <span className="font-bold">+{row.unique_transfer_code || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-gray-100 pt-1.5 text-xs">
+                            <span className="font-bold text-gray-700">Total Akhir:</span>
+                            <span className="text-sm font-black text-gray-900">{formatCurrency(row.final_amount)}</span>
+                          </div>
+                        </td>
+                      ) : null}
+                      {isColumnVisible("status") ? (
+                        <td className="px-4 py-4 text-center">{getStatusBadge(row.status)}</td>
+                      ) : null}
                     </tr>
                   ))
                 )}
