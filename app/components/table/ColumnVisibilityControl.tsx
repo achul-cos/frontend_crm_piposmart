@@ -27,7 +27,7 @@ function shouldHideByDefault(label: string) {
     return false;
   }
 
-  if (["payment", "wallet", "ledger"].includes(normalized)) {
+  if (["payment", "wallet", "ledger", "saldo owner"].includes(normalized)) {
     return true;
   }
 
@@ -58,7 +58,7 @@ export default function ColumnVisibilityControl({
     const table = document.getElementById(tableId);
     if (!table) return;
 
-    const frame = window.requestAnimationFrame(() => {
+    const updateColumns = () => {
       const headers = Array.from(
         table.querySelectorAll("thead tr:first-child th")
       ).map((cell, index) => ({
@@ -73,9 +73,27 @@ export default function ColumnVisibilityControl({
           .filter((column) => shouldHideByDefault(column.label))
           .map((column) => column.index);
       });
+    };
+
+    // Initial update
+    const frame = window.requestAnimationFrame(updateColumns);
+
+    // Watch for dynamic changes in the table header
+    const thead = table.querySelector("thead");
+    const observer = new MutationObserver(() => {
+      window.requestAnimationFrame(updateColumns);
     });
 
-    return () => window.cancelAnimationFrame(frame);
+    if (thead) {
+      observer.observe(thead, { childList: true, subtree: true });
+    } else {
+      observer.observe(table, { childList: true, subtree: true });
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [tableId]);
 
   useEffect(() => {

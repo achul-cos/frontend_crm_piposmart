@@ -25,6 +25,8 @@ import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import * as XLSX from "xlsx";
 import AnalyticsTab from "./AnalyticsTab";
+import PageLayout from "@/app/components/layout/PageLayout";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 
 const modalInputClass =
@@ -38,6 +40,90 @@ const modalTextareaClass =
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function WalletBalanceCell({ ownerId }: { ownerId: number }) {
+  const [balance, setBalance] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("@/app/lib/api").then(({ getOwnerOverview }) => {
+      getOwnerOverview(ownerId)
+        .then((res) => {
+          if (!cancelled) setBalance(res.balance.wallet.balance);
+        })
+        .catch(() => {
+          if (!cancelled) setBalance("-");
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId]);
+
+  if (balance === null) return <span className="text-gray-400 text-xs">Memuat...</span>;
+  if (balance === "-") return <span className="text-gray-400 text-xs">-</span>;
+
+  const amount = Number(balance || 0);
+  const formatted = new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+
+  return <span className="font-bold text-gray-900">{formatted}</span>;
+}
+
+function AutocompleteFilter({ label, placeholder, value, onChange, options }: { label: string, placeholder: string, value: string, onChange: (val: string) => void, options: string[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().startsWith(value.toLowerCase())
+  );
+
+  return (
+    <div ref={wrapperRef} className="flex flex-col gap-1.5 w-full relative">
+      <span className="text-xs font-semibold text-black">{label}</span>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+      />
+      {isOpen && value && filteredOptions.length > 0 && (
+        <ul className="absolute left-0 top-full z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {filteredOptions.map((opt) => (
+            <li
+              key={opt}
+              onClick={() => {
+                onChange(opt);
+                setIsOpen(false);
+              }}
+              className="cursor-pointer px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-red-50 hover:text-[#C92C1E]"
+            >
+              {opt}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function ModalShell({
@@ -230,7 +316,6 @@ export default function OwnerOutletPage() {
     phone: "",
     city: "",
   });
-  const [openFilter, setOpenFilter] = useState<string | null>(null);
   const [selectedOwnerIds, setSelectedOwnerIds] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
@@ -262,11 +347,15 @@ export default function OwnerOutletPage() {
     phone: "",
     province: "",
     city: "",
+    district: "",
+    sub_district: "",
     address: "",
     outlet_name: "",
     outlet_phone: "",
     outlet_province: "",
     outlet_city: "",
+    outlet_district: "",
+    outlet_sub_district: "",
     outlet_address: "",
   });
 
@@ -280,6 +369,8 @@ export default function OwnerOutletPage() {
     phone: "",
     province: "",
     city: "",
+    district: "",
+    sub_district: "",
     address: "",
     created_at: "",
   });
@@ -287,17 +378,30 @@ export default function OwnerOutletPage() {
   const {
     provinces,
     cities,
+    districts,
+    villages,
     loadCitiesByProvinceName,
+    loadDistrictsByCityName,
+    loadVillagesByDistrictName,
     loadingProvinces,
     loadingCities,
+    loadingDistricts,
+    loadingVillages,
+    loadAllForEdit,
   } = useLocation();
 
   const {
     provinces: outletProvinces,
     cities: outletCities,
+    districts: outletDistricts,
+    villages: outletVillages,
     loadCitiesByProvinceName: loadOutletCities,
+    loadDistrictsByCityName: loadOutletDistricts,
+    loadVillagesByDistrictName: loadOutletVillages,
     loadingProvinces: outletLoadingProvinces,
     loadingCities: outletLoadingCities,
+    loadingDistricts: outletLoadingDistricts,
+    loadingVillages: outletLoadingVillages,
   } = useLocation();
 
   useEffect(() => {
@@ -414,6 +518,8 @@ export default function OwnerOutletPage() {
             phone: addOwnerForm.outlet_phone || "",
             province: addOwnerForm.outlet_province || "",
             city: addOwnerForm.outlet_city || "",
+            district: addOwnerForm.outlet_district || "",
+            sub_district: addOwnerForm.outlet_sub_district || "",
             address: addOwnerForm.outlet_address || "",
           },
         ]);
@@ -428,11 +534,15 @@ export default function OwnerOutletPage() {
         phone: "",
         province: "",
         city: "",
+        district: "",
+        sub_district: "",
         address: "",
         outlet_name: "",
         outlet_phone: "",
         outlet_province: "",
         outlet_city: "",
+        outlet_district: "",
+        outlet_sub_district: "",
         outlet_address: "",
       });
       loadOwners();
@@ -452,13 +562,13 @@ export default function OwnerOutletPage() {
       phone: owner.phone || "",
       province: owner.province || "",
       city: owner.city || "",
+      district: owner.district || "",
+      sub_district: owner.sub_district || "",
       address: owner.address || "",
       created_at: owner.created_at || "",
     });
 
-    if (owner.province) {
-      loadCitiesByProvinceName(owner.province);
-    }
+    loadAllForEdit(owner.province, owner.city, owner.district);
 
     setIsEditOwnerModalOpen(true);
   };
@@ -481,6 +591,8 @@ export default function OwnerOutletPage() {
         phone: editOwnerForm.phone,
         province: editOwnerForm.province,
         city: editOwnerForm.city,
+        district: editOwnerForm.district,
+        sub_district: editOwnerForm.sub_district,
         address: editOwnerForm.address,
       });
 
@@ -805,325 +917,254 @@ export default function OwnerOutletPage() {
   const activeCount = owners.filter((owner) => owner.status === "ACTIVE").length;
   const inactiveCount = owners.length - activeCount;
 
-  const renderFilterHeader = (key: string, label: string) => {
+  const renderSortableHeader = (key: string, label: string) => {
     const isSorted = sort.replace("-", "") === key;
     const isDesc = sort.startsWith("-");
-
     return (
-      <th className="relative whitespace-nowrap px-4 py-4 font-bold">
-        <div className="flex select-none items-center gap-2">
-          <div
-            className="flex cursor-pointer items-center gap-1 transition-colors hover:text-red-700"
-            onClick={() => setSort(sort === key ? `-${key}` : key)}
-            title={`Urutkan berdasarkan ${label}`}
-          >
-            {label}
-            <div className="-space-y-1 flex flex-col opacity-40 transition-opacity group-hover:opacity-100">
-              <svg
-                className={`h-2.5 w-2.5 ${
-                  isSorted && !isDesc ? "text-[#C92C1E] opacity-100" : ""
-                }`}
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <svg
-                className={`h-2.5 w-2.5 ${
-                  isSorted && isDesc ? "text-[#C92C1E] opacity-100" : ""
-                }`}
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
+      <th 
+        className="px-4 py-4 font-bold cursor-pointer hover:text-red-700 transition-colors"
+        onClick={() => setSort(sort === key ? `-${key}` : key)}
+        title={`Urutkan berdasarkan ${label}`}
+      >
+        <div className="flex items-center gap-2">
+          {label}
+          <div className="-space-y-1 flex flex-col opacity-40">
+            <svg className={`h-2.5 w-2.5 ${isSorted && !isDesc ? "text-[#C92C1E] opacity-100" : ""}`} fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            <svg className={`h-2.5 w-2.5 ${isSorted && isDesc ? "text-[#C92C1E] opacity-100" : ""}`} fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
           </div>
-
-          <svg
-            className={`ml-1 h-3.5 w-3.5 cursor-pointer transition-colors ${
-              filters[key as keyof typeof filters]
-                ? "text-[#C92C1E]"
-                : "text-gray-400 hover:text-gray-600"
-            }`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            onClick={() => setOpenFilter(openFilter === key ? null : key)}
-          >
-            <title>{`Filter ${label}`}</title>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2.5}
-              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-            />
-          </svg>
         </div>
-
-        {openFilter === key && (
-          <>
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => setOpenFilter(null)}
-            />
-            <div className="absolute left-4 top-full z-20 mt-1 w-48 origin-top rounded-lg border border-gray-200 bg-white p-2 shadow-xl">
-              <div className="mb-2 flex items-center gap-2">
-                <svg
-                  className="h-4 w-4 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <span className="text-sm font-semibold text-gray-600">
-                  Cari {label}
-                </span>
-              </div>
-
-              <input
-                type="text"
-                placeholder="Ketik untuk mencari..."
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm font-normal focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-                value={filters[key as keyof typeof filters]}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, [key]: e.target.value }))
-                }
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") setOpenFilter(null);
-                }}
-              />
-            </div>
-          </>
-        )}
       </th>
     );
   };
 
+
+  const statCards = (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
+        <div className="flex flex-col">
+          <p className="text-xs font-bold uppercase tracking-wider text-red-100">Total Owner</p>
+          <div className="mt-1">
+            <h2 className="text-3xl font-black text-white">{pagination.total}</h2>
+          </div>
+        </div>
+        <div className="absolute -right-4 -top-4 opacity-10 pointer-events-none">
+          <svg className="h-32 w-32 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+        </div>
+      </div>
+      
+      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col">
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Owner Aktif</p>
+            <div className="h-3 w-3 rounded-full bg-emerald-400"></div>
+          </div>
+          <div className="mt-1">
+            <h2 className="text-3xl font-black text-gray-900">{activeCount}</h2>
+            <p className="mt-1 text-[10px] text-gray-400 font-medium">Total owner aktif pada data saat ini.</p>
+          </div>
+        </div>
+      </div>
+      
+      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col">
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Owner Non-Aktif</p>
+            <div className="h-3 w-3 rounded-full bg-red-600"></div>
+          </div>
+          <div className="mt-1">
+            <h2 className="text-3xl font-black text-gray-900">{inactiveCount}</h2>
+            <p className="mt-1 text-[10px] text-gray-400 font-medium">Total owner non-aktif pada data saat ini.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const tabButtons = (
+    <>
+      {/* 2. Content Sections - Tabs */}
+      <div className="space-y-4">
+        <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+          <div className="flex text-sm font-bold">
+            {(
+              [
+                { key: "list", label: "Daftar Owner" },
+                { key: "analytics", label: "Analisis" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-all ${
+                  activeTab === tab.key
+                    ? "bg-white text-[#C92C1E] shadow-sm"
+                    : "text-gray-500 hover:bg-gray-200 hover:text-gray-900"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  const actionButtons = (
+    <>
+      {selectedOwnerIds.length > 0 && (
+        <button onClick={handleBulkDelete} className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"><TrashIcon className="h-4 w-4" /> Hapus Terpilih ({selectedOwnerIds.length})</button>
+      )}
+      <button onClick={() => setIsAddOwnerModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"><PlusIcon className="h-4 w-4" /> Tambah Owner</button>
+      <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"><UploadIcon className="h-4 w-4" /> Import Data</button>
+      <button onClick={handleExportExcel} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"><DownloadIcon className="h-4 w-4" /> Export Data</button>
+      <button onClick={() => setIsImportHistoryModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"><HistoryIcon className="h-4 w-4" /> Riwayat</button>
+      <button onClick={() => router.push("/menu/owner-outlet/trash")} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"><TrashIcon className="h-4 w-4" /> Hapus</button>
+    </>
+  );
+
+  const uniqueNames = Array.from(new Set(owners.map(o => o.name).filter(Boolean))) as string[];
+  const uniqueBrands = Array.from(new Set(owners.map(o => o.brand_name).filter(Boolean))) as string[];
+  const uniquePhones = Array.from(new Set(owners.map(o => o.phone).filter(Boolean))) as string[];
+  const uniqueCities = Array.from(new Set(owners.map(o => o.city).filter(Boolean))) as string[];
+
+  const filterInputs = (
+    <div className="grid grid-cols-2 gap-4 w-full md:grid-cols-3 lg:grid-cols-6">
+      <AutocompleteFilter
+        label="Nama Owner"
+        placeholder="Filter Nama..."
+        value={filters.name || ""}
+        onChange={(val) => {
+          setFilters(prev => ({ ...prev, name: val }));
+          setPagination(prev => ({ ...prev, page: 1 }));
+        }}
+        options={uniqueNames}
+      />
+      <AutocompleteFilter
+        label="Brand"
+        placeholder="Filter Brand..."
+        value={filters.brand_name || ""}
+        onChange={(val) => {
+          setFilters(prev => ({ ...prev, brand_name: val }));
+          setPagination(prev => ({ ...prev, page: 1 }));
+        }}
+        options={uniqueBrands}
+      />
+      <AutocompleteFilter
+        label="Kontak"
+        placeholder="Filter Kontak..."
+        value={filters.phone || ""}
+        onChange={(val) => {
+          setFilters(prev => ({ ...prev, phone: val }));
+          setPagination(prev => ({ ...prev, page: 1 }));
+        }}
+        options={uniquePhones}
+      />
+      <AutocompleteFilter
+        label="Wilayah / Lokasi"
+        placeholder="Semua Wilayah"
+        value={filters.city || ""}
+        onChange={(val) => {
+          setFilters(prev => ({ ...prev, city: val }));
+          setPagination(prev => ({ ...prev, page: 1 }));
+        }}
+        options={uniqueCities}
+      />
+      <label className="flex flex-col gap-1.5 w-full">
+        <span className="text-xs font-semibold text-black">Dari Tanggal</span>
+        <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]" />
+      </label>
+      <label className="flex flex-col gap-1.5 w-full">
+        <span className="text-xs font-semibold text-black">Sampai Tanggal</span>
+        <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]" />
+      </label>
+    </div>
+  );
+
+  const searchBox = (
+    <div className="flex w-full items-center gap-3">
+      <form onSubmit={handleSearch} className="relative flex-1">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <input type="text" placeholder="Cari kode owner, nama owner, email, telepon, outlet, wilayah, brand, dll..." value={search} onChange={(e) => { setSearch(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }} className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]" />
+      </form>
+      <ColumnVisibilityControl tableId="owner-table" storageKey="column-visibility:owner-table" buttonLabel="Kolom" />
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      
+      {/* 1. Header Card */}
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
-        <div className="flex flex-col items-start justify-between gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center">
+        <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
-              <span>Menu</span>
-              <svg
-                className="h-3 w-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={3}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-              <span className="text-[#C92C1E]">Owner</span>
-            </div>
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-1">
+            <span>Menu</span>
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-[#C92C1E]">Owner</span>
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+            Manajemen Owner
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 max-w-3xl">
+            Data seluruh owner beserta outlet miliknya untuk informasi umum, status langganan, dan sampah data owner.
+          </p>
+        </div>
+        </div>
+      </div>
 
-            <h1 className="text-2xl font-black tracking-tight text-gray-900">
-              Manajemen Owner
-            </h1>
+      {/* 2. Stat Cards */}
+      <div>{statCards}</div>
 
-            <p className="mt-1 text-sm text-gray-500">
-              Kelola data owner beserta outlet miliknya, import Excel, dan
-              riwayat perubahan data.
-            </p>
+      {/* 3. Tabs and Main Content Area */}
+      <div className="space-y-4">
+        {tabButtons}
+
+        {activeTab === "analytics" ? (
+          <AnalyticsTab />
+        ) : (
+          <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        
+        {/* Table Header (Title, Desc, Actions) */}
+        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Daftar Owner</h2>
+            <p className="mt-1 text-sm text-gray-500">Daftar seluruh data owner yang terdaftar dalam sistem.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 w-full">
+            {actionButtons}
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-              Total Owner
-            </p>
-            <h2 className="text-3xl font-black">{pagination.total}</h2>
+        {/* Filters */}
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-wrap items-start gap-4">
+            {filterInputs}
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Owner Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{activeCount}</h2>
+        {/* Search */}
+        <div className="border-b border-gray-50 px-6 py-4">
+          {searchBox}
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Owner Non-Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{inactiveCount}</h2>
-        </div>
-      </div>
-
-      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
-        <button
-          onClick={() => setActiveTab("list")}
-          className={`rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
-            activeTab === "list"
-              ? "bg-white text-[#C92C1E] shadow-sm"
-              : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-          }`}
-        >
-          Daftar Owner
-        </button>
-
-        <button
-          onClick={() => setActiveTab("analytics")}
-          className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all ${
-            activeTab === "analytics"
-              ? "bg-white text-[#C92C1E] shadow-sm"
-              : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-          }`}
-        >
-          <ChartIcon />
-          Analitik
-        </button>
-      </div>
-
-      {activeTab === "analytics" ? (
-        <AnalyticsTab />
-      ) : (
-        <>
-          <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-              <form
-                onSubmit={handleSearch}
-                className="flex w-full flex-wrap items-center gap-2 lg:w-auto"
-              >
-                <input
-                  type="text"
-                  placeholder="Cari Owner..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-                />
-
-                <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-1.5 min-w-max">
-                  <span className="text-xs text-gray-500 font-medium">Tgl Dibuat:</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setPagination(prev => ({ ...prev, page: 1 }));
-                    }}
-                    className="text-sm text-black outline-none bg-transparent w-[120px] focus:border-[#C92C1E]"
-                    title="Mulai Tanggal"
-                  />
-                  <span className="text-sm text-gray-400 font-bold">-</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setPagination(prev => ({ ...prev, page: 1 }));
-                    }}
-                    className="text-sm text-black outline-none bg-transparent w-[120px] focus:border-[#C92C1E]"
-                    title="Sampai Tanggal"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="rounded-lg bg-[#C92C1E] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
-                >
-                  Cari
-                </button>
-              </form>
-
-              <div className="flex w-full justify-end gap-2 sm:w-auto">
-                {selectedOwnerIds.length > 0 && (
-                  <button
-                    onClick={handleBulkDelete}
-                    className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
-                  >
-                    <TrashIcon />
-                    Hapus Terpilih ({selectedOwnerIds.length})
-                  </button>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={exportStartDate}
-                    onChange={(e) => setExportStartDate(e.target.value)}
-                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-black outline-none focus:border-[#C92C1E]"
-                    title="Mulai Tanggal (Export)"
-                  />
-                  <span className="text-sm font-bold text-black">-</span>
-                  <input
-                    type="date"
-                    value={exportEndDate}
-                    onChange={(e) => setExportEndDate(e.target.value)}
-                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-black outline-none focus:border-[#C92C1E]"
-                    title="Sampai Tanggal (Export)"
-                  />
-                </div>
-
-                <button
-                  onClick={handleExportExcel}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
-                >
-                  <DownloadIcon className="h-4 w-4 text-blue-600" />
-                  Export Excel
-                </button>
-
-                <button
-                  onClick={() => setIsImportHistoryModalOpen(true)}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-                >
-                  <HistoryIcon />
-                  Riwayat Import
-                </button>
-
-                <button
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
-                >
-                  <UploadIcon className="h-4 w-4 text-emerald-600" />
-                  Import Excel
-                </button>
-
-                <button
-                  onClick={() => setIsAddOwnerModalOpen(true)}
-                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-                >
-                  <PlusIcon />
-                  Tambah Owner
-                </button>
-
-                <button
-                  onClick={() => router.push("/menu/owner-outlet/trash")}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-200"
-                >
-                  <TrashIcon className="h-4 w-4 text-gray-600" />
-                  Lihat Sampah
-                </button>
-              </div>
-            </div>
-
+        {/* Table Content */}
+        <div className="relative w-full">
+          <div className="flex flex-col">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+
+              <table id="owner-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
                 <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="w-12 px-4 py-4 text-center">
@@ -1143,14 +1184,15 @@ export default function OwnerOutletPage() {
                         className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       />
                     </th>
-                    {renderFilterHeader("code", "Kode")}
-                    {renderFilterHeader("name", "Nama Owner")}
-                    {renderFilterHeader("brand_name", "Brand")}
-                    {renderFilterHeader("phone", "Kontak")}
-                    {renderFilterHeader("city", "Lokasi")}
-                    <th className="px-4 py-4 text-center font-bold">Tgl Dibuat</th>
-                    <th className="px-4 py-4 text-center font-bold">Status</th>
-                    <th className="px-4 py-4 text-center font-bold">Outlet</th>
+                    <th className="w-12 px-4 py-4 text-center font-bold">No.</th>
+                    {renderSortableHeader("name", "Nama Owner")}
+                    {renderSortableHeader("brand_name", "Brand")}
+                    {renderSortableHeader("phone", "Kontak")}
+                    {renderSortableHeader("city", "Lokasi")}
+                    {renderSortableHeader("created_at", "Tgl. Dibuat")}
+                    {renderSortableHeader("status", "Status")}
+                    {renderSortableHeader("outlet_count", "Outlet")}
+                    {renderSortableHeader("wallet_balance", "Saldo Owner")}
                     <th className="px-4 py-4 text-center font-bold">Aksi</th>
                   </tr>
                 </thead>
@@ -1195,10 +1237,10 @@ export default function OwnerOutletPage() {
                             />
                           </td>
 
-                          <td className="px-4 py-4 align-top font-medium text-gray-900">
-                            {owner.code}
+                          <td className="px-4 py-4 text-center font-bold text-gray-900">
+                            {(pagination.page - 1) * pagination.limit + owners.indexOf(owner) + 1}
                           </td>
-                          <td className="px-4 py-4 align-top font-medium text-gray-900">
+                          <td className="px-4 py-4 align-top font-bold text-gray-900">
                             {owner.name}
                           </td>
                           <td className="px-4 py-4 align-top">
@@ -1206,9 +1248,7 @@ export default function OwnerOutletPage() {
                           </td>
                           <td className="px-4 py-4 align-top">{owner.phone}</td>
                           <td className="px-4 py-4 align-top">
-                            {owner.city
-                              ? `${owner.city}, ${owner.province || ""}`
-                              : "-"}
+                            {[owner.sub_district, owner.district, owner.city, owner.province].filter(Boolean).join(", ") || "-"}
                           </td>
                           <td className="px-4 py-4 align-top whitespace-nowrap">
                             {owner.created_at ? new Date(owner.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : "-"}
@@ -1229,6 +1269,9 @@ export default function OwnerOutletPage() {
                               {owner.outlet_count || 0}
                             </span>
                           </td>
+                          <td className="px-4 py-4 align-top text-right whitespace-nowrap">
+                            <WalletBalanceCell ownerId={owner.id} />
+                          </td>
                           <td
                             className="px-4 py-4 text-center"
                             onMouseDown={(e) => e.stopPropagation()}
@@ -1239,10 +1282,10 @@ export default function OwnerOutletPage() {
                                   e.stopPropagation();
                                   handleViewOutlets(owner);
                                 }}
-                                className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
                                 title="Detail Outlet"
                               >
-                                <EyeIcon />
+                                <EyeIcon className="h-4 w-4" />
                               </button>
 
                               <button
@@ -1250,10 +1293,10 @@ export default function OwnerOutletPage() {
                                   e.stopPropagation();
                                   handleOpenEditOwner(owner);
                                 }}
-                                className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
                                 title="Edit Owner"
                               >
-                                <EditIcon />
+                                <EditIcon className="h-4 w-4" />
                               </button>
 
                               {owner.status !== "ACTIVE" ? (
@@ -1262,10 +1305,10 @@ export default function OwnerOutletPage() {
                                     e.stopPropagation();
                                     handleRestoreOwner(owner.id);
                                   }}
-                                  className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                                  className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-600 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50"
                                   title="Restore Owner"
                                 >
-                                  <RestoreIcon />
+                                  <RestoreIcon className="h-4 w-4" />
                                 </button>
                               ) : (
                                 <button
@@ -1273,10 +1316,10 @@ export default function OwnerOutletPage() {
                                     e.stopPropagation();
                                     handleDeleteOwner(owner.id);
                                   }}
-                                  className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                                  className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
                                   title="Hapus Owner"
                                 >
-                                  <TrashIcon />
+                                  <TrashIcon className="h-4 w-4" />
                                 </button>
                               )}
                             </div>
@@ -1291,8 +1334,8 @@ export default function OwnerOutletPage() {
 
             <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
-                <span className="text-xs text-gray-500">
-                  Total {pagination.total} Owner
+                <span className="text-xs font-medium text-gray-500">
+                  Menampilkan {(pagination.page - 1) * pagination.limit + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total} data
                 </span>
 
                 <div className="flex items-center gap-2">
@@ -1352,8 +1395,12 @@ export default function OwnerOutletPage() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+      )}
+      </div>
 
-          <ImportHistoryModal
+      <ImportHistoryModal
             isOpen={isImportHistoryModalOpen}
             onClose={() => setIsImportHistoryModalOpen(false)}
             profile="OWNER_OUTLET"
@@ -1480,9 +1527,15 @@ export default function OwnerOutletPage() {
                     </span>
                     <select
                       value={addOwnerForm.city}
-                      onChange={(e) =>
-                        setAddOwnerForm({ ...addOwnerForm, city: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setAddOwnerForm({
+                          ...addOwnerForm,
+                          city: e.target.value,
+                          district: "",
+                          sub_district: "",
+                        });
+                        loadDistrictsByCityName(e.target.value);
+                      }}
                       className={modalSelectClass}
                       disabled={
                         isAddOwnerSubmitting ||
@@ -1494,6 +1547,64 @@ export default function OwnerOutletPage() {
                       {cities.map((city) => (
                         <option key={city.id} value={city.name}>
                           {city.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kecamatan
+                    </span>
+                    <select
+                      value={addOwnerForm.district}
+                      onChange={(e) => {
+                        setAddOwnerForm({
+                          ...addOwnerForm,
+                          district: e.target.value,
+                          sub_district: "",
+                        });
+                        loadVillagesByDistrictName(e.target.value);
+                      }}
+                      className={modalSelectClass}
+                      disabled={
+                        isAddOwnerSubmitting ||
+                        !addOwnerForm.city ||
+                        loadingDistricts
+                      }
+                    >
+                      <option value="">Pilih Kecamatan</option>
+                      {districts.map((district) => (
+                        <option key={district.id} value={district.name}>
+                          {district.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kelurahan/Desa
+                    </span>
+                    <select
+                      value={addOwnerForm.sub_district}
+                      onChange={(e) =>
+                        setAddOwnerForm({
+                          ...addOwnerForm,
+                          sub_district: e.target.value,
+                        })
+                      }
+                      className={modalSelectClass}
+                      disabled={
+                        isAddOwnerSubmitting ||
+                        !addOwnerForm.district ||
+                        loadingVillages
+                      }
+                    >
+                      <option value="">Pilih Kelurahan/Desa</option>
+                      {villages.map((village) => (
+                        <option key={village.id} value={village.name}>
+                          {village.name}
                         </option>
                       ))}
                     </select>
@@ -1598,12 +1709,15 @@ export default function OwnerOutletPage() {
                     </span>
                     <select
                       value={addOwnerForm.outlet_city || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setAddOwnerForm({
                           ...addOwnerForm,
                           outlet_city: e.target.value,
-                        })
-                      }
+                          outlet_district: "",
+                          outlet_sub_district: "",
+                        });
+                        loadOutletDistricts(e.target.value);
+                      }}
                       className={modalSelectClass}
                       disabled={
                         isAddOwnerSubmitting ||
@@ -1615,6 +1729,64 @@ export default function OwnerOutletPage() {
                       {outletCities.map((city) => (
                         <option key={city.id} value={city.name}>
                           {city.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kecamatan Outlet
+                    </span>
+                    <select
+                      value={addOwnerForm.outlet_district || ""}
+                      onChange={(e) => {
+                        setAddOwnerForm({
+                          ...addOwnerForm,
+                          outlet_district: e.target.value,
+                          outlet_sub_district: "",
+                        });
+                        loadOutletVillages(e.target.value);
+                      }}
+                      className={modalSelectClass}
+                      disabled={
+                        isAddOwnerSubmitting ||
+                        !addOwnerForm.outlet_city ||
+                        outletLoadingDistricts
+                      }
+                    >
+                      <option value="">Pilih Kecamatan</option>
+                      {outletDistricts.map((district) => (
+                        <option key={district.id} value={district.name}>
+                          {district.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kelurahan/Desa Outlet
+                    </span>
+                    <select
+                      value={addOwnerForm.outlet_sub_district || ""}
+                      onChange={(e) =>
+                        setAddOwnerForm({
+                          ...addOwnerForm,
+                          outlet_sub_district: e.target.value,
+                        })
+                      }
+                      className={modalSelectClass}
+                      disabled={
+                        isAddOwnerSubmitting ||
+                        !addOwnerForm.outlet_district ||
+                        outletLoadingVillages
+                      }
+                    >
+                      <option value="">Pilih Kelurahan/Desa</option>
+                      {outletVillages.map((village) => (
+                        <option key={village.id} value={village.name}>
+                          {village.name}
                         </option>
                       ))}
                     </select>
@@ -1813,12 +1985,15 @@ export default function OwnerOutletPage() {
                     </span>
                     <select
                       value={editOwnerForm.city}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setEditOwnerForm({
                           ...editOwnerForm,
                           city: e.target.value,
-                        })
-                      }
+                          district: "",
+                          sub_district: "",
+                        });
+                        loadDistrictsByCityName(e.target.value);
+                      }}
                       className={modalSelectClass}
                       disabled={
                         isEditOwnerSubmitting ||
@@ -1830,6 +2005,64 @@ export default function OwnerOutletPage() {
                       {cities.map((city) => (
                         <option key={city.id} value={city.name}>
                           {city.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kecamatan
+                    </span>
+                    <select
+                      value={editOwnerForm.district}
+                      onChange={(e) => {
+                        setEditOwnerForm({
+                          ...editOwnerForm,
+                          district: e.target.value,
+                          sub_district: "",
+                        });
+                        loadVillagesByDistrictName(e.target.value);
+                      }}
+                      className={modalSelectClass}
+                      disabled={
+                        isEditOwnerSubmitting ||
+                        !editOwnerForm.city ||
+                        loadingDistricts
+                      }
+                    >
+                      <option value="">Pilih Kecamatan</option>
+                      {districts.map((district) => (
+                        <option key={district.id} value={district.name}>
+                          {district.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kelurahan/Desa
+                    </span>
+                    <select
+                      value={editOwnerForm.sub_district}
+                      onChange={(e) =>
+                        setEditOwnerForm({
+                          ...editOwnerForm,
+                          sub_district: e.target.value,
+                        })
+                      }
+                      className={modalSelectClass}
+                      disabled={
+                        isEditOwnerSubmitting ||
+                        !editOwnerForm.district ||
+                        loadingVillages
+                      }
+                    >
+                      <option value="">Pilih Kelurahan/Desa</option>
+                      {villages.map((village) => (
+                        <option key={village.id} value={village.name}>
+                          {village.name}
                         </option>
                       ))}
                     </select>
@@ -1890,8 +2123,6 @@ export default function OwnerOutletPage() {
               </div>
             </form>
           </ModalShell>
-        </>
-      )}
 
       <ModalShell
         open={isImportModalOpen}
