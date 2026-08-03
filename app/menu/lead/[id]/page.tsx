@@ -343,7 +343,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <span className="text-[#C92C1E]">Detail Data</span>
           </div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-            {isLoading ? "Memuat Data..." : lead ? `Detail Lead: ${lead.owner?.name || lead.code}` : "Data Tidak Ditemukan"}
+            {isLoading ? "Memuat Data..." : lead ? `Detail Lead: ${lead.outlet?.name || lead.owner?.name || lead.code}` : "Data Tidak Ditemukan"}
           </h1>
           {!isLoading && lead ? (
             <p className="mt-1 text-sm text-gray-500">
@@ -470,7 +470,18 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <FieldBox label="Pemilik Data Saat Ini" value={lead.current_owner?.name || "-"} />
             <FieldBox label="Role Pemilik Saat Ini" value={formatLabel(lead.current_owner_role)} />
             <FieldBox label="Supervisor" value={lead.supervisor?.name || "-"} />
-            <FieldBox label="PIC Sales Aktif" value={lead.active_sales?.name || "-"} />
+            <FieldBox
+              label="PIC Sales Aktif"
+              value={
+                lead.active_sales?.name ? (
+                  <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-bold text-blue-700">
+                    {lead.active_sales.name}
+                  </span>
+                ) : (
+                  "-"
+                )
+              }
+            />
             <FieldBox label="Role Supervisor" value={lead.supervisor?.role || "-"} />
             <FieldBox label="Role Sales" value={lead.active_sales?.role || "-"} />
           </InfoSection>
@@ -481,9 +492,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />}
           >
             <FieldBox label="Outlet ID" value={lead.outlet_id ?? "-"} />
-            <FieldBox label="Kode Outlet" value={outlet?.code || "-"} />
-            <FieldBox label="Nama Outlet" value={outlet?.name || "-"} />
-            <FieldBox label="Telepon Outlet" value={outlet?.phone || "-"} />
+            <FieldBox label="Kode Outlet" value={lead.outlet?.code || outlet?.code || "-"} />
+            <FieldBox label="Nama Outlet" value={lead.outlet?.name || outlet?.name || "-"} />
+            <FieldBox label="Telepon Outlet" value={lead.outlet?.phone || outlet?.phone || "-"} />
             <FieldBox label="Status Outlet" value={outlet?.status || "-"} />
             <FieldBox label="Lokasi Outlet" value={outlet ? [outlet.city, outlet.province].filter(Boolean).join(", ") || "-" : "-"} />
             <FieldBox label="Alamat Outlet" span value={outlet?.address || (lead.outlet_id ? "Detail outlet belum tersedia." : "Lead ini belum terhubung ke outlet tertentu.")} />

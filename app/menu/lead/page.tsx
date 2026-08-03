@@ -57,6 +57,8 @@ interface NasabahItem {
   kodeOwner: string;
   ownerId?: number;
   namaOwner: string;
+  kodeOutlet?: string;
+  namaOutlet?: string;
   projectBrand: string;
   outlet: string;
   outlets?: {
@@ -298,22 +300,61 @@ function getQuickSkorBadgeClass(item: NasabahItem) {
 
 function PicBadge({
   value,
-  color = "red",
+  role,
+  salesList = [],
+  supervisorList = [],
 }: {
   value: string;
-  color?: "red" | "green";
+  role?: string;
+  salesList?: UserResponse[];
+  supervisorList?: UserResponse[];
 }) {
-  const colorClass =
-    color === "green"
-      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-      : "bg-red-50 border-red-200 text-[#C92C1E]";
+  const rawVal = String(value || "").trim();
+  const normalizedVal = rawVal.toLowerCase();
+  const normalizedRole = String(role || "").trim().toUpperCase();
+
+  const isNoPic =
+    !rawVal ||
+    normalizedVal === "" ||
+    normalizedVal === "-" ||
+    normalizedVal === "no pic" ||
+    normalizedVal === "belum ada pic" ||
+    normalizedVal.includes("invalid");
+
+  let colorClass = "bg-blue-50 border-blue-200 text-blue-700 font-black";
+  let label = rawVal || "Belum Ada PIC";
+
+  if (isNoPic) {
+    colorClass = "bg-slate-100 border-slate-200 text-slate-500 font-semibold";
+    label = "Belum Ada PIC";
+  } else {
+    let effectiveRole = normalizedRole;
+    if (!effectiveRole) {
+      if (salesList.some((s) => s.name.toLowerCase() === normalizedVal)) {
+        effectiveRole = "SALES";
+      } else if (supervisorList.some((s) => s.name.toLowerCase() === normalizedVal)) {
+        effectiveRole = "SUPERVISOR";
+      }
+    }
+
+    if (effectiveRole === "SALES") {
+      colorClass = "bg-blue-50 border-blue-200 text-blue-700 font-black";
+    } else if (effectiveRole === "SUPERVISOR") {
+      colorClass = "bg-purple-50 border-purple-200 text-purple-700 font-black";
+    } else if (effectiveRole === "ADMIN") {
+      colorClass = "bg-amber-50 border-amber-200 text-amber-800 font-black";
+    } else {
+      // Default color for PIC Sales when role is not explicitly set
+      colorClass = "bg-blue-50 border-blue-200 text-blue-700 font-black";
+    }
+  }
 
   return (
     <span
-      className={`inline-flex max-w-[150px] items-center justify-center rounded-full border px-2.5 py-1 text-center text-[10px] font-black uppercase tracking-tight ${colorClass}`}
-      title={value || "-"}
+      className={`inline-flex max-w-[150px] items-center justify-center rounded-full border px-2.5 py-1 text-center text-[10px] uppercase tracking-tight ${colorClass}`}
+      title={label}
     >
-      <span className="truncate">{value || "-"}</span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }
@@ -564,6 +605,9 @@ export default function DataKelolaanPage() {
   const [activeTodayDate, setActiveTodayDate] = useState(() => getTodayInputDate());
 
   const mapBackendLeadToNasabahItem = useCallback((lead: BackendLead): NasabahItem => {
+    const mainOutletName = lead.outlet?.name || (lead.outlet_id ? `Outlet #${lead.outlet_id}` : "-");
+    const primaryCode = lead.outlet?.code || lead.owner?.code || "-";
+    const primaryPhone = lead.outlet?.phone || lead.owner?.phone || "-";
     return {
       no: lead.id,
       pic: lead.current_owner?.name || "-",
@@ -571,13 +615,15 @@ export default function DataKelolaanPage() {
       tanggalDibagikan: lead.created_at,
       statusAkun: lead.status,
       kodeBaris: lead.code,
-      kodeOwner: lead.owner?.code || "-",
+      kodeOwner: primaryCode,
       ownerId: lead.owner?.id,
       namaOwner: lead.owner?.name || "-",
+      kodeOutlet: lead.outlet?.code || "",
+      namaOutlet: mainOutletName,
       projectBrand: lead.owner?.brand_name || "-",
-      outlet: String(lead.outlet_id || "-"),
+      outlet: mainOutletName,
       noHpOwner: lead.owner?.phone || "-",
-      noHpOutlet: "-",
+      noHpOutlet: primaryPhone,
       createDateProject: lead.created_at,
       expiredDate: "-",
       totalTransaksi: 0,
@@ -670,6 +716,7 @@ export default function DataKelolaanPage() {
     searchKodeOwner,
     searchNamaOwner,
     searchNamaBrand,
+    picFilter,
     skorFilter,
     filterMode,
     startDateFilter,
@@ -2102,6 +2149,7 @@ export default function DataKelolaanPage() {
 
                 <th className="px-4 py-4 text-center font-bold">No</th>
                 {renderFilterHeader("kodeOwner", "Kode", searchKodeOwner, setSearchKodeOwner)}
+                {renderFilterHeader("namaOutlet", "Nama Outlet", searchNamaOwner, setSearchNamaOwner)}
                 {renderFilterHeader("namaOwner", "Nama Owner", searchNamaOwner, setSearchNamaOwner)}
                 {renderFilterHeader("projectBrand", "Brand", searchNamaBrand, setSearchNamaBrand)}
                 <th className="px-4 py-4 min-w-[150px] font-bold">Kontak</th>
@@ -2226,7 +2274,7 @@ export default function DataKelolaanPage() {
               ) : (
                 paginatedData.map((row, idx) => (
                   <tr
-                    key={row.no || idx}
+                    key={`lead-row-${row.no || idx}-${row.kodeOutlet || idx}`}
                     className={`transition-colors ${
                       selectionMode ? "cursor-pointer" : ""
                     } ${
@@ -2262,11 +2310,19 @@ export default function DataKelolaanPage() {
                         </td>
 
                         <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[150px]">
-                          {row.kodeOwner || "-"}
+                          {row.kodeOutlet || row.kodeOwner || "-"}
                         </td>
 
                         <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[220px]">
-                          {row.namaOwner || "-"}
+                          <div className="font-bold text-gray-900 font-sans">
+                            {row.namaOutlet || "-"}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[200px]">
+                          <div className="font-medium text-gray-800">
+                            {row.namaOwner || "-"}
+                          </div>
                         </td>
 
                         <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[200px]">
@@ -2274,11 +2330,16 @@ export default function DataKelolaanPage() {
                         </td>
 
                         <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[160px]">
-                          {row.noHpOwner || "-"}
+                          {row.noHpOutlet && row.noHpOutlet !== "-" ? row.noHpOutlet : (row.noHpOwner || "-")}
                         </td>
 
                         <td className="px-4 py-4 align-top text-center">
-                          <PicBadge value={row.pic || ""} color="red" />
+                          <PicBadge
+                            value={row.pic || ""}
+                            role={row.picRole}
+                            salesList={salesList}
+                            supervisorList={supervisorList}
+                          />
                         </td>
 
                         <td className="px-4 py-4 align-top text-center">

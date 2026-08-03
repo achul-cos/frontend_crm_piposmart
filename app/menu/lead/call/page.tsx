@@ -22,8 +22,10 @@ import Remark3SalesSection, {
 export interface CallCustomer {
   no: number;
   namaOwner?: string;
+  namaOutlet?: string;
   outlet?: string;
   kodeOwner?: string;
+  kodeOutlet?: string;
   pic?: string;
   noHpOwner?: string;
   noHpOutlet?: string;
@@ -522,11 +524,11 @@ export default function CallPage({
                   </div>
                   <div className="min-w-0">
                     <h3 className="truncate text-xl font-black tracking-tight text-gray-900">
-                      {customer.namaOwner || "Nama Customer"}
+                      {customer.namaOutlet || customer.outlet || "-"}
                     </h3>
                     <div className="mt-1 flex items-center gap-2">
                       <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-[#C92C1E]">
-                        {customer.kodeOwner || customer.outlet || "KODE"}
+                        {customer.kodeOutlet || customer.kodeOwner || customer.outlet || "KODE"}
                       </span>
                       {customer.statusAkun && (
                         <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
@@ -542,9 +544,18 @@ export default function CallPage({
                 <div className="flex flex-1 items-center justify-between gap-6 overflow-x-auto pb-2 sm:pb-0">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-gray-500">PIC Sales</span>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs font-black text-gray-900">
-                      <UserIcon className="h-3.5 w-3.5 text-gray-400" />
-                      {customer.pic || "-"}
+                    <div className="mt-1 flex items-center gap-1.5 text-xs font-bold">
+                      {customer.pic && customer.pic !== "-" && customer.pic.toLowerCase() !== "no pic" ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-blue-700 font-black">
+                          <UserIcon className="h-3.5 w-3.5 text-blue-500" />
+                          {customer.pic}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-slate-500 font-medium">
+                          <UserIcon className="h-3.5 w-3.5 text-slate-400" />
+                          Belum Ada PIC
+                        </span>
+                      )}
                     </div>
                   </div>
 
