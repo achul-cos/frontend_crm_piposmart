@@ -48,12 +48,53 @@ type Closing = {
   code?: string;
 };
 
+type EntityRef = {
+  id?: number;
+  code?: string;
+  name?: string;
+};
+
+type UserBrief = {
+  id?: number;
+  name?: string;
+  role?: string;
+};
+
+type PackageSnapshot = {
+  id?: number;
+  code?: string;
+  name?: string;
+  level_order?: number;
+};
+
+type PlanSnapshot = {
+  id?: number;
+  code?: string;
+  name?: string;
+  tenure_months?: number;
+  duration_days?: number;
+  price?: string;
+  currency?: string;
+};
+
+type UpgradeContext = {
+  effective_start_date?: string;
+  original_end_date?: string;
+  remaining_days?: number;
+  daily_price?: string;
+  previous_package?: PackageSnapshot | null;
+  previous_plan?: PlanSnapshot | null;
+};
+
 type SubscriptionOrderItem = {
   id: number;
   code?: string;
   owner?: Owner;
   closing?: Closing;
+  sales?: UserBrief;
+  supervisor?: UserBrief;
   plan?: Plan;
+  package?: EntityRef;
   promotion?: {
     id?: number;
     code?: string;
@@ -71,8 +112,13 @@ type SubscriptionOrderItem = {
   tenure_months?: number;
   duration_days?: number;
   base_price?: string;
+  discount_amount?: string;
   additional_charge?: string;
   final_amount?: string;
+  currency?: string;
+  order_type?: "NEW" | "UPGRADE" | string;
+  source_subscription?: EntityRef | null;
+  upgrade?: UpgradeContext | null;
   status?: string;
   purchased_at?: string;
   subscription_start_date?: string;
@@ -110,8 +156,21 @@ type ReconciliationItem = {
   status?: string;
   match_type?: string;
   amount_difference?: string;
+  admin_tenure_months?: number;
+  admin_final_amount?: string;
+  note?: string;
+  reason?: string;
   confirmed_at?: string;
   created_at?: string;
+};
+
+type SubscriptionPeriodItem = {
+  id: number;
+  period_index?: number;
+  start_date?: string;
+  end_date?: string;
+  duration_days?: number;
+  status?: string;
 };
 
 type ReconciliationIssueItem = {
@@ -140,6 +199,7 @@ type WalletItem = {
 type SubscriptionOrderDetailResponse = {
   order?: SubscriptionOrderItem;
   subscription?: SubscriptionItem;
+  period?: SubscriptionPeriodItem;
   reconciliation?: ReconciliationItem;
   issue?: ReconciliationIssueItem;
 };
@@ -254,6 +314,19 @@ const getOwnerName = (owner?: Owner) => {
 const getOwnerCode = (owner?: Owner) => {
   if (!owner) return "-";
   return owner.code || owner.kode_owner || "-";
+};
+
+const getOrderTypeLabel = (orderType?: string) => {
+  if (orderType === "UPGRADE") return "Upgrade";
+  if (orderType === "NEW") return "Baru";
+  return orderType || "-";
+};
+
+const getOrderTypeClass = (orderType?: string) => {
+  if (orderType === "UPGRADE") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
 };
 
 const normalizeList = <T,>(payload: unknown): T[] => {
@@ -1160,9 +1233,29 @@ export default function SubscriptionPage() {
                         <p className="font-black text-gray-900">
                           {order.code || `ORDER-${order.id}`}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${getOrderTypeClass(
+                              order.order_type,
+                            )}`}
+                          >
+                            {getOrderTypeLabel(order.order_type)}
+                          </span>
+                          {order.source_subscription?.code && (
+                            <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600">
+                              Dari {order.source_subscription.code}
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-1 text-[11px] font-bold text-gray-400">
                           Closing: {order.closing?.code || order.closing?.id || "-"}
                         </p>
+                        {order.upgrade?.remaining_days ? (
+                          <p className="mt-1 text-[11px] font-bold text-amber-600">
+                            Sisa {order.upgrade.remaining_days} hari • efektif{" "}
+                            {formatTanggalPendek(order.upgrade.effective_start_date)}
+                          </p>
+                        ) : null}
                       </td>
 
                       <td className="p-3 align-top">
@@ -1533,6 +1626,10 @@ export default function SubscriptionPage() {
                   value={selectedOrderDetail.order.status || "-"}
                 />
                 <InfoItem
+                  label="Jenis Order"
+                  value={getOrderTypeLabel(selectedOrderDetail.order.order_type)}
+                />
+                <InfoItem
                   label="Purchased At"
                   value={formatTanggal(selectedOrderDetail.order.purchased_at)}
                 />
@@ -1562,6 +1659,14 @@ export default function SubscriptionPage() {
                   }
                 />
                 <InfoItem
+                  label="Sales"
+                  value={selectedOrderDetail.order.sales?.name || "-"}
+                />
+                <InfoItem
+                  label="Supervisor"
+                  value={selectedOrderDetail.order.supervisor?.name || "-"}
+                />
+                <InfoItem
                   label="Promotion"
                   value={
                     selectedOrderDetail.order.promotions &&
@@ -1581,6 +1686,131 @@ export default function SubscriptionPage() {
                   Order melebihi saldo owner sebesar{" "}
                   {formatRupiah(selectedOrderDetail.order.balance_shortfall_amount)}
                 </p>
+              )}
+            </div>
+          )}
+
+          {selectedOrderDetail?.order?.order_type === "UPGRADE" &&
+            selectedOrderDetail.order.upgrade && (
+              <div className="rounded-[28px] border border-amber-200 bg-amber-50/70 p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-700">
+                  Histori Upgrade
+                </p>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
+                  <InfoItem
+                    label="Subscription Sumber"
+                    value={
+                      selectedOrderDetail.order.source_subscription?.code ||
+                      `SUB-${selectedOrderDetail.order.source_subscription?.id || "-"}`
+                    }
+                  />
+                  <InfoItem
+                    label="Paket Sebelumnya"
+                    value={
+                      selectedOrderDetail.order.upgrade.previous_package?.name ||
+                      selectedOrderDetail.order.upgrade.previous_package?.code ||
+                      "-"
+                    }
+                  />
+                  <InfoItem
+                    label="Plan Sebelumnya"
+                    value={
+                      selectedOrderDetail.order.upgrade.previous_plan?.name ||
+                      selectedOrderDetail.order.upgrade.previous_plan?.code ||
+                      "-"
+                    }
+                  />
+                  <InfoItem
+                    label="Mulai Efektif Upgrade"
+                    value={formatTanggalPendek(
+                      selectedOrderDetail.order.upgrade.effective_start_date,
+                    )}
+                  />
+                  <InfoItem
+                    label="Akhir Masa Aktif Lama"
+                    value={formatTanggalPendek(
+                      selectedOrderDetail.order.upgrade.original_end_date,
+                    )}
+                  />
+                  <InfoItem
+                    label="Sisa Hari yang Ditagihkan"
+                    value={`${selectedOrderDetail.order.upgrade.remaining_days || 0} hari`}
+                  />
+                  <InfoItem
+                    label="Harga Harian Prorata"
+                    value={formatRupiah(
+                      selectedOrderDetail.order.upgrade.daily_price,
+                    )}
+                  />
+                  <InfoItem
+                    label="Nominal Upgrade"
+                    value={formatRupiah(selectedOrderDetail.order.final_amount)}
+                  />
+                </div>
+              </div>
+            )}
+
+          {selectedOrderDetail?.subscription && (
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+                Subscription Hasil Order
+              </p>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
+                <InfoItem
+                  label="Kode Subscription"
+                  value={
+                    selectedOrderDetail.subscription.code ||
+                    `SUB-${selectedOrderDetail.subscription.id}`
+                  }
+                />
+                <InfoItem
+                  label="Status Subscription"
+                  value={selectedOrderDetail.subscription.status || "-"}
+                />
+                <InfoItem
+                  label="Active From"
+                  value={formatTanggalPendek(
+                    selectedOrderDetail.subscription.active_from,
+                  )}
+                />
+                <InfoItem
+                  label="Active Until"
+                  value={formatTanggalPendek(
+                    selectedOrderDetail.subscription.active_until,
+                  )}
+                />
+              </div>
+
+              {selectedOrderDetail.period && (
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    Period Pertama
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
+                    <InfoItem
+                      label="Start Date"
+                      value={formatTanggalPendek(
+                        selectedOrderDetail.period.start_date,
+                      )}
+                    />
+                    <InfoItem
+                      label="End Date"
+                      value={formatTanggalPendek(
+                        selectedOrderDetail.period.end_date,
+                      )}
+                    />
+                    <InfoItem
+                      label="Durasi"
+                      value={`${selectedOrderDetail.period.duration_days || 0} hari`}
+                    />
+                    <InfoItem
+                      label="Status Period"
+                      value={selectedOrderDetail.period.status || "-"}
+                    />
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -1613,7 +1843,27 @@ export default function SubscriptionPage() {
                     selectedOrderDetail.reconciliation.amount_difference,
                   )}
                 />
+                <InfoItem
+                  label="Admin Final Amount"
+                  value={formatRupiah(
+                    selectedOrderDetail.reconciliation.admin_final_amount,
+                  )}
+                />
+                <InfoItem
+                  label="Admin Tenure"
+                  value={
+                    selectedOrderDetail.reconciliation.admin_tenure_months
+                      ? `${selectedOrderDetail.reconciliation.admin_tenure_months} bulan`
+                      : "-"
+                  }
+                />
               </div>
+
+              {selectedOrderDetail.reconciliation.note && (
+                <p className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-600">
+                  {selectedOrderDetail.reconciliation.note}
+                </p>
+              )}
             </div>
           )}
 
