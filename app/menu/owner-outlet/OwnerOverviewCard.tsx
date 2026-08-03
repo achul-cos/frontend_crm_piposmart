@@ -15,7 +15,7 @@ function formatRupiah(value?: string): string {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
-  return "Gagal memuat ringkasan saldo owner.";
+  return "Gagal memuat ringkasan saldo aplikasi.";
 }
 
 // Sprint 15a — GET /owners/:id/overview: saldo, riwayat transfer/topup/spent,
@@ -54,7 +54,7 @@ export default function OwnerOverviewCard({ ownerId }: { ownerId: number }) {
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        Memuat ringkasan saldo owner...
+        Memuat ringkasan saldo aplikasi...
       </div>
     );
   }
@@ -62,7 +62,7 @@ export default function OwnerOverviewCard({ ownerId }: { ownerId: number }) {
   if (error || !overview) {
     return (
       <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
-        {error || "Ringkasan saldo owner tidak tersedia."}
+        {error || "Ringkasan saldo aplikasi tidak tersedia."}
       </div>
     );
   }

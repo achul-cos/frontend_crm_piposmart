@@ -699,6 +699,12 @@ export interface BackendLead {
     message?: string;
   };
   outlet_id?: number;
+  outlet?: {
+    id?: number;
+    code?: string;
+    name?: string;
+    phone?: string;
+  };
   current_owner?: {
     id: number;
     name: string;
@@ -3674,6 +3680,56 @@ export async function deleteDiscussionReply(replyId: number): Promise<void> {
 
   await handleResponse(res);
 }
+
+// ─── Owner Wallet & Subscriptions History API ───
+
+export interface OwnerSubscriptionItem {
+  id: number;
+  code?: string;
+  order_type?: string;
+  owner_id?: number;
+  outlet_id?: number;
+  outlet_name?: string;
+  package_name?: string;
+  plan_name?: string;
+  status: string;
+  amount?: string | number;
+  total_amount?: string | number;
+  purchased_at?: string;
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+}
+
+export async function fetchOwnerWalletTransactions(ownerId: number): Promise<WalletTransactionItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/wallet/transactions`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+  const data = await handleResponse<any>(res);
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.items)) return data.data.items;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+export async function fetchOwnerSubscriptions(ownerId: number): Promise<OwnerSubscriptionItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/subscription-orders?owner_id=${ownerId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+  const data = await handleResponse<any>(res);
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.items)) return data.data.items;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+
 
 
 

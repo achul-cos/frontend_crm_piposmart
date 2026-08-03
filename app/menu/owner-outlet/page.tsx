@@ -1192,7 +1192,7 @@ export default function OwnerOutletPage() {
                     {renderSortableHeader("created_at", "Tgl. Dibuat")}
                     {renderSortableHeader("status", "Status")}
                     {renderSortableHeader("outlet_count", "Outlet")}
-                    {renderSortableHeader("wallet_balance", "Saldo Owner")}
+                    {renderSortableHeader("wallet_balance", "Saldo Aplikasi")}
                     <th className="px-4 py-4 text-center font-bold">Aksi</th>
                   </tr>
                 </thead>

@@ -419,8 +419,12 @@ export default function DataKelolaanTrashPage() {
                   </td>
                   <td className="p-3 text-center text-gray-400 font-bold">{idx + 1}</td>
                   <td className="p-3 text-center">
-                    <span className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-black rounded-full bg-red-50 border border-red-200 text-[#C92C1E] uppercase tracking-tight whitespace-nowrap">
-                      {row.pic || "-"}
+                    <span className={`inline-flex items-center justify-center px-2.5 py-0.5 text-[10px] rounded-full border uppercase tracking-tight whitespace-nowrap ${
+                      !row.pic || row.pic === "-" || row.pic.toLowerCase() === "no pic"
+                        ? "bg-slate-100 border-slate-200 text-slate-500 font-medium"
+                        : "bg-blue-50 border-blue-200 text-blue-700 font-black"
+                    }`}>
+                      {row.pic || "Belum Ada PIC"}
                     </span>
                   </td>
                   <td className="p-3 font-black text-gray-900 whitespace-normal break-words">{row.namaOwner || "-"}</td>

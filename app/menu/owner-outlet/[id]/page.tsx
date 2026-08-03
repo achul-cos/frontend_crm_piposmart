@@ -11,6 +11,10 @@ import {
   bulkCreateOwnerOutlets,
   bulkUpdateOwnerOutlets,
   bulkSoftDeleteOwnerOutlets,
+  fetchOwnerWalletTransactions,
+  fetchOwnerSubscriptions,
+  type WalletTransactionItem,
+  type OwnerSubscriptionItem,
   type ImportRowError,
   type ImportBatchResponse,
 } from "@/app/lib/api";
@@ -25,6 +29,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
   
   const [owner, setOwner] = useState<BackendOwner | null>(null);
   const [outlets, setOutlets] = useState<BackendOutlet[]>([]);
+  const [transactions, setTransactions] = useState<WalletTransactionItem[]>([]);
+  const [subscriptions, setSubscriptions] = useState<OwnerSubscriptionItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Add Modal State
@@ -61,12 +67,16 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [ownerRes, outletsData] = await Promise.all([
+      const [ownerRes, outletsData, walletData, subData] = await Promise.all([
         fetchOwnerDetail(ownerId),
-        fetchOwnerOutlets(ownerId)
+        fetchOwnerOutlets(ownerId),
+        fetchOwnerWalletTransactions(ownerId).catch(() => []),
+        fetchOwnerSubscriptions(ownerId).catch(() => []),
       ]);
       setOwner(ownerRes.data);
       setOutlets(outletsData);
+      setTransactions(walletData);
+      setSubscriptions(subData);
     } catch (err) {
       console.error("Gagal memuat detail:", err);
     } finally {
@@ -429,6 +439,157 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Level 5: Riwayat Topup */}
+          <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                  <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Topup</h4>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">SALDO WALLET INI DIPAKAI BERSAMA SELURUH OUTLET OWNER</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold bg-red-50 text-[#C92C1E] px-3 py-1 rounded-full border border-red-200">
+                {transactions.length} Transaksi
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-x-auto">
+              {transactions.length === 0 ? (
+                <div className="text-center py-12 bg-white">
+                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat top up atau transaksi saldo aplikasi untuk owner ini.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-sm text-gray-600">
+                  <thead className="bg-gray-50/80 uppercase text-gray-500 text-[10px] font-black tracking-wider border-b-2 border-[#C92C1E]">
+                    <tr>
+                      <th className="px-6 py-4">Tanggal</th>
+                      <th className="px-6 py-4">Tipe Transaksi</th>
+                      <th className="px-6 py-4">Sumber</th>
+                      <th className="px-6 py-4 text-right">Nominal</th>
+                      <th className="px-6 py-4 text-right">Saldo Akhir</th>
+                      <th className="px-6 py-4">Keterangan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white text-xs">
+                    {transactions.map((tx) => {
+                      const isCredit = tx.transaction_type === "CREDIT" || tx.source_type === "TOPUP";
+                      const numAmount = Number(tx.amount || 0);
+                      const numBalance = Number(tx.balance_after || 0);
+                      return (
+                        <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
+                            {tx.created_at ? new Date(tx.created_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-"}
+                          </td>
+                          <td className="px-6 py-4 font-bold">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
+                              isCredit ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
+                            }`}>
+                              {tx.transaction_type || (isCredit ? "CREDIT" : "DEBIT")}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-bold text-gray-800">
+                            {tx.source_type || "-"}
+                          </td>
+                          <td className={`px-6 py-4 text-right font-black ${isCredit ? "text-emerald-600" : "text-rose-600"}`}>
+                            {isCredit ? "+" : "-"} Rp {numAmount.toLocaleString("id-ID")}
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-gray-900">
+                            Rp {numBalance.toLocaleString("id-ID")}
+                          </td>
+                          <td className="px-6 py-4 text-gray-600 max-w-[250px] truncate">
+                            {tx.note || tx.source_reference || "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Level 6: Riwayat Subscribe */}
+          <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                  <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Subscribe</h4>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">LANGGANAN PAKET PADA OWNER INI</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold bg-red-50 text-[#C92C1E] px-3 py-1 rounded-full border border-red-200">
+                {subscriptions.length} Pesanan
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-x-auto">
+              {subscriptions.length === 0 ? (
+                <div className="text-center py-12 bg-white">
+                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat langganan paket untuk owner ini.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-sm text-gray-600">
+                  <thead className="bg-gray-50/80 uppercase text-gray-500 text-[10px] font-black tracking-wider border-b-2 border-[#C92C1E]">
+                    <tr>
+                      <th className="px-6 py-4">Kode Order</th>
+                      <th className="px-6 py-4">Tipe Order</th>
+                      <th className="px-6 py-4">Nama Outlet</th>
+                      <th className="px-6 py-4">Paket / Plan</th>
+                      <th className="px-6 py-4 text-right">Total Bayar</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4">Tanggal Order</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white text-xs">
+                    {subscriptions.map((sub) => {
+                      const numTotal = Number(sub.total_amount || sub.amount || 0);
+                      const isSuccess = sub.status === "ACTIVE" || sub.status === "COMPLETED" || sub.status === "PAID" || sub.status === "RECONCILED";
+                      return (
+                        <tr key={sub.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-6 py-4 font-bold text-gray-900">{sub.code || `SUB-${sub.id}`}</td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                              sub.order_type === "UPGRADE" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
+                            }`}>
+                              {sub.order_type || "NEW"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-bold text-gray-800">{sub.outlet_name || "-"}</td>
+                          <td className="px-6 py-4 font-bold text-gray-800">
+                            {[sub.package_name, sub.plan_name].filter(Boolean).join(" - ") || "-"}
+                          </td>
+                          <td className="px-6 py-4 text-right font-black text-gray-900">
+                            Rp {numTotal.toLocaleString("id-ID")}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${
+                              isSuccess ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"
+                            }`}>
+                              {sub.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
+                            {sub.purchased_at || sub.created_at ? new Date(sub.purchased_at || sub.created_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
