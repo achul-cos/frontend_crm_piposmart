@@ -2227,11 +2227,6 @@ export default function DataKelolaanPage() {
                 paginatedData.map((row, idx) => (
                   <tr
                     key={row.no || idx}
-                    onClick={() => {
-                      if (selectionMode) {
-                        handleToggleSelectRow(row.no);
-                      }
-                    }}
                     className={`transition-colors ${
                       selectionMode ? "cursor-pointer" : ""
                     } ${
