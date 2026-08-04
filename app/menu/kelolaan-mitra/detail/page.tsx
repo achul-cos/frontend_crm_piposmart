@@ -205,6 +205,11 @@ function PartnerDetailPageInner() {
   const [referralDate, setReferralDate] = useState("");
   const [referralNote, setReferralNote] = useState("");
 
+  const [showInteractionForm, setShowInteractionForm] = useState(focusInteraction);
+  const [showReferralForm, setShowReferralForm] = useState(false);
+  const [showMoreInteractions, setShowMoreInteractions] = useState(false);
+  const [showMoreReferrals, setShowMoreReferrals] = useState(false);
+
   const isSales = currentRole === "SALES";
   const isAdmin = currentRole === "" || currentRole === "ADMIN";
   const canManage = isAdmin || currentRole === "SUPERVISOR";
@@ -501,33 +506,65 @@ function PartnerDetailPageInner() {
             </form>
           ) : null}
 
-          <form onSubmit={handleInteractionSubmit} className={`rounded-[26px] border bg-white p-5 ${focusInteraction ? "border-red-200 shadow-[0_0_0_4px_rgba(201,44,30,0.06)]" : "border-slate-200"}`}>
-            <p className="text-xs font-black text-slate-950">Form Interaksi</p>
-            <p className="mt-1 text-[11px] font-medium text-slate-500">Catat call atau chat terakhir agar histori komunikasi mitra tetap rapi.</p>
-            <div className="mt-4 space-y-3">
-              <select value={interactionType} onChange={(event) => setInteractionType(event.target.value as "CALL" | "CHAT")} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
-                <option value="CALL">CALL</option>
-                <option value="CHAT">CHAT</option>
-              </select>
-              <input type="datetime-local" max={new Date().toISOString().slice(0, 16)} value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={4} placeholder="Catatan interaksi dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              <button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Simpan Interaksi</button>
-            </div>
-          </form>
+          <div className={`rounded-[26px] border bg-white transition-all overflow-hidden ${focusInteraction || showInteractionForm ? "border-red-200 shadow-[0_0_0_4px_rgba(201,44,30,0.06)]" : "border-slate-200"}`}>
+            <button
+              type="button"
+              onClick={() => setShowInteractionForm((prev) => !prev)}
+              className="flex w-full items-center justify-between p-5 text-left transition hover:bg-slate-50/50"
+            >
+              <div>
+                <p className="text-xs font-black text-slate-950">Form Interaksi</p>
+                <p className="mt-1 text-[11px] font-medium text-slate-500">Catat call atau chat terakhir agar histori komunikasi mitra tetap rapi.</p>
+              </div>
+              <span className="ml-4 flex h-8 px-3 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 transition hover:bg-white hover:border-slate-300">
+                {showInteractionForm ? "Sembunyikan Form ▲" : "Tampilkan Form ▼"}
+              </span>
+            </button>
 
-          <form onSubmit={handleReferralSubmit} className="rounded-[26px] border border-slate-200 bg-white p-5">
-            <p className="text-xs font-black text-slate-950">Form Referral</p>
-            <p className="mt-1 text-[11px] font-medium text-slate-500">Catat lead dari jaringan partner ini agar jejak closing dan komisinya saling nyambung.</p>
-            <div className="mt-4 space-y-3">
-              <select value={referralLeadId} onChange={(event) => setReferralLeadId(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
-                <option value="">Pilih lead</option>
-                {leads.map((lead) => <option key={lead.id} value={lead.id}>{leadLabel(lead)}</option>)}
-              </select>
-              <input type="datetime-local" value={referralDate} onChange={(event) => setReferralDate(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              <textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} rows={4} placeholder="Catatan referral" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              <button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Simpan Referral</button>
-            </div>
-          </form>
+            {showInteractionForm && (
+              <form onSubmit={handleInteractionSubmit} className="border-t border-slate-100 p-5 pt-4">
+                <div className="space-y-3">
+                  <select value={interactionType} onChange={(event) => setInteractionType(event.target.value as "CALL" | "CHAT")} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                    <option value="CALL">CALL</option>
+                    <option value="CHAT">CHAT</option>
+                  </select>
+                  <input type="datetime-local" max={new Date().toISOString().slice(0, 16)} value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={4} placeholder="Catatan interaksi dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  <button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Simpan Interaksi</button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          <div className="rounded-[26px] border border-slate-200 bg-white transition-all overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowReferralForm((prev) => !prev)}
+              className="flex w-full items-center justify-between p-5 text-left transition hover:bg-slate-50/50"
+            >
+              <div>
+                <p className="text-xs font-black text-slate-950">Form Referral</p>
+                <p className="mt-1 text-[11px] font-medium text-slate-500">Catat lead dari jaringan partner ini agar jejak closing dan komisinya saling nyambung.</p>
+              </div>
+              <span className="ml-4 flex h-8 px-3 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 transition hover:bg-white hover:border-slate-300">
+                {showReferralForm ? "Sembunyikan Form ▲" : "Tampilkan Form ▼"}
+              </span>
+            </button>
+
+            {showReferralForm && (
+              <form onSubmit={handleReferralSubmit} className="border-t border-slate-100 p-5 pt-4">
+                <div className="space-y-3">
+                  <select value={referralLeadId} onChange={(event) => setReferralLeadId(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                    <option value="">Pilih lead</option>
+                    {leads.map((lead) => <option key={lead.id} value={lead.id}>{leadLabel(lead)}</option>)}
+                  </select>
+                  <input type="datetime-local" value={referralDate} onChange={(event) => setReferralDate(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  <textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} rows={4} placeholder="Catatan referral" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  <button type="submit" disabled={!canInteract || saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Simpan Referral</button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       </SectionCard>
 
@@ -542,7 +579,30 @@ function PartnerDetailPageInner() {
           <div>
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Riwayat Interaksi</h3>
             <div className="mt-3 space-y-3">
-              {interactions.length === 0 ? <EmptyState message="Belum ada interaksi." /> : interactions.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><p className="font-black text-slate-900">{item.interaction_type}</p><p className="text-[11px] font-bold text-slate-400">{formatDateTime(item.interaction_at)}</p></div><p className="mt-3 text-sm font-bold leading-6 text-slate-700">{item.note || "Tanpa catatan"}</p></div>)}
+              {interactions.length === 0 ? (
+                <EmptyState message="Belum ada interaksi." />
+              ) : (
+                <>
+                  {(showMoreInteractions ? interactions : interactions.slice(0, 3)).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-black text-slate-900">{item.interaction_type}</p>
+                        <p className="text-[11px] font-bold text-slate-400">{formatDateTime(item.interaction_at)}</p>
+                      </div>
+                      <p className="mt-3 text-sm font-bold leading-6 text-slate-700">{item.note || "Tanpa catatan"}</p>
+                    </div>
+                  ))}
+                  {interactions.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowMoreInteractions((prev) => !prev)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                    >
+                      {showMoreInteractions ? "Sembunyikan Riwayat ▲" : `Tampilkan Selengkapnya (${interactions.length - 3} lagi) ▼`}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -553,7 +613,28 @@ function PartnerDetailPageInner() {
           <div>
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Referral Lead</h3>
             <div className="mt-3 space-y-3">
-              {referrals.length === 0 ? <EmptyState message="Belum ada referral." /> : referrals.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-900">{leadMap.get(item.lead_id) ? leadLabel(leadMap.get(item.lead_id) as BackendLead) : `Lead #${item.lead_id}`}</p><p className="mt-1 text-[11px] font-bold text-slate-400">Referral {formatDateTime(item.referral_date)}</p><p className="mt-3 text-sm font-bold leading-6 text-slate-700">{item.notes || "Tanpa catatan"}</p></div>)}
+              {referrals.length === 0 ? (
+                <EmptyState message="Belum ada referral." />
+              ) : (
+                <>
+                  {(showMoreReferrals ? referrals : referrals.slice(0, 3)).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="font-black text-slate-900">{leadMap.get(item.lead_id) ? leadLabel(leadMap.get(item.lead_id) as BackendLead) : `Lead #${item.lead_id}`}</p>
+                      <p className="mt-1 text-[11px] font-bold text-slate-400">Referral {formatDateTime(item.referral_date)}</p>
+                      <p className="mt-3 text-sm font-bold leading-6 text-slate-700">{item.notes || "Tanpa catatan"}</p>
+                    </div>
+                  ))}
+                  {referrals.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowMoreReferrals((prev) => !prev)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                    >
+                      {showMoreReferrals ? "Sembunyikan Referral ▲" : `Tampilkan Selengkapnya (${referrals.length - 3} lagi) ▼`}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
           <div>

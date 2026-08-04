@@ -144,7 +144,7 @@ const getTodayInputDate = () => {
 
 const LIST_SKOR = [
   { value: "0", label: "Tidak Potensial (0)", scor: 0 },
-  { value: "1", label: "Kemungkinan Potensial (1)", scor: 1 },
+  { value: "1", label: "Kemungkinan (1)", scor: 1 },
   { value: "2", label: "Potensial (2)", scor: 2 },
   { value: "3", label: "Langganan (3)", scor: 3 },
 ];
@@ -367,12 +367,13 @@ function getSkorLabelFromItem(item: NasabahItem) {
 }
 
 function SkorBadge({ item }: { item: NasabahItem }) {
+  const label = getSkorLabelFromItem(item);
   return (
     <span
-      className={`inline-flex max-w-[180px] items-center justify-center rounded-full px-2.5 py-1 text-center text-[10px] font-black uppercase tracking-tight ${getQuickSkorBadgeClass(item)}`}
-      title={getSkorLabelFromItem(item)}
+      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-center text-[10px] font-black uppercase tracking-tight whitespace-nowrap ${getQuickSkorBadgeClass(item)}`}
+      title={label}
     >
-      <span className="truncate">{getSkorLabelFromItem(item)}</span>
+      {label}
     </span>
   );
 }
@@ -552,18 +553,24 @@ export default function DataKelolaanPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
+  // hasMoved mencegah drag-select aktif hanya karena klik biasa (tanpa gerakan mouse)
+  const hasMoved = React.useRef(false);
 
   useEffect(() => {
-    const handleMouseUp = () => setIsDragging(false);
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      hasMoved.current = false;
+    };
     window.addEventListener("mouseup", handleMouseUp);
     return () => window.removeEventListener("mouseup", handleMouseUp);
   }, []);
 
   const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
     setIsDragging(true);
+    hasMoved.current = false;
     const mode = currentlySelected ? "deselect" : "select";
     setDragMode(mode);
-    
+
     setSelectedIds(prev => {
       if (mode === "select" && !prev.includes(id)) return [...prev, id];
       if (mode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
@@ -572,12 +579,17 @@ export default function DataKelolaanPage() {
   };
 
   const handleRowMouseEnter = (id: number) => {
-    if (isDragging) {
+    // Hanya jalankan drag-select jika mouse benar-benar sudah bergerak
+    if (isDragging && hasMoved.current) {
       setSelectedIds(prev => {
         if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
         if (dragMode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
         return prev;
       });
+    }
+    // Tandai bahwa mouse sudah memasuki row lain (artinya sudah bergerak)
+    if (isDragging) {
+      hasMoved.current = true;
     }
   };
   const [deleteTargetMode, setDeleteTargetMode] = useState<DeleteTargetMode>("selected");
@@ -2290,6 +2302,10 @@ export default function DataKelolaanPage() {
                     }}
                     onMouseEnter={() => {
                       if (selectionMode) handleRowMouseEnter(row.no);
+                    }}
+                    onMouseMove={() => {
+                      // Tandai mouse sudah bergerak agar drag-select bisa aktif
+                      if (isDragging && !hasMoved.current) hasMoved.current = true;
                     }}
                   >
                     {selectionMode && (
