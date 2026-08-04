@@ -73,7 +73,7 @@ const getCurrentYear = () => String(new Date().getFullYear());
 
 const LIST_SKOR = [
   { value: "0", label: "Tidak Potensial (0)", scor: 0 },
-  { value: "1", label: "Kemungkinan Potensial (1)", scor: 1 },
+  { value: "1", label: "Kemungkinan (1)", scor: 1 },
   { value: "2", label: "Potensial (2)", scor: 2 },
   { value: "3", label: "Langganan (3)", scor: 3 },
 ];

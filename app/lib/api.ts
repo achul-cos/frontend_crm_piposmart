@@ -360,6 +360,8 @@ export interface BackendOwner {
   district?: string;
   sub_district?: string;
   status: string;
+  subscription_status?: string;
+  subscribed_outlet_count?: number;
   outlet_count?: number;
   wallet_balance?: string;
   created_at?: string;
@@ -2748,6 +2750,7 @@ export interface ListOutletSubscriptionStatusesParams {
   owner_id?: number;
   subscription_status?: string;
   month?: string;
+  due_date?: string;
   page?: number;
   limit?: number;
   sort?: string;

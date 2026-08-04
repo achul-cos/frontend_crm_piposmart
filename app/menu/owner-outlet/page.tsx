@@ -404,8 +404,13 @@ export default function OwnerOutletPage() {
     loadingVillages: outletLoadingVillages,
   } = useLocation();
 
+  const hasMoved = useRef(false);
+
   useEffect(() => {
-    const handleMouseUp = () => setIsDragging(false);
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      hasMoved.current = false;
+    };
     window.addEventListener("mouseup", handleMouseUp);
     return () => window.removeEventListener("mouseup", handleMouseUp);
   }, []);
@@ -467,7 +472,9 @@ export default function OwnerOutletPage() {
   };
 
   const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
+    if (selectedOwnerIds.length === 0) return;
     setIsDragging(true);
+    hasMoved.current = false;
     const mode = currentlySelected ? "deselect" : "select";
     setDragMode(mode);
 
@@ -481,15 +488,18 @@ export default function OwnerOutletPage() {
   };
 
   const handleRowMouseEnter = (id: number) => {
-    if (!isDragging) return;
+    if (!isDragging || selectedOwnerIds.length === 0) return;
 
-    setSelectedOwnerIds((prev) => {
-      if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
-      if (dragMode === "deselect" && prev.includes(id)) {
-        return prev.filter((selectedId) => selectedId !== id);
-      }
-      return prev;
-    });
+    if (hasMoved.current) {
+      setSelectedOwnerIds((prev) => {
+        if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
+        if (dragMode === "deselect" && prev.includes(id)) {
+          return prev.filter((selectedId) => selectedId !== id);
+        }
+        return prev;
+      });
+    }
+    hasMoved.current = true;
   };
 
   const handleAddOwnerSubmit = async (e: React.FormEvent) => {
@@ -914,8 +924,30 @@ export default function OwnerOutletPage() {
     router.push(`/menu/owner-outlet/${owner.id}`);
   };
 
-  const activeCount = owners.filter((owner) => owner.status === "ACTIVE").length;
-  const inactiveCount = owners.length - activeCount;
+  const getOwnerStatus = (owner: BackendOwner) => {
+    const st = (owner.subscription_status || owner.status || "").toUpperCase();
+    if (st === "SUBSCRIBE" || st === "BERLANGGANAN") return "SUBSCRIBE";
+    if (st === "TRIAL") return "TRIAL";
+    if (st === "NOT_SUBSCRIBE" || st === "NOT SUBSCRIBE" || st === "TIDAK BERLANGGANAN") return "NOT SUBSCRIBE";
+    if (st === "ACTIVE") return "SUBSCRIBE";
+    return st || "NOT SUBSCRIBE";
+  };
+
+  const getOwnerStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case "SUBSCRIBE":
+        return "border border-emerald-200 bg-emerald-50 text-emerald-700";
+      case "TRIAL":
+        return "border border-violet-300 bg-violet-50 text-violet-800";
+      case "NOT SUBSCRIBE":
+      default:
+        return "border border-red-200 bg-red-50 text-red-700";
+    }
+  };
+
+  const subscribeCount = owners.filter((o) => getOwnerStatus(o) === "SUBSCRIBE").length;
+  const trialCount = owners.filter((o) => getOwnerStatus(o) === "TRIAL").length;
+  const notSubscribeCount = owners.length - subscribeCount - trialCount;
 
   const renderSortableHeader = (key: string, label: string) => {
     const isSorted = sort.replace("-", "") === key;
@@ -943,7 +975,7 @@ export default function OwnerOutletPage() {
 
 
   const statCards = (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
       <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
         <div className="flex flex-col">
           <p className="text-xs font-bold uppercase tracking-wider text-red-100">Total Owner</p>
@@ -959,12 +991,12 @@ export default function OwnerOutletPage() {
       <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col">
           <div className="flex justify-between items-start">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Owner Aktif</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Berlangganan (Subscribe)</p>
             <div className="h-3 w-3 rounded-full bg-emerald-400"></div>
           </div>
           <div className="mt-1">
-            <h2 className="text-3xl font-black text-gray-900">{activeCount}</h2>
-            <p className="mt-1 text-[10px] text-gray-400 font-medium">Total owner aktif pada data saat ini.</p>
+            <h2 className="text-3xl font-black text-gray-900">{subscribeCount}</h2>
+            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner yang berlangganan minimal di 1 outlet.</p>
           </div>
         </div>
       </div>
@@ -972,12 +1004,25 @@ export default function OwnerOutletPage() {
       <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col">
           <div className="flex justify-between items-start">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Owner Non-Aktif</p>
-            <div className="h-3 w-3 rounded-full bg-red-600"></div>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Trial</p>
+            <div className="h-3 w-3 rounded-full bg-blue-400"></div>
           </div>
           <div className="mt-1">
-            <h2 className="text-3xl font-black text-gray-900">{inactiveCount}</h2>
-            <p className="mt-1 text-[10px] text-gray-400 font-medium">Total owner non-aktif pada data saat ini.</p>
+            <h2 className="text-3xl font-black text-gray-900">{trialCount}</h2>
+            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner masa trial 14 hari.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col">
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Belum Berlangganan</p>
+            <div className="h-3 w-3 rounded-full bg-slate-400"></div>
+          </div>
+          <div className="mt-1">
+            <h2 className="text-3xl font-black text-gray-900">{notSubscribeCount}</h2>
+            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner yang belum berlangganan.</p>
           </div>
         </div>
       </div>
@@ -1217,23 +1262,42 @@ export default function OwnerOutletPage() {
                       return (
                         <tr
                           key={owner.id}
-                          className={`select-none transition-colors ${
+                          className={`transition-colors ${
+                            selectedOwnerIds.length > 0
+                              ? "cursor-pointer select-none"
+                              : ""
+                          } ${
                             isSelected
                               ? "bg-red-50/40 hover:bg-red-50/60"
                               : "hover:bg-gray-50"
                           }`}
                           onMouseDown={(e) => {
-                            if (e.button !== 0) return;
+                            if (e.button !== 0 || selectedOwnerIds.length === 0) return;
                             handleRowMouseDown(owner.id, isSelected);
                           }}
-                          onMouseEnter={() => handleRowMouseEnter(owner.id)}
+                          onMouseEnter={() => {
+                            if (selectedOwnerIds.length > 0) handleRowMouseEnter(owner.id);
+                          }}
+                          onMouseMove={() => {
+                            if (isDragging && !hasMoved.current) hasMoved.current = true;
+                          }}
                         >
-                          <td className="px-4 py-4 text-center">
+                          <td
+                            className="px-4 py-4 text-center cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOwnerIds((prev) =>
+                                prev.includes(owner.id)
+                                  ? prev.filter((id) => id !== owner.id)
+                                  : [...prev, owner.id]
+                              );
+                            }}
+                          >
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              readOnly
-                              className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                              onChange={() => {}}
+                              className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] cursor-pointer"
                             />
                           </td>
 
@@ -1254,22 +1318,25 @@ export default function OwnerOutletPage() {
                             {owner.created_at ? new Date(owner.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : "-"}
                           </td>
                           <td className="px-4 py-4 text-center align-top">
-                            <span
-                              className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${
-                                owner.status === "ACTIVE"
-                                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border border-red-200 bg-red-50 text-red-700"
-                              }`}
-                            >
-                              {owner.status}
-                            </span>
+                            {(() => {
+                              const st = getOwnerStatus(owner);
+                              return (
+                                <span
+                                  className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getOwnerStatusBadgeStyle(
+                                    st
+                                  )}`}
+                                >
+                                  {st}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-4 text-center align-top">
                             <span className="inline-flex items-center justify-center rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-700">
                               {owner.outlet_count || 0}
                             </span>
                           </td>
-                          <td className="px-4 py-4 align-top text-right whitespace-nowrap">
+                          <td className="px-4 py-4 align-top text-left whitespace-nowrap">
                             <WalletBalanceCell ownerId={owner.id} />
                           </td>
                           <td
@@ -1299,29 +1366,16 @@ export default function OwnerOutletPage() {
                                 <EditIcon className="h-4 w-4" />
                               </button>
 
-                              {owner.status !== "ACTIVE" ? (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRestoreOwner(owner.id);
-                                  }}
-                                  className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-600 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50"
-                                  title="Restore Owner"
-                                >
-                                  <RestoreIcon className="h-4 w-4" />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteOwner(owner.id);
-                                  }}
-                                  className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
-                                  title="Hapus Owner"
-                                >
-                                  <TrashIcon className="h-4 w-4" />
-                                </button>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteOwner(owner.id);
+                                }}
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
+                                title="Hapus Owner"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
                             </div>
                           </td>
                         </tr>
