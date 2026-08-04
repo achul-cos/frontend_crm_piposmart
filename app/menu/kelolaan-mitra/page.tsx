@@ -75,6 +75,8 @@ type RuleTierFormState = {
   value: string;
 };
 
+type AutoCommissionCategory = "REFERRAL" | "PARTNERSHIP" | "STRATEGIC";
+
 const PAGE_SIZE = 20;
 
 const inputClass =
@@ -201,6 +203,38 @@ function formatTierRange(
     : `>= ${tier.min_closings} closing`;
 }
 
+function getAutoCommissionCategory(
+  typeIdentifier?: string | null,
+): AutoCommissionCategory | null {
+  const typeUpper = (typeIdentifier || "").toUpperCase();
+
+  if (
+    typeUpper.includes("STRATEGIC") ||
+    typeUpper.includes("STRATEGIS") ||
+    typeUpper.includes("DISTRIBUTOR")
+  ) {
+    return "STRATEGIC";
+  }
+
+  if (
+    typeUpper.includes("PARTNERSHIP") ||
+    typeUpper.includes("PARTNER") ||
+    typeUpper.includes("AGEN")
+  ) {
+    return "PARTNERSHIP";
+  }
+
+  if (
+    typeUpper.includes("REFERRAL") ||
+    typeUpper.includes("REFRAL") ||
+    typeUpper.includes("REF")
+  ) {
+    return "REFERRAL";
+  }
+
+  return null;
+}
+
 function ModalShell({
   open,
   title,
@@ -219,7 +253,7 @@ function ModalShell({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
       <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        className="w-full max-w-5xl h-[85vh] max-h-[85vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
@@ -285,6 +319,7 @@ export default function KelolaanMitraPage() {
 
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showTypeModal, setShowTypeModal] = useState(false);
+  const [typeModalTab, setTypeModalTab] = useState<"detail" | "rules">("detail");
   const [editingPartner, setEditingPartner] = useState<PartnerItem | null>(null);
   const [editingType, setEditingType] = useState<PartnerTypeItem | null>(null);
 
@@ -440,6 +475,133 @@ export default function KelolaanMitraPage() {
     return plans.find((plan) => plan.id === Number(ruleForm.planId)) || null;
   }, [plans, ruleForm.planId]);
 
+  const getPresetCommissionValue = (
+    plan: CatalogPlan | null,
+    typeIdentifier?: string | null,
+  ): string | null => {
+    if (!plan) return null;
+
+    const category = getAutoCommissionCategory(typeIdentifier);
+    const pkgNameUpper = (plan.package?.name || "").toUpperCase();
+    const planNameUpper = (plan.name || "").toUpperCase();
+    const tenure = Number(plan.tenure_months || 0);
+
+    // Auto-fill is strictly for official subscription packages in PDF (12, 18, 24 months)
+    if (tenure !== 12 && tenure !== 18 && tenure !== 24) {
+      return null;
+    }
+
+    if (!category) return null;
+
+    const isBasic = pkgNameUpper.includes("BASIC") || planNameUpper.includes("BASIC");
+    const isBusiness = pkgNameUpper.includes("BUSINESS") || planNameUpper.includes("BUSINESS");
+    const isPro = pkgNameUpper.includes("PRO") || planNameUpper.includes("PRO");
+
+    // 1. Basic (12 Bulan)
+    if (isBasic && tenure === 12) {
+      if (category === "REFERRAL") return "120000";
+      if (category === "PARTNERSHIP") return "150000";
+      if (category === "STRATEGIC") return "240000";
+    }
+
+    // 2. Business (12, 18, 24 Bulan)
+    if (isBusiness) {
+      if (tenure === 12) {
+        if (category === "REFERRAL") return "180000";
+        if (category === "PARTNERSHIP") return "210000";
+        if (category === "STRATEGIC") return "320000";
+      }
+      if (tenure === 18) {
+        if (category === "REFERRAL") return "270000";
+        if (category === "PARTNERSHIP") return "315000";
+        if (category === "STRATEGIC") return "480000";
+      }
+      if (tenure === 24) {
+        if (category === "REFERRAL") return "360000";
+        if (category === "PARTNERSHIP") return "420000";
+        if (category === "STRATEGIC") return "640000";
+      }
+    }
+
+    // 3. Pro (12, 18, 24 Bulan)
+    if (isPro) {
+      if (tenure === 12) {
+        if (category === "REFERRAL") return "220000";
+        if (category === "PARTNERSHIP") return "250000";
+        if (category === "STRATEGIC") return "400000";
+      }
+      if (tenure === 18) {
+        if (category === "REFERRAL") return "330000";
+        if (category === "PARTNERSHIP") return "375000";
+        if (category === "STRATEGIC") return "600000";
+      }
+      if (tenure === 24) {
+        if (category === "REFERRAL") return "440000";
+        if (category === "PARTNERSHIP") return "500000";
+        if (category === "STRATEGIC") return "800000";
+      }
+    }
+
+    return null;
+  };
+
+  const buildAutomaticRulesForType = (typeCode: string, typeName: string) => {
+    const typeIdentifier = `${typeCode} ${typeName}`.trim();
+    const category = getAutoCommissionCategory(typeIdentifier);
+
+    if (!category) {
+      return [];
+    }
+
+    const effectiveFrom = new Date().toISOString().slice(0, 10);
+
+    return plans
+      .map((plan) => {
+        const value = getPresetCommissionValue(plan, typeIdentifier);
+
+        if (!value) {
+          return null;
+        }
+
+        return {
+          plan_id: plan.id,
+          mode: "FIXED" as const,
+          value,
+          effective_from: `${effectiveFrom}T00:00:00Z`,
+        };
+      })
+      .filter(
+        (
+          rule,
+        ): rule is {
+          plan_id: number;
+          mode: "FIXED";
+          value: string;
+          effective_from: string;
+        } => rule !== null,
+      );
+  };
+
+  const handlePlanChange = (planId: string) => {
+    const selectedPlanObj = plans.find((p) => String(p.id) === planId) || null;
+    const typeIdentifier =
+      editingType?.code ||
+      selectedType?.code ||
+      editingType?.name ||
+      selectedType?.name ||
+      typeForm.code ||
+      typeForm.name;
+
+    const presetVal = getPresetCommissionValue(selectedPlanObj, typeIdentifier);
+
+    setRuleForm((current) => ({
+      ...current,
+      planId,
+      mode: presetVal ? "FIXED" : current.mode,
+      value: presetVal || current.value,
+    }));
+  };
+
   const loadTypeDetail = async (typeId: number) => {
     setLoadingTypeDetail(true);
 
@@ -517,11 +679,16 @@ export default function KelolaanMitraPage() {
     setRuleTiers([createEmptyRuleTier()]);
     setTypeFormError("");
     setRuleFormError("");
+    setTypeModalTab("detail");
     setShowTypeModal(true);
   };
 
-  const openEditTypeModal = async (partnerType: PartnerTypeItem) => {
+  const openEditTypeModal = async (
+    partnerType: PartnerTypeItem,
+    initialTab: "detail" | "rules" = "detail",
+  ) => {
     setEditingType(partnerType);
+    setSelectedType(partnerType);
     setTypeForm({
       code: partnerType.code,
       name: partnerType.name,
@@ -533,17 +700,40 @@ export default function KelolaanMitraPage() {
     setRuleTiers([createEmptyRuleTier()]);
     setTypeFormError("");
     setRuleFormError("");
+    setTypeModalTab(initialTab);
     setShowTypeModal(true);
 
     await loadTypeDetail(partnerType.id);
   };
 
   const handleRuleModeChange = (mode: "PERCENTAGE" | "FIXED" | "TIER") => {
-    setRuleForm((current) => ({
-      ...current,
-      mode,
-      value: mode === "TIER" ? "" : current.value,
-    }));
+    setRuleForm((current) => {
+      let newValue = mode === "TIER" ? "" : current.value;
+
+      if (mode === "FIXED") {
+        const selectedPlanObj = plans.find((p) => String(p.id) === current.planId) || null;
+        const typeIdentifier =
+          editingType?.code ||
+          selectedType?.code ||
+          editingType?.name ||
+          selectedType?.name ||
+          typeForm.code ||
+          typeForm.name;
+
+        const presetVal = getPresetCommissionValue(selectedPlanObj, typeIdentifier);
+        if (presetVal) {
+          newValue = presetVal;
+        } else if (selectedType?.commission_value) {
+          newValue = selectedType.commission_value;
+        }
+      }
+
+      return {
+        ...current,
+        mode,
+        value: newValue,
+      };
+    });
 
     if (mode === "TIER") {
       setRuleTiers((current) =>
@@ -691,8 +881,38 @@ export default function KelolaanMitraPage() {
           description: typeForm.description.trim() || undefined,
         });
 
+        const automaticRules = buildAutomaticRulesForType(
+          created.code,
+          created.name,
+        );
+        let automaticRuleFailure = 0;
+
+        if (automaticRules.length > 0) {
+          const results = await Promise.allSettled(
+            automaticRules.map((payload) =>
+              createPartnerTypeCommissionRule(created.id, payload),
+            ),
+          );
+
+          automaticRuleFailure = results.filter(
+            (result) => result.status === "rejected",
+          ).length;
+        }
+
         setEditingType(created);
+        setSelectedType(created);
         await refreshTypes(created.id);
+        setTypeModalTab("rules");
+
+        if (automaticRules.length === 0) {
+          setTypeFormError(
+            "Jenis mitra berhasil disimpan, tetapi rule otomatis hanya tersedia untuk kategori Referral, Partnership/Agen, atau Strategic/Distributor.",
+          );
+        } else if (automaticRuleFailure > 0) {
+          setTypeFormError(
+            `Jenis mitra berhasil disimpan, tetapi ${automaticRuleFailure} rule komisi otomatis gagal dibuat. Silakan cek tab Rule Komisi per Plan.`,
+          );
+        }
       }
     } catch (error) {
       setTypeFormError(getErrorMessage(error));
@@ -758,6 +978,12 @@ export default function KelolaanMitraPage() {
 
     setSavingRule(true);
 
+    const formatIsoDate = (dateStr: string, isEnd = false) => {
+      if (!dateStr) return isEnd ? undefined : new Date().toISOString();
+      if (dateStr.includes("T")) return dateStr;
+      return isEnd ? `${dateStr}T23:59:59Z` : `${dateStr}T00:00:00Z`;
+    };
+
     try {
       await createPartnerTypeCommissionRule(typeId, {
         plan_id: ruleForm.planId
@@ -765,8 +991,8 @@ export default function KelolaanMitraPage() {
           : undefined,
         mode: ruleForm.mode,
         value: ruleForm.mode === "TIER" ? undefined : ruleForm.value.trim(),
-        effective_from: ruleForm.effectiveFrom,
-        effective_to: ruleForm.effectiveTo || undefined,
+        effective_from: formatIsoDate(ruleForm.effectiveFrom) || new Date().toISOString(),
+        effective_to: formatIsoDate(ruleForm.effectiveTo, true),
         tiers:
           ruleForm.mode === "TIER"
             ? ruleTiers.map((tier, index) => ({
@@ -1078,10 +1304,10 @@ export default function KelolaanMitraPage() {
                           <button
                             type="button"
                             onClick={() => void openEditTypeModal(item)}
-                            className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
-                            title="Kelola Jenis Mitra"
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100 mx-auto"
+                            title="Edit Jenis Mitra"
                           >
-                            Edit
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </button>
                         ) : (
                           <span className="text-xs font-bold text-gray-300">-</span>
@@ -1157,9 +1383,10 @@ export default function KelolaanMitraPage() {
                                 ? `/menu/kelolaan-mitra/detail?id=${partner.id}&tab=interaction`
                                 : `/menu/kelolaan-mitra/detail?id=${partner.id}`
                             }
-                            className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
+                            title="Detail Mitra"
                           >
-                            Detail
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                           </Link>
 
                           {isAdmin && tableMode === "ACTIVE_PARTNERS" ? (
@@ -1167,18 +1394,20 @@ export default function KelolaanMitraPage() {
                               <button
                                 type="button"
                                 onClick={() => openEditPartnerModal(partner)}
-                                className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100"
+                                title="Edit Mitra"
                               >
-                                Edit
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => void handleDeactivatePartner(partner)}
                                 disabled={saving}
-                                className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-black text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Nonaktifkan Mitra"
                               >
-                                Nonaktif
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                               </button>
                             </>
                           ) : null}
@@ -1188,9 +1417,10 @@ export default function KelolaanMitraPage() {
                               type="button"
                               onClick={() => void handleRestorePartner(partner)}
                               disabled={saving}
-                              className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Pulihkan Mitra"
                             >
-                              Pulihkan
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                             </button>
                           ) : null}
                         </div>
@@ -1435,14 +1665,46 @@ export default function KelolaanMitraPage() {
       <ModalShell
         open={showTypeModal}
         title={editingType ? "Edit Jenis Mitra" : "Tambah Jenis Mitra"}
-        subtitle="Atur komisi dasar jenis mitra dan rule komisi aktif dengan tampilan popup Komisi."
+        subtitle="Atur informasi master jenis mitra dan konfigurasi rule komisi aktif."
         onClose={() => setShowTypeModal(false)}
       >
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.05fr_1.35fr]">
-          <form
-            onSubmit={handleTypeSubmit}
-            className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
-          >
+        <div className="space-y-5">
+          {/* Tab Navigation */}
+          <div className="flex border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setTypeModalTab("detail")}
+              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-black transition ${
+                typeModalTab === "detail"
+                  ? "border-[#C92C1E] text-[#C92C1E]"
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              📋 Informasi Jenis Mitra
+            </button>
+            <button
+              type="button"
+              onClick={() => setTypeModalTab("rules")}
+              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-black transition ${
+                typeModalTab === "rules"
+                  ? "border-[#C92C1E] text-[#C92C1E]"
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              ⚙️ Rule Komisi per Plan
+              {commissionRules.length > 0 && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-[#C92C1E]">
+                  {commissionRules.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {typeModalTab === "detail" ? (
+            <form
+              onSubmit={handleTypeSubmit}
+              className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs max-w-2xl mx-auto"
+            >
             {typeFormError ? (
               <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
                 {typeFormError}
@@ -1461,7 +1723,7 @@ export default function KelolaanMitraPage() {
 
             <label className="block space-y-2">
               <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                Code
+                Code <span className="text-slate-400 font-normal lowercase">(opsional)</span>
               </span>
               <input
                 value={typeForm.code}
@@ -1472,7 +1734,7 @@ export default function KelolaanMitraPage() {
                   }))
                 }
                 disabled={Boolean(editingType)}
-                placeholder="Code jenis mitra"
+                placeholder="Otomatis jika dikosongkan (cth: DISTRIBUTOR)"
                 className={`${inputClass} uppercase`}
               />
             </label>
@@ -1520,17 +1782,30 @@ export default function KelolaanMitraPage() {
                 <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                   Nilai Komisi Dasar
                 </span>
-                <input
-                  value={typeForm.commissionValue}
-                  onChange={(event) =>
-                    setTypeForm((current) => ({
-                      ...current,
-                      commissionValue: event.target.value,
-                    }))
-                  }
-                  placeholder="Masukkan nilai"
-                  className={inputClass}
-                />
+                <div className="relative">
+                  {typeForm.commissionMode === "FIXED" ? (
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500">
+                      Rp
+                    </span>
+                  ) : null}
+                  <input
+                    value={typeForm.commissionValue}
+                    onChange={(event) =>
+                      setTypeForm((current) => ({
+                        ...current,
+                        commissionValue: event.target.value,
+                      }))
+                    }
+                    placeholder={
+                      typeForm.commissionMode === "FIXED"
+                        ? "Masukkan nominal komisi"
+                        : "Masukkan persentase komisi"
+                    }
+                    className={`${inputClass} ${
+                      typeForm.commissionMode === "FIXED" ? "pl-11" : ""
+                    }`}
+                  />
+                </div>
               </label>
             </div>
 
@@ -1559,11 +1834,16 @@ export default function KelolaanMitraPage() {
                 : formatMoney(typeForm.commissionValue || 0)}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between pt-2">
+              {!editingType ? (
+                <p className="text-[11px] font-medium text-slate-400">
+                  💡 Rule Komisi per Plan dapat diatur setelah Jenis Mitra disimpan.
+                </p>
+              ) : <div />}
               <button
                 type="submit"
                 disabled={savingType}
-                className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                className="rounded-2xl bg-[#C92C1E] px-6 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
               >
                 {savingType
                   ? "Menyimpan..."
@@ -1573,8 +1853,45 @@ export default function KelolaanMitraPage() {
               </button>
             </div>
           </form>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Target Jenis Mitra
+                  </p>
+                  <p className="text-sm font-black text-slate-900">
+                    {selectedType?.name || editingType?.name || "Belum ada jenis mitra terpilih"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">Pilih Mitra:</span>
+                  <select
+                    value={selectedType?.id || editingType?.id || ""}
+                    onChange={(e) => {
+                      const targetId = Number(e.target.value);
+                      if (targetId) {
+                        const found = partnerTypes.find((t) => t.id === targetId);
+                        if (found) {
+                          setSelectedType(found);
+                          setEditingType(found);
+                          loadTypeDetail(targetId);
+                        }
+                      }
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#C92C1E]"
+                  >
+                    <option value="">-- Pilih Jenis Mitra --</option>
+                    {partnerTypes.map((pt) => (
+                      <option key={pt.id} value={pt.id}>
+                        {pt.name} ({pt.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-          <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.2fr_1fr]">
             <form
               onSubmit={handleRuleSubmit}
               className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
@@ -1601,18 +1918,12 @@ export default function KelolaanMitraPage() {
                 </span>
                 <select
                   value={ruleForm.planId}
-                  onChange={(event) =>
-                    setRuleForm((current) => ({
-                      ...current,
-                      planId: event.target.value,
-                    }))
-                  }
+                  onChange={(event) => handlePlanChange(event.target.value)}
                   className={selectClass}
                 >
                   <option value="">Semua Plan</option>
                   {plans.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.package?.name ? `${item.package.name} â€” ` : ""}
                       {item.name} ({item.tenure_months} bln)
                     </option>
                   ))}
@@ -1622,7 +1933,7 @@ export default function KelolaanMitraPage() {
               <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">
                 {!selectedRulePlan
                   ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)."
-                  : `Plan terpilih: ${selectedRulePlan.name} â€” harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedRulePlan.price || 0))}`}
+                  : `Plan terpilih: ${selectedRulePlan.name} - harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedRulePlan.price || 0))}`}
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1650,17 +1961,30 @@ export default function KelolaanMitraPage() {
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Nilai Rule
                     </span>
-                    <input
-                      value={ruleForm.value}
-                      onChange={(event) =>
-                        setRuleForm((current) => ({
-                          ...current,
-                          value: event.target.value,
-                        }))
-                      }
-                      placeholder="Nilai komisi rule"
-                      className={inputClass}
-                    />
+                    <div className="relative">
+                      {ruleForm.mode === "FIXED" ? (
+                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500">
+                          Rp
+                        </span>
+                      ) : null}
+                      <input
+                        value={ruleForm.value}
+                        onChange={(event) =>
+                          setRuleForm((current) => ({
+                            ...current,
+                            value: event.target.value,
+                          }))
+                        }
+                        placeholder={
+                          ruleForm.mode === "FIXED"
+                            ? "Nilai komisi rule"
+                            : "Nilai persen komisi"
+                        }
+                        className={`${inputClass} ${
+                          ruleForm.mode === "FIXED" ? "pl-11" : ""
+                        }`}
+                      />
+                    </div>
                   </label>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-[#C92C1E]">
@@ -1770,13 +2094,26 @@ export default function KelolaanMitraPage() {
                             <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
                               Nilai
                             </span>
-                            <input
-                              value={tier.value}
-                              onChange={(event) =>
-                                updateRuleTier(index, "value", event.target.value)
-                              }
-                              className={inputClass}
-                            />
+                            <div className="relative">
+                              {tier.mode === "FIXED" ? (
+                                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500">
+                                  Rp
+                                </span>
+                              ) : null}
+                              <input
+                                value={tier.value}
+                                onChange={(event) =>
+                                  updateRuleTier(
+                                    index,
+                                    "value",
+                                    event.target.value,
+                                  )
+                                }
+                                className={`${inputClass} ${
+                                  tier.mode === "FIXED" ? "pl-11" : ""
+                                }`}
+                              />
+                            </div>
                           </label>
                         </div>
 
@@ -1959,7 +2296,9 @@ export default function KelolaanMitraPage() {
                 )}
               </div>
             </section>
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       </ModalShell>
     </div>

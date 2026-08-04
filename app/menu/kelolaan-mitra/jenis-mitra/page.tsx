@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/exhaustive-deps */
@@ -122,6 +122,97 @@ export default function JenisMitraPage() {
     if (!ruleForm.planId) return null;
     return plans.find((plan) => plan.id === Number(ruleForm.planId)) || null;
   }, [plans, ruleForm.planId]);
+
+  const getPresetCommissionValue = (
+    plan: CatalogPlan | null,
+    typeIdentifier?: string | null,
+  ): string | null => {
+    if (!plan) return null;
+
+    const typeUpper = (typeIdentifier || "").toUpperCase();
+    const pkgNameUpper = (plan.package?.name || plan.name || "").toUpperCase();
+    const planNameUpper = (plan.name || "").toUpperCase();
+    const tenure = Number(plan.tenure_months || 0);
+
+    // Determine category (Referral, Partnership, Strategic)
+    let category: "REFERRAL" | "PARTNERSHIP" | "STRATEGIC" = "REFERRAL";
+    if (typeUpper.includes("STRATEGIC") || typeUpper.includes("STRATEGIS") || typeUpper.includes("DISTRIBUTOR")) {
+      category = "STRATEGIC";
+    } else if (typeUpper.includes("PARTNERSHIP") || typeUpper.includes("PARTNER") || typeUpper.includes("AGEN")) {
+      category = "PARTNERSHIP";
+    } else if (typeUpper.includes("REFERRAL") || typeUpper.includes("REFRAL") || typeUpper.includes("REF")) {
+      category = "REFERRAL";
+    }
+
+    // Basic Package
+    if (pkgNameUpper.includes("BASIC") || planNameUpper.includes("BASIC")) {
+      if (category === "STRATEGIC") return "240000";
+      if (category === "PARTNERSHIP") return "150000";
+      return "120000"; // Referral fallback
+    }
+
+    // Business Package
+    if (pkgNameUpper.includes("BUSINESS") || planNameUpper.includes("BUSINESS")) {
+      if (tenure === 18) {
+        if (category === "STRATEGIC") return "480000";
+        if (category === "PARTNERSHIP") return "315000";
+        return "270000"; // Referral
+      }
+      if (tenure === 24) {
+        if (category === "STRATEGIC") return "640000";
+        if (category === "PARTNERSHIP") return "420000";
+        return "360000"; // Referral
+      }
+      // Default Business (12 Bulan / 1 Bulan / standard)
+      if (category === "STRATEGIC") return "320000";
+      if (category === "PARTNERSHIP") return "210000";
+      return "180000"; // Referral
+    }
+
+    // Pro Package
+    if (pkgNameUpper.includes("PRO") || planNameUpper.includes("PRO")) {
+      if (tenure === 18) {
+        if (category === "STRATEGIC") return "600000";
+        if (category === "PARTNERSHIP") return "375000";
+        return "330000"; // Referral
+      }
+      if (tenure === 24) {
+        if (category === "STRATEGIC") return "800000";
+        if (category === "PARTNERSHIP") return "500000";
+        return "440000"; // Referral
+      }
+      // Default Pro (12 Bulan / 1 Bulan / standard)
+      if (category === "STRATEGIC") return "400000";
+      if (category === "PARTNERSHIP") return "250000";
+      return "220000"; // Referral
+    }
+
+    // General fallback based on category if package name is unknown
+    if (category === "STRATEGIC") return "240000";
+    if (category === "PARTNERSHIP") return "150000";
+    return "120000";
+  };
+
+  const handlePlanChange = (planId: string) => {
+    const selectedPlanObj = plans.find((p) => String(p.id) === planId) || null;
+    const selectedTypeObj = partnerTypes.find((t) => t.id === selectedTypeId);
+    const typeIdentifier =
+      selectedTypeObj?.code ||
+      selectedTypeObj?.name ||
+      editingType?.code ||
+      editingType?.name ||
+      typeForm.code ||
+      typeForm.name;
+
+    const presetVal = getPresetCommissionValue(selectedPlanObj, typeIdentifier);
+
+    setRuleForm((current) => ({
+      ...current,
+      planId,
+      mode: presetVal ? "FIXED" : current.mode,
+      value: presetVal || current.value,
+    }));
+  };
 
   const filteredPartnerTypes = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -431,8 +522,8 @@ export default function JenisMitraPage() {
                         <div className="flex flex-wrap gap-2">
                           <Link
                             href={`/menu/kelolaan-mitra/jenis-mitra/${item.id}`}
-                            className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                            title="Lihat Halaman Detail Jenis Mitra"
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
+                            title="Detail Jenis Mitra"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -453,9 +544,10 @@ export default function JenisMitraPage() {
                                 setSelectedTypeId(item.id);
                                 setTimeout(() => startEditType(), 0);
                               }}
-                              className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50"
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100"
+                              title="Edit"
                             >
-                              Edit
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                             </button>
                           ) : null}
                           {canManage ? (
@@ -463,9 +555,9 @@ export default function JenisMitraPage() {
                               type="button"
                               disabled
                               title="Backend belum menyediakan endpoint nonaktifkan partner type"
-                              className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-300"
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-300 shadow-sm cursor-not-allowed"
                             >
-                              Nonaktifkan
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                             </button>
                           ) : null}
                         </div>
@@ -552,7 +644,7 @@ export default function JenisMitraPage() {
             </div>
             {ruleFormError ? <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{ruleFormError}</div> : null}
             {ruleFormSuccess ? <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{ruleFormSuccess}</div> : null}
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"><select value={ruleForm.planId} onChange={(event) => setRuleForm((current) => ({ ...current, planId: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Semua Plan</option>{plans.map((item) => <option key={item.id} value={item.id}>{item.package?.name ? `${item.package.name} — ` : ""}{item.name} ({item.tenure_months} bln)</option>)}</select><select value={ruleForm.mode} onChange={(event) => setRuleForm((current) => ({ ...current, mode: event.target.value as "PERCENTAGE" | "FIXED" | "TIER" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option><option value="TIER">TIER</option></select>{ruleForm.mode === "TIER" ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">Mode TIER memakai daftar bracket di bawah.</div> : <input value={ruleForm.value} onChange={(event) => setRuleForm((current) => ({ ...current, value: event.target.value }))} placeholder={ruleForm.mode === "PERCENTAGE" ? "Contoh: 7.5" : "Contoh: 250000"} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />}<input type="datetime-local" value={ruleForm.effectiveFrom} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><input type="datetime-local" value={ruleForm.effectiveTo} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveTo: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">{!selectedPlan ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)." : `Plan terpilih: ${selectedPlan.name} — harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedPlan.price || 0))}`}</div></div>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"><select value={ruleForm.planId} onChange={(event) => handlePlanChange(event.target.value)} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Semua Plan</option>{plans.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.tenure_months} bln)</option>)}</select><select value={ruleForm.mode} onChange={(event) => setRuleForm((current) => ({ ...current, mode: event.target.value as "PERCENTAGE" | "FIXED" | "TIER" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option><option value="TIER">TIER</option></select>{ruleForm.mode === "TIER" ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">Mode TIER memakai daftar bracket di bawah.</div> : <input value={ruleForm.value} onChange={(event) => setRuleForm((current) => ({ ...current, value: event.target.value }))} placeholder={ruleForm.mode === "PERCENTAGE" ? "Contoh: 7.5" : "Contoh: 250000"} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />}<input type="datetime-local" value={ruleForm.effectiveFrom} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><input type="datetime-local" value={ruleForm.effectiveTo} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveTo: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">{!selectedPlan ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)." : `Plan terpilih: ${selectedPlan.name} — harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedPlan.price || 0))}`}</div></div>
             {ruleForm.mode === "TIER" ? <div className="mt-4 space-y-3">{ruleForm.tiers.map((tier, index) => <div key={index} className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-5"><input type="number" min={1} value={tier.min_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, min_closings: Number(event.target.value) || 1 } : item) }))} placeholder="Min closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><input value={tier.max_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, max_closings: event.target.value } : item) }))} placeholder="Max closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><select value={tier.mode} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, mode: event.target.value as "PERCENTAGE" | "FIXED" } : item) }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option></select><input value={tier.value} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, value: event.target.value } : item) }))} placeholder="Nilai komisi tier" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: current.tiers.filter((_, tierIndex) => tierIndex !== index).map((item, itemIndex) => ({ ...item, tier_order: itemIndex + 1 })) }))} disabled={ruleForm.tiers.length === 1} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">Hapus Tier</button></div>)}<button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: [...current.tiers, { tier_order: current.tiers.length + 1, min_closings: current.tiers.length + 1, max_closings: "", mode: "PERCENTAGE", value: "" }] }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 transition hover:bg-gray-50">+ Tambah Tier</button></div> : null}
             <div className="mt-4 flex justify-end"><button type="submit" disabled={!canManage || savingRule || !selectedTypeId} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingRule ? "Menyimpan Rule..." : "Simpan Commission Rule"}</button></div>
           </form>
@@ -590,7 +682,7 @@ export default function JenisMitraPage() {
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.value || (rule.tiers && rule.tiers.length > 0 ? `${rule.tiers.length} tier` : "-")}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{formatDateTime(rule.effective_from)} - {formatDateTime(rule.effective_to)}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.active ? "ACTIVE" : "INACTIVE"}</td>
-                        <td className="px-4 py-4">{canManage && rule.active ? <button type="button" onClick={() => void handleDeactivateRule(rule)} className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-100">Nonaktifkan</button> : <span className="text-xs font-bold text-gray-300">-</span>}</td>
+                        <td className="px-4 py-4">{canManage && rule.active ? <button type="button" onClick={() => void handleDeactivateRule(rule)} className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100" title="Nonaktifkan"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></button> : <span className="text-xs font-bold text-gray-300">-</span>}</td>
                       </tr>
                     ))
                   )}
