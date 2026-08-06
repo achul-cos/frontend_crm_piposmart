@@ -19,19 +19,32 @@ function formatRupiah(value?: string): string {
   return `Rp ${num.toLocaleString("id-ID")}`;
 }
 
-function formatDate(value?: string): string {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+function formatDate(value?: string | null): string {
+  if (!value) return "—";
+  const trimmed = value.trim();
+  if (trimmed === "—" || trimmed === "-" || trimmed === "Belum Berlangganan" || trimmed === "Tidak Pernah") {
+    return trimmed;
+  }
+  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let date: Date;
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    date = new Date(Number(y), Number(m) - 1, Number(d));
+  } else {
+    date = new Date(trimmed);
+  }
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
 
 /**
  * Detail Outlet — halaman tersendiri (bukan drawer), disusun sehierarki dan
  * konsisten dengan Detail Owner (`app/menu/owner-outlet/[id]/page.tsx`):
- * Ringkasan → Informasi Owner → Informasi Outlet → Riwayat Topup → Riwayat
- * Subscribe, semuanya vertikal per grup informasi. Wallet di-scope per OWNER
- * di backend (bukan per-outlet, saldo dipakai bersama semua outlet owner
- * tsb) — riwayat topup di sini karenanya riwayat wallet OWNER, bukan hanya
- * transaksi outlet ini secara sempit.
+ * Ringkasan → Informasi Owner → Informasi Outlet → Riwayat Subscribe.
  */
 export default function OutletDetailPage() {
   return (
@@ -47,7 +60,6 @@ function OutletDetailPageInner() {
   const outletId = Number(searchParams.get("id"));
 
   const [detail, setDetail] = useState<OutletDetail | null>(null);
-  const [walletHistory, setWalletHistory] = useState<WalletTransactionItem[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,14 +81,8 @@ function OutletDetailPageInner() {
         if (cancelled) return;
         setDetail(outletDetail);
 
-        const [walletRes, subsRes] = await Promise.all([
-          outletDetail.owner.id
-            ? listOwnerWalletTransactions(outletDetail.owner.id, { limit: 10 })
-            : Promise.resolve({ items: [], pagination: { page: 1, limit: 10, total: 0 } }),
-          listSubscriptionsByOutlet(outletId, { limit: 10 }),
-        ]);
+        const subsRes = await listSubscriptionsByOutlet(outletId, { limit: 10 });
         if (cancelled) return;
-        setWalletHistory(walletRes.items);
         setSubscriptions(subsRes.items);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Gagal memuat detail outlet.");
@@ -102,31 +108,24 @@ function OutletDetailPageInner() {
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
             </svg>
-            <Link href="/menu/kelolaan-outlet" className="hover:text-[#C92C1E] transition-colors">
-              Outlet
-            </Link>
+            <Link href="/menu/kelolaan-outlet" className="hover:underline">Kelolaan Outlet</Link>
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
             </svg>
-            <span className="text-[#C92C1E]">Detail Data</span>
+            <span className="text-[#C92C1E]">Detail</span>
           </div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-            {isLoading ? "Memuat Data..." : detail ? `Detail Outlet: ${detail.name}` : "Data Tidak Ditemukan"}
-          </h1>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight">Detail Outlet</h1>
         </div>
         <Link
           href="/menu/kelolaan-outlet"
-          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 hover:text-[#C92C1E] flex items-center gap-2"
+          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Kembali ke Daftar
+          ← Kembali ke Kelolaan Outlet
         </Link>
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center items-center py-20 text-gray-500 gap-3 bg-white rounded-2xl border border-gray-200/60 shadow-sm">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center flex flex-col items-center justify-center gap-3">
           <svg className="animate-spin h-6 w-6 text-[#C92C1E]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -150,26 +149,7 @@ function OutletDetailPageInner() {
       ) : (
         <div className="space-y-6">
           {/* Level 1: Ringkasan (Quick Stats) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
-              <div className="relative z-10">
-                <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Saldo Aplikasi</p>
-                <p className="text-xs font-semibold text-red-100/90 mt-1 mb-2">
-                  Saldo aplikasi sekarang tercatat di level Owner (dipakai bersama seluruh outlet), bukan per outlet.
-                </p>
-                {detail.owner.id ? (
-                  <Link
-                    href={`/menu/owner-outlet/${detail.owner.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-xs font-black text-white hover:bg-white/25 transition-colors"
-                  >
-                    Lihat saldo aplikasi di halaman Owner →
-                  </Link>
-                ) : null}
-              </div>
-              <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
               <div className="relative z-10">
                 <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total Langganan</p>
@@ -205,6 +185,7 @@ function OutletDetailPageInner() {
             <FieldBox label="Telepon" value={detail.owner.phone} />
             <FieldBox label="Email" value={detail.owner.email} />
             <FieldBox label="Brand" value={detail.owner.brand_name} />
+            <FieldBox label="Tanggal Dibuat Owner" value={formatDate(detail.owner.created_at)} />
           </InfoSection>
 
           {/* Level 3: Informasi Outlet */}
@@ -218,6 +199,7 @@ function OutletDetailPageInner() {
             <FieldBox label="Kode Outlet" value={detail.code} />
             <FieldBox label="Nama Outlet" value={detail.name} />
             <FieldBox label="Telepon" value={detail.phone} />
+            <FieldBox label="Tanggal Dibuat Outlet" value={formatDate(detail.created_at)} />
             <FieldBox label="Provinsi" value={detail.province} />
             <FieldBox label="Kota/Kabupaten" value={detail.city} />
             <FieldBox label="Kecamatan" value={detail.district} />
@@ -225,41 +207,6 @@ function OutletDetailPageInner() {
             <FieldBox label="Alamat Lengkap" value={detail.address} span />
             <FieldBox label="Status" badge value={detail.status} />
           </InfoSection>
-
-          {/* Level 4: Riwayat Topup */}
-          <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
-              <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
-                <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Topup</h4>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">Saldo wallet ini dipakai bersama seluruh outlet owner</p>
-              </div>
-            </div>
-            {walletHistory.length === 0 ? (
-              <div className="text-center py-14 bg-white">
-                <p className="text-gray-500 text-xs font-medium">Belum ada riwayat transaksi.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {walletHistory.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between px-5 py-3 text-xs hover:bg-gray-50 transition-colors">
-                    <div>
-                      <p className="font-bold text-gray-900">{tx.transaction_type}</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(tx.occurred_at)}</p>
-                    </div>
-                    <p className={`font-black ${tx.direction === "CREDIT" ? "text-emerald-600" : "text-red-600"}`}>
-                      {tx.direction === "CREDIT" ? "+" : "-"}
-                      {formatRupiah(tx.amount)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Level 5: Riwayat Subscribe */}
           <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">

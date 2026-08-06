@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   listGlobalOutlets,
   listOutletSubscriptionStatuses,
@@ -20,26 +20,150 @@ import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import OutletFormModal from "./OutletFormModal";
 import OutletAnalytics from "./OutletAnalytics";
 import BulkEditOutletModal, { type BulkEditFields } from "./BulkEditOutletModal";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+
+function AutocompleteFilter({
+  label,
+  placeholder,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const uniqueOptions = useMemo(() => Array.from(new Set(options.filter(Boolean))), [options]);
+
+  const filteredOptions = uniqueOptions.filter((opt) =>
+    opt.toLowerCase().includes(value.toLowerCase())
+  );
+
+  return (
+    <div ref={wrapperRef} className="flex flex-col gap-1.5 w-full relative">
+      <span className="text-xs font-semibold text-black">{label}</span>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+      />
+      {isOpen && value && filteredOptions.length > 0 && (
+        <ul className="absolute left-0 top-full z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {filteredOptions.map((opt, idx) => (
+            <li
+              key={`${opt}-${idx}`}
+              onClick={() => {
+                onChange(opt);
+                setIsOpen(false);
+              }}
+              className="cursor-pointer px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-red-50 hover:text-[#C92C1E]"
+            >
+              {opt}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 type TableState = "umum" | "langganan" | "sampah" | "analytics";
 
 const SUBSCRIPTION_STATUS_OPTIONS = [
   { value: "", label: "Semua Status" },
-  { value: "NOT_SUBSCRIBE", label: "Tidak Berlangganan" },
-  { value: "NEW", label: "Baru" },
   { value: "BERLANGGANAN", label: "Berlangganan" },
+  { value: "NEW", label: "NEW" },
+  { value: "AKAN_JATUH_TEMPO", label: "Akan Jatuh Tempo" },
   { value: "JATUH_TEMPO", label: "Jatuh Tempo" },
-  { value: "EXPIRED", label: "Kedaluwarsa" },
+  { value: "TELAH_JATUH_TEMPO", label: "Telah Jatuh Tempo" },
+  { value: "EXPIRED", label: "Unsubscribe" },
+  { value: "NOT_SUBSCRIBE", label: "Tidak Berlangganan" },
 ];
+
+const TIME_STATUS_OPTIONS = [
+  { value: "", label: "Semua Status Outlet" },
+  { value: "NEW", label: "New" },
+  { value: "EXISTING", label: "Existing" },
+  { value: "FUTURE", label: "Future" },
+];
+
+function getOutletTimeStatus(createdAtStr?: string, filterMonthStr?: string): string {
+  if (!filterMonthStr || !createdAtStr) return "-";
+  const date = new Date(createdAtStr);
+  if (Number.isNaN(date.getTime())) return "-";
+  const createdY = date.getFullYear();
+  const createdM = date.getMonth() + 1;
+  const createdMonthStr = `${createdY}-${createdM.toString().padStart(2, "0")}`;
+
+  if (filterMonthStr === createdMonthStr) return "New";
+  if (filterMonthStr < createdMonthStr) return "Existing";
+  return "Future";
+}
 
 function currentMonthValue(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function currentDateValue(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const isDueStatus = (status: string) =>
+  status === "AKAN_JATUH_TEMPO" ||
+  status === "JATUH_TEMPO" ||
+  status === "TELAH_JATUH_TEMPO";
+
 function formatRupiah(value?: string): string {
   const num = Number(value || 0);
   return `Rp ${num.toLocaleString("id-ID")}`;
+}
+
+function formatIndonesianDate(value?: string | null): string {
+  if (!value) return "—";
+  const trimmed = value.trim();
+  if (trimmed === "—" || trimmed === "-" || trimmed === "Belum Berlangganan" || trimmed === "Tidak Pernah") {
+    return trimmed;
+  }
+  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let date: Date;
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    date = new Date(Number(y), Number(m) - 1, Number(d));
+  } else {
+    date = new Date(trimmed);
+  }
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
 
 // Bulk mutation backend hanya expose endpoint owner-scoped
@@ -78,6 +202,12 @@ export default function KelolaanOutletPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [subscriptionStatus, setSubscriptionStatus] = useState("");
+  const [timeStatusFilter, setTimeStatusFilter] = useState("");
+  const [filterCode, setFilterCode] = useState("");
+  const [filterName, setFilterName] = useState("");
+  const [filterOwner, setFilterOwner] = useState("");
+  const [filterCity, setFilterCity] = useState("");
+  const [filterPlan, setFilterPlan] = useState("");
   const [month, setMonth] = useState(currentMonthValue());
   const [page, setPage] = useState(1);
   const limit = 10;
@@ -105,7 +235,105 @@ export default function KelolaanOutletPage() {
   const [isBulkActing, setIsBulkActing] = useState(false);
   const [bulkResultMessage, setBulkResultMessage] = useState<string | null>(null);
 
-  const bulkSelect = useBulkSelect(overviewItems);
+  const uniqueOverviewCodes = useMemo(
+    () => Array.from(new Set(overviewItems.map((i) => i.code).filter(Boolean))),
+    [overviewItems]
+  );
+  const uniqueOverviewNames = useMemo(
+    () => Array.from(new Set(overviewItems.map((i) => i.name).filter(Boolean))),
+    [overviewItems]
+  );
+  const uniqueOverviewOwners = useMemo(
+    () => Array.from(new Set(overviewItems.map((i) => i.owner.name || "").filter(Boolean))),
+    [overviewItems]
+  );
+  const uniqueOverviewCities = useMemo(() => {
+    const list: string[] = [];
+    overviewItems.forEach((i) => {
+      if (i.city) list.push(i.city);
+      if (i.province) list.push(i.province);
+      if (i.city && i.province) list.push(`${i.city}, ${i.province}`);
+    });
+    return Array.from(new Set(list.filter(Boolean)));
+  }, [overviewItems]);
+
+  const uniqueSubCodes = useMemo(
+    () => Array.from(new Set(subscriptionItems.map((i) => i.outlet_code).filter(Boolean))),
+    [subscriptionItems]
+  );
+  const uniqueSubNames = useMemo(
+    () => Array.from(new Set(subscriptionItems.map((i) => i.outlet_name).filter(Boolean))),
+    [subscriptionItems]
+  );
+  const uniqueSubOwners = useMemo(
+    () => Array.from(new Set(subscriptionItems.map((i) => (i.owner.name || "")).filter(Boolean))),
+    [subscriptionItems]
+  );
+  const uniqueSubPlans = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          subscriptionItems
+            .map((i) => i.package_plan?.package_name)
+            .filter((val): val is string => Boolean(val))
+        )
+      ),
+    [subscriptionItems]
+  );
+
+  const filteredOverviewItems = useMemo(() => {
+    return overviewItems.filter((item) => {
+      if (filterCode && !item.code.toLowerCase().includes(filterCode.toLowerCase())) {
+        return false;
+      }
+      if (filterName && !item.name.toLowerCase().includes(filterName.toLowerCase())) {
+        return false;
+      }
+      if (
+        filterOwner &&
+        !(item.owner.name || "").toLowerCase().includes(filterOwner.toLowerCase()) &&
+        !(item.owner.code || "").toLowerCase().includes(filterOwner.toLowerCase())
+      ) {
+        return false;
+      }
+      if (filterCity) {
+        const cityProv = `${item.city || ""} ${item.province || ""}`.toLowerCase();
+        if (!cityProv.includes(filterCity.toLowerCase())) return false;
+      }
+      if (timeStatusFilter) {
+        const status = getOutletTimeStatus(item.created_at, month);
+        if ((timeStatusFilter === "NEW_EXISTING" || timeStatusFilter === "NEW") && status !== "New") return false;
+        if (timeStatusFilter === "EXISTING" && status !== "Existing") return false;
+        if (timeStatusFilter === "FUTURE" && status !== "Future") return false;
+      }
+      return true;
+    });
+  }, [overviewItems, filterCode, filterName, filterOwner, filterCity, timeStatusFilter, month]);
+
+  const filteredSubscriptionItems = useMemo(() => {
+    return subscriptionItems.filter((item) => {
+      if (filterCode && !item.outlet_code.toLowerCase().includes(filterCode.toLowerCase())) {
+        return false;
+      }
+      if (filterName && !item.outlet_name.toLowerCase().includes(filterName.toLowerCase())) {
+        return false;
+      }
+      if (
+        filterOwner &&
+        !(item.owner.name || "").toLowerCase().includes(filterOwner.toLowerCase()) &&
+        !(item.owner.code || "").toLowerCase().includes(filterOwner.toLowerCase())
+      ) {
+        return false;
+      }
+      if (filterPlan) {
+        const planStr = `${item.package_plan?.package_name || ""} ${item.package_plan?.plan_name || ""}`.toLowerCase();
+        if (!planStr.includes(filterPlan.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [subscriptionItems, filterCode, filterName, filterOwner, filterPlan]);
+
+  const bulkSelect = useBulkSelect(filteredOverviewItems);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -127,15 +355,15 @@ export default function KelolaanOutletPage() {
     bulkSelect.clear();
     setBulkResultMessage(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableState, page, search, subscriptionStatus, month]);
+  }, [tableState, page, search, subscriptionStatus, month, timeStatusFilter, filterCode, filterName, filterOwner, filterCity, filterPlan]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const visibleCount =
     tableState === "langganan"
-      ? subscriptionItems.length
+      ? filteredSubscriptionItems.length
       : tableState === "analytics"
         ? 0
-        : overviewItems.length;
+        : filteredOverviewItems.length;
   const activeTabLabel =
     tableState === "umum"
       ? "Informasi Umum"
@@ -196,6 +424,11 @@ export default function KelolaanOutletPage() {
 
   const changeTableState = (next: TableState) => {
     setTableState(next);
+    setFilterCode("");
+    setFilterName("");
+    setFilterOwner("");
+    setFilterCity("");
+    setFilterPlan("");
     setPage(1);
   };
 
@@ -284,60 +517,85 @@ export default function KelolaanOutletPage() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+
+      {/* 1. Header Card */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-1">
               <span>Menu</span>
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
               </svg>
               <span className="text-[#C92C1E]">Outlet</span>
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-gray-900">Manajemen Outlet</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Manajemen Outlet</h1>
+            <p className="mt-1 text-sm text-gray-500 max-w-3xl">
               Data seluruh outlet lintas owner untuk informasi umum, status langganan, dan sampah outlet.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">Total Outlet</p>
-            <h2 className="text-3xl font-black">{total}</h2>
+      {/* 2. Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
+          <div className="flex flex-col">
+            <p className="text-xs font-bold uppercase tracking-wider text-red-100">Total Outlet</p>
+            <div className="mt-1">
+              <h2 className="text-3xl font-black text-white">{total}</h2>
+            </div>
           </div>
-          <svg className="absolute -bottom-4 -right-4 h-28 w-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M9 7V5a3 3 0 016 0v2M8 11h8m-8 4h8" />
-          </svg>
-        </div>
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Data Ditampilkan</p>
-            <h2 className="text-3xl font-black text-gray-900">{visibleCount}</h2>
-            <p className="mt-1 text-xs text-gray-500">Jumlah baris pada halaman aktif saat ini.</p>
-          </div>
-          <div className="absolute right-0 top-0 p-5">
-            <span className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500"></span>
-            </span>
+          <div className="absolute -right-4 -top-4 opacity-10 pointer-events-none">
+            <svg className="h-32 w-32 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
           </div>
         </div>
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Tab Aktif</p>
-            <h2 className="text-xl font-black text-gray-900">{activeTabLabel}</h2>
-            <p className="mt-1 text-xs text-gray-500">{activeTabDescription}</p>
+
+        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-start">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Ditampilkan</p>
+              <div className="h-3 w-3 rounded-full bg-emerald-400"></div>
+            </div>
+            <div className="mt-1">
+              <h2 className="text-3xl font-black text-gray-900">{visibleCount}</h2>
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">Baris pada halaman aktif saat ini.</p>
+            </div>
           </div>
-          <div className="absolute right-0 top-0 p-5">
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-[#C92C1E]"></span>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-start">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tab Aktif</p>
+              <div className="h-3 w-3 rounded-full bg-[#C92C1E]"></div>
+            </div>
+            <div className="mt-1">
+              <h2 className="text-xl font-black text-gray-900">{activeTabLabel}</h2>
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">{activeTabDescription}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-start">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Halaman</p>
+              <div className="h-3 w-3 rounded-full bg-sky-400"></div>
+            </div>
+            <div className="mt-1">
+              <h2 className="text-3xl font-black text-gray-900">{page} <span className="text-base font-bold text-gray-400">/ {totalPages}</span></h2>
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">Halaman saat ini dari total halaman.</p>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* 3. Tabs and Main Content Area */}
       <div className="space-y-4">
+        {/* Tab Switcher */}
         <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
           <div className="flex text-sm font-bold">
             {(
@@ -352,11 +610,10 @@ export default function KelolaanOutletPage() {
                 key={tab.key}
                 type="button"
                 onClick={() => changeTableState(tab.key)}
-                className={`rounded-lg px-5 py-2.5 transition-all ${
-                  tableState === tab.key
-                    ? "bg-white text-[#C92C1E] shadow-sm"
-                    : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
-                }`}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-all ${tableState === tab.key
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200 hover:text-gray-900"
+                  }`}
               >
                 {tab.label}
               </button>
@@ -367,123 +624,250 @@ export default function KelolaanOutletPage() {
         {tableState === "analytics" ? (
           <OutletAnalytics />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-              <div className="flex flex-1 flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Cari kode outlet, nama outlet, atau owner..."
-                  className="min-w-[220px] flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                />
+          <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
 
-                {tableState === "langganan" && (
-                  <>
-                    <select
-                      value={subscriptionStatus}
-                      onChange={(event) => {
-                        setSubscriptionStatus(event.target.value);
-                        setPage(1);
-                      }}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                    >
-                      {SUBSCRIPTION_STATUS_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="month"
-                      value={month}
-                      onChange={(event) => {
-                        setMonth(event.target.value);
-                        setPage(1);
-                      }}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                    />
-                  </>
-                )}
+            {/* Table Header (Title, Desc, Actions) */}
+            <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{activeTabLabel}</h2>
+                <p className="mt-1 text-sm text-gray-500">{activeTabDescription}</p>
               </div>
-
-              {isAdmin && tableState !== "sampah" && (
-                <button
-                  type="button"
-                  onClick={() => setShowForm({ mode: "create" })}
-                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Tambah Outlet
-                </button>
-              )}
-            </div>
-
-            {bulkResultMessage && (
-              <div className="border-b border-green-100 bg-green-50 px-4 py-3">
-                <p className="text-xs font-bold text-green-800">{bulkResultMessage}</p>
-              </div>
-            )}
-
-            {isAdmin && bulkSelect.selectedCount > 0 && tableState !== "langganan" && (
-              <div className="flex flex-wrap items-center gap-2 border-b border-red-100 bg-red-50 px-4 py-3">
-                <span className="text-sm font-bold text-[#C92C1E]">
-                  {bulkSelect.selectedCount} outlet dipilih
-                </span>
-                <div className="ml-auto flex flex-wrap gap-2">
-                  {tableState === "umum" && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setShowBulkEdit(true)}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50"
-                      >
-                        Ubah Bulk
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBulkTrashConfirm(true)}
-                        className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 transition-all hover:bg-red-50"
-                      >
-                        Pindahkan ke Sampah
-                      </button>
-                    </>
-                  )}
-                  {tableState === "sampah" && (
-                    <button
-                      type="button"
-                      onClick={() => setBulkDeleteConfirm(true)}
-                      className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 transition-all hover:bg-red-50"
-                    >
-                      Hapus Permanen
-                    </button>
-                  )}
+              <div className="flex flex-wrap items-center gap-3 w-full">
+                {isAdmin && tableState !== "sampah" && (
                   <button
                     type="button"
-                    onClick={bulkSelect.clear}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50"
+                    onClick={() => setShowForm({ mode: "create" })}
+                    className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"
                   >
-                    Batal Pilih
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Tambah Outlet
                   </button>
+                )}
+                {isAdmin && bulkSelect.selectedCount > 0 && tableState === "umum" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkEdit(true)}
+                      className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+                    >
+                      Ubah Bulk ({bulkSelect.selectedCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkTrashConfirm(true)}
+                      className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"
+                    >
+                      Pindahkan ke Sampah
+                    </button>
+                  </>
+                )}
+                {isAdmin && bulkSelect.selectedCount > 0 && tableState === "sampah" && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkDeleteConfirm(true)}
+                    className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"
+                  >
+                    Hapus Permanen ({bulkSelect.selectedCount})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filters */}
+            {(tableState === "umum" || tableState === "langganan") && (
+              <div className="border-b border-gray-50 px-6 py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 w-full">
+                  {tableState === "umum" && (
+                    <>
+                      <AutocompleteFilter
+                        label="Kode Outlet"
+                        placeholder="Filter Kode..."
+                        value={filterCode}
+                        onChange={setFilterCode}
+                        options={uniqueOverviewCodes}
+                      />
+                      <AutocompleteFilter
+                        label="Nama Outlet"
+                        placeholder="Filter Nama Outlet..."
+                        value={filterName}
+                        onChange={setFilterName}
+                        options={uniqueOverviewNames}
+                      />
+                      <AutocompleteFilter
+                        label="Owner"
+                        placeholder="Filter Owner..."
+                        value={filterOwner}
+                        onChange={setFilterOwner}
+                        options={uniqueOverviewOwners}
+                      />
+                      <AutocompleteFilter
+                        label="Kota / Provinsi"
+                        placeholder="Filter Wilayah..."
+                        value={filterCity}
+                        onChange={setFilterCity}
+                        options={uniqueOverviewCities}
+                      />
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <span className="text-xs font-semibold text-black">Status Outlet</span>
+                        <select
+                          value={timeStatusFilter}
+                          onChange={(e) => {
+                            setTimeStatusFilter(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        >
+                          {TIME_STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <label className="flex flex-col gap-1.5 w-full">
+                        <span className="text-xs font-semibold text-black">Bulan Pendaftaran</span>
+                        <input
+                          type="month"
+                          value={month}
+                          onChange={(e) => {
+                            setMonth(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  {tableState === "langganan" && (
+                    <>
+                      <AutocompleteFilter
+                        label="Kode Outlet"
+                        placeholder="Filter Kode..."
+                        value={filterCode}
+                        onChange={setFilterCode}
+                        options={uniqueSubCodes}
+                      />
+                      <AutocompleteFilter
+                        label="Nama Outlet"
+                        placeholder="Filter Nama Outlet..."
+                        value={filterName}
+                        onChange={setFilterName}
+                        options={uniqueSubNames}
+                      />
+                      <AutocompleteFilter
+                        label="Owner"
+                        placeholder="Filter Owner..."
+                        value={filterOwner}
+                        onChange={setFilterOwner}
+                        options={uniqueSubOwners}
+                      />
+                      <AutocompleteFilter
+                        label="Paket / Plan"
+                        placeholder="Filter Paket..."
+                        value={filterPlan}
+                        onChange={setFilterPlan}
+                        options={uniqueSubPlans}
+                      />
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <span className="text-xs font-semibold text-black">Status Langganan</span>
+                        <select
+                          value={subscriptionStatus}
+                          onChange={(e) => {
+                            const nextStatus = e.target.value;
+                            setSubscriptionStatus(nextStatus);
+                            setPage(1);
+                            if (isDueStatus(nextStatus)) {
+                              if (month.length !== 10) setMonth(currentDateValue());
+                            } else {
+                              if (month.length === 10) setMonth(month.slice(0, 7));
+                            }
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        >
+                          {SUBSCRIPTION_STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <label className="flex flex-col gap-1.5 w-full">
+                        <span className="text-xs font-semibold text-black">Periode Tanggal / Bulan</span>
+                        <input
+                          type={isDueStatus(subscriptionStatus) ? "date" : "month"}
+                          value={month}
+                          onChange={(e) => {
+                            setMonth(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        />
+                      </label>
+                    </>
+                  )}
                 </div>
               </div>
             )}
 
+            {/* Search Global + Kolom */}
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[220px]">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Cari kode outlet, nama outlet, atau owner..."
+                    className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
+
+                {tableState === "langganan" ? (
+                  <ColumnVisibilityControl
+                    tableId="kelolaan-outlet-subscription-table"
+                    storageKey="column-visibility:kelolaan-outlet-subscription-table"
+                    buttonLabel="Kolom"
+                  />
+                ) : (
+                  <ColumnVisibilityControl
+                    tableId="kelolaan-outlet-overview-table"
+                    storageKey="column-visibility:kelolaan-outlet-overview-table"
+                    buttonLabel="Kolom"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Bulk Result Message */}
+            {bulkResultMessage && (
+              <div className="border-b border-green-100 bg-green-50 px-6 py-3">
+                <p className="text-xs font-bold text-green-800">{bulkResultMessage}</p>
+              </div>
+            )}
+
+            {/* Table Content */}
             <div className="overflow-x-auto">
               {isLoading ? (
-                <p className="p-8 text-center text-sm font-medium text-gray-400">Memuat data...</p>
+                <p className="p-10 text-center text-sm font-medium text-gray-400">Memuat data...</p>
               ) : error ? (
-                <p className="p-8 text-center text-sm font-medium text-red-600">{error}</p>
+                <p className="p-10 text-center text-sm font-medium text-red-600">{error}</p>
               ) : tableState === "langganan" ? (
-                <SubscriptionTable items={subscriptionItems} />
+                <SubscriptionTable items={filteredSubscriptionItems} />
               ) : (
                 <OverviewTable
-                  items={overviewItems}
+                  items={filteredOverviewItems}
                   scope={tableState}
                   isAdmin={isAdmin}
                   bulkSelect={bulkSelect}
+                  monthFilter={month}
                   onEdit={(outlet) => setShowForm({ mode: "edit", outlet })}
                   onRestore={(outlet) =>
                     setRestoreTarget({ id: outlet.id, ownerId: outlet.owner.id || 0, name: outlet.name })
@@ -495,12 +879,12 @@ export default function KelolaanOutletPage() {
               )}
             </div>
 
+            {/* Pagination */}
             {!isLoading && !error && (
               <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
                 <div className="flex items-center gap-4">
-                  <span className="text-xs text-gray-500">Total {total} Outlet</span>
-                  <span className="text-xs text-gray-500">
-                    Menampilkan {total === 0 ? 0 : (page - 1) * limit + 1}&ndash;{Math.min(page * limit, total)}
+                  <span className="text-xs font-medium text-gray-500">
+                    Menampilkan {total === 0 ? 0 : (page - 1) * limit + 1}–{Math.min(page * limit, total)} dari {total} data
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -604,28 +988,31 @@ function OverviewTable({
   scope,
   isAdmin,
   bulkSelect,
+  monthFilter,
   onEdit,
   onRestore,
   onForceDelete,
 }: {
   items: OutletOverviewItem[];
-  scope: TableState;
+  scope: string;
   isAdmin: boolean;
   bulkSelect: BulkSelectApi;
+  monthFilter: string;
   onEdit: (outlet: BackendOutlet) => void;
   onRestore: (outlet: OutletOverviewItem) => void;
   onForceDelete: (outlet: OutletOverviewItem) => void;
 }) {
-  if (items.length === 0) {
-    return (
-      <p className="p-8 text-center text-sm font-medium text-gray-400">
-        Tidak ada data outlet yang cocok.
-      </p>
-    );
-  }
+  const getTimeStatusBadgeClass = (status: string) => {
+    if (status === "New" || status === "New Existing") return "border-blue-200 bg-blue-50 text-blue-700";
+    if (status === "Existing") return "border-green-200 bg-green-50 text-green-700";
+    if (status === "Future") return "border-gray-200 bg-gray-50 text-gray-600";
+    return "border-gray-200 bg-gray-100 text-gray-500";
+  };
+
+  const colCount = isAdmin ? 8 : 7;
 
   return (
-    <table className="w-full min-w-[1000px] text-left text-sm text-gray-600">
+    <table id="kelolaan-outlet-overview-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
       <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
         <tr>
           {isAdmin && (
@@ -633,11 +1020,7 @@ function OverviewTable({
               <input
                 type="checkbox"
                 checked={bulkSelect.isAllSelected}
-                onChange={() => {}}
-                onClick={(event) => {
-                  event.preventDefault();
-                  bulkSelect.toggleAll();
-                }}
+                onChange={() => bulkSelect.toggleAll()}
                 className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
               />
             </th>
@@ -646,28 +1029,35 @@ function OverviewTable({
           <th className="px-4 py-4 font-bold">Nama Outlet</th>
           <th className="px-4 py-4 font-bold">Owner</th>
           <th className="px-4 py-4 font-bold">Kota / Provinsi</th>
-          <th className="px-4 py-4 font-bold">Saldo Aplikasi</th>
+          <th className="px-4 py-4 font-bold">Tgl Dibuat</th>
           <th className="px-4 py-4 text-center font-bold">Status</th>
           <th className="px-4 py-4 text-center font-bold">Aksi</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100 bg-white">
-        {items.map((item) => (
+        {items.length === 0 ? (
+          <tr>
+            <td colSpan={colCount} className="p-8 text-center text-sm font-medium text-gray-400">
+              Belum ada outlet yang ditambahkan.
+            </td>
+          </tr>
+        ) : (
+          items.map((item) => (
           <tr
             key={item.id}
-            className={`transition-colors hover:bg-gray-50 ${
-              bulkSelect.isSelected(item.id) ? "bg-red-50/60" : ""
-            }`}
+            className={`transition-colors hover:bg-gray-50 ${bulkSelect.isSelected(item.id) ? "bg-red-50/60" : ""
+              }`}
           >
             {isAdmin && (
               <td className="px-4 py-4 align-top text-center">
                 <input
                   type="checkbox"
                   checked={bulkSelect.isSelected(item.id)}
-                  onChange={() => {}}
+                  onChange={(event) => {
+                    bulkSelect.toggleRow(item.id, event.nativeEvent instanceof MouseEvent ? event.nativeEvent.shiftKey : false);
+                  }}
                   onClick={(event) => {
-                    event.preventDefault();
-                    bulkSelect.toggleRow(item.id, event.shiftKey);
+                    (event as React.MouseEvent<HTMLInputElement>).stopPropagation();
                   }}
                   className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                 />
@@ -683,28 +1073,20 @@ function OverviewTable({
               {item.city || "—"}
               {item.province ? `, ${item.province}` : ""}
             </td>
-            <td className="px-4 py-4 align-top text-sm font-semibold text-gray-700">
-              {item.owner.id ? (
-                <Link
-                  href={`/menu/owner-outlet/${item.owner.id}`}
-                  className="text-[#C92C1E] underline decoration-dotted underline-offset-2 hover:text-red-700"
-                >
-                  Lihat saldo aplikasi
-                </Link>
-              ) : (
-                "—"
-              )}
+            <td className="px-4 py-4 align-top font-medium text-gray-700 whitespace-nowrap">
+              {formatIndonesianDate(item.created_at)}
             </td>
             <td className="px-4 py-4 align-top text-center">
-              <span
-                className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${
-                  item.status === "ACTIVE"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-gray-200 bg-gray-100 text-gray-500"
-                }`}
-              >
-                {item.status}
-              </span>
+              {(() => {
+                const timeStatus = getOutletTimeStatus(item.created_at, monthFilter);
+                return (
+                  <span
+                    className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getTimeStatusBadgeClass(timeStatus)}`}
+                  >
+                    {timeStatus}
+                  </span>
+                );
+              })()}
             </td>
             <td className="px-4 py-4 align-top text-center">
               <div className="flex items-center justify-center gap-2">
@@ -724,12 +1106,15 @@ function OverviewTable({
                     onClick={() =>
                       onEdit({
                         id: item.id,
-                        owner_id: item.owner.id,
+                        owner_id: item.owner.id || 0,
                         code: item.code,
                         name: item.name,
                         phone: item.phone || "",
-                        province: item.province,
-                        city: item.city,
+                        province: item.province || "",
+                        city: item.city || "",
+                        district: item.district || "",
+                        sub_district: item.sub_district || "",
+                        address: item.address || "",
                       })
                     }
                     className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
@@ -767,23 +1152,50 @@ function OverviewTable({
               </div>
             </td>
           </tr>
-        ))}
+        ))
+        )}
       </tbody>
     </table>
   );
 }
 
-function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] }) {
-  if (items.length === 0) {
-    return (
-      <p className="p-8 text-center text-sm font-medium text-gray-400">
-        Tidak ada data langganan yang cocok untuk bulan ini.
-      </p>
-    );
+function getSubscriptionStatusBadgeClass(code?: string): string {
+  const c = (code || "").toUpperCase();
+  if (c.includes("BERLANGGANAN") || c === "ACTIVE" || c === "SUBSCRIBE") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
+  if (c.includes("AKAN") || c.includes("TELAH") || c.includes("JATUH") || c.includes("DUE")) {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+  if (c === "NEW" || c === "BARU" || c === "TRIAL") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (c.includes("EXPIRED") || c.includes("UNSUBSCRIBE") || c.includes("KEDALUWARSA")) {
+    return "border-rose-300 bg-rose-100/80 text-rose-800";
+  }
+  if (c.includes("NOT") || c.includes("TIDAK")) {
+    return "border-red-200 bg-red-50 text-red-700 font-bold";
+  }
+  return "border-red-200 bg-red-50 text-red-700 font-bold";
+}
 
+function getStatusDisplayLabel(code?: string, fallbackLabel?: string): string {
+  const c = (code || fallbackLabel || "").toUpperCase();
+  if (c === "BERLANGGANAN" || c === "ACTIVE" || c === "SUBSCRIBE") return "BERLANGGANAN";
+  if (c === "BERLANGGANAN 1 BULAN") return "BERLANGGANAN 1 BULAN";
+  if (c === "NEW" || c === "BARU") return "NEW";
+  if (c === "AKAN_JATUH_TEMPO" || c === "AKAN JATUH TEMPO") return "AKAN JATUH TEMPO";
+  if (c === "JATUH_TEMPO" || c === "JATUH TEMPO") return "JATUH TEMPO";
+  if (c === "TELAH_JATUH_TEMPO" || c === "TELAH JATUH TEMPO") return "TELAH JATUH TEMPO";
+  if (c === "EXPIRED" || c === "UNSUBSCRIBE" || c === "KEDALUWARSA") return "UNSUBSCRIBE";
+  if (c === "NOT_SUBSCRIBE" || c === "NOT SUBSCRIBE" || c === "TIDAK BERLANGGANAN") return "TIDAK BERLANGGANAN";
+  if (c === "TRIAL") return "TRIAL";
+  return fallbackLabel || code || "";
+}
+
+function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] }) {
   return (
-    <table className="w-full min-w-[1020px] text-left text-sm text-gray-600">
+    <table id="kelolaan-outlet-subscription-table" data-column-visibility-manual="true" className="w-full min-w-[1020px] text-left text-sm text-gray-600">
       <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
         <tr>
           <th className="px-4 py-4 font-bold">Kode Outlet</th>
@@ -792,12 +1204,20 @@ function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] })
           <th className="px-4 py-4 font-bold">Paket / Plan</th>
           <th className="px-4 py-4 text-center font-bold">Status Langganan</th>
           <th className="px-4 py-4 font-bold">Sisa Hari</th>
-          <th className="px-4 py-4 font-bold">Berakhir</th>
+          <th className="px-4 py-4 font-bold">Tgl Mulai</th>
+          <th className="px-4 py-4 font-bold">Tgl Berakhir</th>
           <th className="px-4 py-4 text-center font-bold">Aksi</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100 bg-white">
-        {items.map((item) => (
+        {items.length === 0 ? (
+          <tr>
+            <td colSpan={9} className="p-8 text-center text-sm font-medium text-gray-400">
+              Tidak ada data langganan yang cocok untuk bulan ini.
+            </td>
+          </tr>
+        ) : (
+          items.map((item) => (
           <tr key={item.outlet_id} className="transition-colors hover:bg-gray-50">
             <td className="px-4 py-4 align-top font-medium text-gray-900">{item.outlet_code}</td>
             <td className="px-4 py-4 align-top font-medium text-gray-900">{item.outlet_name}</td>
@@ -807,12 +1227,15 @@ function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] })
               {item.package_plan.plan_name ? ` / ${item.package_plan.plan_name}` : ""}
             </td>
             <td className="px-4 py-4 align-top text-center">
-              <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-[#C92C1E]">
-                {item.subscription_status_label}
+              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getSubscriptionStatusBadgeClass(
+                item.subscription_status_code || item.subscription_status_label
+              )}`}>
+                {getStatusDisplayLabel(item.subscription_status_code, item.subscription_status_label)}
               </span>
             </td>
             <td className="px-4 py-4 align-top">{item.remaining_days_display}</td>
-            <td className="px-4 py-4 align-top">{item.last_subscription_end_display}</td>
+            <td className="px-4 py-4 align-top whitespace-nowrap">{formatIndonesianDate(item.subscription_start_date || item.created_at)}</td>
+            <td className="px-4 py-4 align-top whitespace-nowrap">{formatIndonesianDate(item.subscription_end_date || item.last_subscription_end_display)}</td>
             <td className="px-4 py-4 align-top text-center">
               <Link
                 href={`/menu/kelolaan-outlet/detail?id=${item.outlet_id}`}
@@ -826,7 +1249,8 @@ function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] })
               </Link>
             </td>
           </tr>
-        ))}
+        ))
+        )}
       </tbody>
     </table>
   );
@@ -867,9 +1291,8 @@ function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isBusy}
-            className={`rounded-xl px-4 py-2 text-xs font-black text-white ${
-              danger ? "bg-red-600 hover:bg-red-700" : "bg-[#C92C1E] hover:bg-[#A82216]"
-            }`}
+            className={`rounded-xl px-4 py-2 text-xs font-black text-white ${danger ? "bg-red-600 hover:bg-red-700" : "bg-[#C92C1E] hover:bg-[#A82216]"
+              }`}
           >
             {isBusy ? "Memproses..." : confirmLabel}
           </button>
