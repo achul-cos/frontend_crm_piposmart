@@ -2665,14 +2665,17 @@ export interface ExportOwnerOutletRow {
   owner_name: string;
   owner_email: string;
   owner_phone: string;
-  owner_brand_name: string;
-  owner_created_at: string;
+  brand_name: string;
+  owner_date: string;
   outlet_code: string;
   outlet_name: string;
   outlet_phone: string;
   outlet_city: string;
   outlet_province: string;
   outlet_address: string;
+  row_code: string;
+  owner_balance: string;
+  outlet_count: number;
 }
 
 export async function exportOwnerOutlets(
