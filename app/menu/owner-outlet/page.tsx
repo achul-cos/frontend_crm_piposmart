@@ -18,14 +18,12 @@ import {
   softDeleteOwner,
   bulkSoftDeleteOwners,
   bulkCreateOwnerOutlets,
-  listGlobalOutlets,
-  exportOwnerOutlets,
+  getStoredAccessToken,
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import * as XLSX from "xlsx";
 import AnalyticsTab from "./AnalyticsTab";
-import PageLayout from "@/app/components/layout/PageLayout";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 
@@ -235,14 +233,6 @@ function HistoryIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-function ChartIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-    </svg>
-  );
-}
-
 function EyeIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -309,8 +299,6 @@ export default function OwnerOutletPage() {
   const [sort, setSort] = useState("-created_at");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [exportStartDate, setExportStartDate] = useState("");
-  const [exportEndDate, setExportEndDate] = useState("");
   const [filters, setFilters] = useState({
     code: "",
     name: "",
@@ -325,20 +313,16 @@ export default function OwnerOutletPage() {
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] =
-    useState(false);
+  const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importBatch, setImportBatch] =
-    useState<ImportBatchResponse | null>(null);
+  const [importBatch, setImportBatch] = useState<ImportBatchResponse | null>(null);
   const [isImportLoading, setIsImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importErrorRows, setImportErrorRows] = useState<ImportRowError[]>([]);
-  const [editedErrorRows, setEditedErrorRows] = useState<Record<number, Record<string, unknown>>>(
-    {},
-  );
-  const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
-  const [correctionProgress, setCorrectionProgress] = useState(0);
-  const [correctionStatusText, setCorrectionStatusText] = useState("");
+  const [editedErrorRows, setEditedErrorRows] = useState<Record<number, Record<string, unknown>>>({});
+  const [, setIsApplyingCorrections] = useState(false);
+  const [, setCorrectionProgress] = useState(0);
+  const [, setCorrectionStatusText] = useState("");
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isAddOwnerModalOpen, setIsAddOwnerModalOpen] = useState(false);
@@ -645,87 +629,64 @@ export default function OwnerOutletPage() {
     }
   };
 
-  const handleExportExcel = async () => {
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+
+  // FIX: Menambahkan parameter tanggal (date_from & date_to) dari filter UI
+  const handleDownloadExcel = async (type: "owner-outlet" | "owner") => {
     try {
       setIsExporting(true);
-      const activeOutlets = await exportOwnerOutlets({ 
-        limit: 100000,
-        start_date: exportStartDate || undefined,
-        end_date: exportEndDate || undefined,
+      setIsExportMenuOpen(false);
+
+      let endpoint = type === "owner-outlet" 
+        ? "/api/v1/owners/export/download" 
+        : "/api/v1/owners/export/download-owner";
+      
+      const params = new URLSearchParams();
+      if (startDate) params.append("date_from", startDate);
+      if (endDate) params.append("date_to", endDate);
+
+      if (params.toString()) {
+        endpoint += `?${params.toString()}`;
+      }
+      
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const token = getStoredAccessToken();
+      
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
       });
 
-      if (!activeOutlets || activeOutlets.length === 0) {
-        alert("Tidak ada data owner/outlet untuk di-export.");
-        return;
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || "Gagal mengunduh file");
       }
 
-      const dataToExport = activeOutlets.map((item, index) => ({
-        "No": index + 1,
-        "Date of Work": "",
-        "Nama Penginput": "",
-        "Kategori Akun": "",
-        "Kode Baris": "",
-        "Kode Owner": item.owner_code || "",
-        "Nama Owner ": item.owner_name || "",
-        "Email Owner": item.owner_email || "",
-        "No Hp Owner": item.owner_phone || "",
-        "No. Hp Outlet": item.outlet_phone || "",
-        "Nama Project/BRAND": item.owner_brand_name || "",
-        "Nama Outlet": item.outlet_name || "",
-        "Kota": item.outlet_city || "",
-        "Provinsi": item.outlet_province || "",
-        "Alamat Lengkap": item.outlet_address || "",
-        "Kelurahan": "",
-        "Kecamatan": "",
-        "Status": "",
-        "Mitra": "",
-        "Kategory Mitra": "",
-        "Target Call": "",
-        "Target Omset": "",
-        "Total Call/Bulan": "",
-        "Capaian/Bulan": "",
-        "Total Closing": "",
-        "Create Date Project": item.owner_created_at && !isNaN(new Date(item.owner_created_at).getTime())
-          ? new Date(item.owner_created_at).toLocaleDateString("id-ID")
-          : "-",
-        "Bulan": "",
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-
-      // Mempercantik template Excel
-      worksheet["!cols"] = [
-        { wch: 5 },  // No
-        { wch: 15 }, // Date of Work
-        { wch: 20 }, // Nama Penginput
-        { wch: 15 }, // Kategori Akun
-        { wch: 15 }, // Kode Baris
-        { wch: 20 }, // Kode Owner
-        { wch: 25 }, // Nama Owner 
-        { wch: 25 }, // Email Owner
-        { wch: 15 }, // No Hp Owner
-        { wch: 15 }, // No. Hp Outlet
-        { wch: 20 }, // Create Date Project
-        { wch: 10 }, // Bulan
-        { wch: 20 }, // Nama Project/BRAND
-        { wch: 25 }, // Nama Outlet
-        { wch: 15 }, // Kelurahan 
-        { wch: 15 }, // Kecamatan
-        { wch: 15 }, // Kota
-        { wch: 15 }, // Provinsi
-        { wch: 40 }, // Alamat Lengkap
-      ];
-      worksheet["!views"] = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Owner");
-      XLSX.writeFile(
-        workbook,
-        `Data_Total_Owner_${new Date().getTime()}.xlsx`,
-      );
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      
+      const disposition = res.headers.get("Content-Disposition");
+      let filename = type === "owner-outlet" ? "Data_Owner_Outlet.xlsx" : "Data_Owner.xlsx";
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Gagal mengekspor data owner:", error);
       alert("Terjadi kesalahan saat mengunduh data ekspor.");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -865,71 +826,6 @@ export default function OwnerOutletPage() {
     setCorrectionStatusText("");
   };
 
-  const handleEditErrorRow = (rowId: number, field: string, value: string) => {
-    setEditedErrorRows((prev) => {
-      const originalRow = importErrorRows.find((row) => row.id === rowId);
-      const currentPayload =
-        prev[rowId] || (originalRow ? originalRow.raw_payload : {});
-
-      return {
-        ...prev,
-        [rowId]: {
-          ...currentPayload,
-          [field]: value,
-        },
-      };
-    });
-  };
-
-  const handleApplyCorrections = async () => {
-    if (!importBatch) return;
-
-    setIsApplyingCorrections(true);
-    setImportError(null);
-    setCorrectionProgress(10);
-    setCorrectionStatusText("Menyiapkan data perbaikan...");
-
-    try {
-      const correctedPayloads = importErrorRows.map((row) => {
-        return editedErrorRows[row.id] || row.raw_payload;
-      });
-
-      setCorrectionProgress(30);
-      setCorrectionStatusText("Mengambil data valid dari server...");
-      const validResp = await getImportValidRows(importBatch.id);
-      const validPayloads = validResp.items.map((item) => item.raw_payload);
-
-      setCorrectionProgress(50);
-      setCorrectionStatusText("Menyusun ulang file Excel...");
-      const allPayloads = [...validPayloads, ...correctedPayloads];
-
-      const worksheet = XLSX.utils.json_to_sheet(allPayloads);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Owner");
-
-      const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-      const file = new File([wbout], "import_corrected.xlsx", {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-
-      setCorrectionProgress(70);
-      setCorrectionStatusText("Mengunggah ulang file perbaikan...");
-      setIsImportLoading(true);
-      const resp = await uploadImportFile(file, "OWNER_OUTLET");
-      setImportBatch(resp);
-
-      setCorrectionProgress(90);
-      setCorrectionStatusText("Memvalidasi ulang data...");
-      pollImportStatus(resp.id);
-    } catch (error: unknown) {
-      console.error(error);
-      setImportError(getErrorMessage(error, "Gagal menerapkan perbaikan."));
-      setIsApplyingCorrections(false);
-      setCorrectionProgress(0);
-      setCorrectionStatusText("");
-    }
-  };
-
   const handleViewOutlets = (owner: BackendOwner) => {
     router.push(`/menu/owner-outlet/${owner.id}`);
   };
@@ -986,7 +882,6 @@ export default function OwnerOutletPage() {
     );
   };
 
-
   const statCards = (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
       <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
@@ -995,9 +890,6 @@ export default function OwnerOutletPage() {
           <div className="mt-1">
             <h2 className="text-3xl font-black text-white">{pagination.total}</h2>
           </div>
-        </div>
-        <div className="absolute -right-4 -top-4 opacity-10 pointer-events-none">
-          <svg className="h-32 w-32 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
         </div>
       </div>
       
@@ -1043,34 +935,31 @@ export default function OwnerOutletPage() {
   );
 
   const tabButtons = (
-    <>
-      {/* 2. Content Sections - Tabs */}
-      <div className="space-y-4">
-        <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
-          <div className="flex text-sm font-bold">
-            {(
-              [
-                { key: "list", label: "Daftar Owner" },
-                { key: "analytics", label: "Analisis" },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-all ${
-                  activeTab === tab.key
-                    ? "bg-white text-[#C92C1E] shadow-sm"
-                    : "text-gray-500 hover:bg-gray-200 hover:text-gray-900"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+    <div className="space-y-4">
+      <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          {(
+            [
+              { key: "list", label: "Daftar Owner" },
+              { key: "analytics", label: "Analisis" },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-all ${
+                activeTab === tab.key
+                  ? "bg-white text-[#C92C1E] shadow-sm"
+                  : "text-gray-500 hover:bg-gray-200 hover:text-gray-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
-    </>
+    </div>
   );
 
   const actionButtons = (
@@ -1080,7 +969,35 @@ export default function OwnerOutletPage() {
       )}
       <button onClick={() => setIsAddOwnerModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"><PlusIcon className="h-4 w-4" /> Tambah Owner</button>
       <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"><UploadIcon className="h-4 w-4" /> Import Data</button>
-      <button onClick={handleExportExcel} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"><DownloadIcon className="h-4 w-4" /> Export Data</button>
+      <div className="relative">
+        <button 
+          onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
+          disabled={isExporting}
+          className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:opacity-50"
+        >
+          <DownloadIcon className="h-4 w-4" /> 
+          {isExporting ? "Mengunduh..." : "Export Data"}
+          <svg className="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        </button>
+        {isExportMenuOpen && (
+          <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+            <button
+              onClick={() => handleDownloadExcel("owner-outlet")}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <DownloadIcon className="h-4 w-4 text-[#C92C1E]" />
+              Data Owner-Outlet
+            </button>
+            <button
+              onClick={() => handleDownloadExcel("owner")}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <DownloadIcon className="h-4 w-4 text-blue-600" />
+              Data Owner
+            </button>
+          </div>
+        )}
+      </div>
       <button onClick={() => setIsImportHistoryModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"><HistoryIcon className="h-4 w-4" /> Riwayat</button>
       <button onClick={() => router.push("/menu/owner-outlet/trash")} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"><TrashIcon className="h-4 w-4" /> Hapus</button>
     </>
@@ -1184,20 +1101,20 @@ export default function OwnerOutletPage() {
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
           <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-1">
-            <span>Menu</span>
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-            </svg>
-            <span className="text-[#C92C1E]">Owner</span>
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-1">
+              <span>Menu</span>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+              <span className="text-[#C92C1E]">Owner</span>
+            </div>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+              Manajemen Owner
+            </h1>
+            <p className="mt-1 text-sm text-gray-500 max-w-3xl">
+              Data seluruh owner beserta outlet miliknya untuk informasi umum, status langganan, dan sampah data owner.
+            </p>
           </div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-            Manajemen Owner
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 max-w-3xl">
-            Data seluruh owner beserta outlet miliknya untuk informasi umum, status langganan, dan sampah data owner.
-          </p>
-        </div>
         </div>
       </div>
 
@@ -1212,34 +1129,29 @@ export default function OwnerOutletPage() {
           <AnalyticsTab />
         ) : (
           <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        
-        {/* Table Header (Title, Desc, Actions) */}
-        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Daftar Owner</h2>
-            <p className="mt-1 text-sm text-gray-500">Daftar seluruh data owner yang terdaftar dalam sistem.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 w-full">
-            {actionButtons}
-          </div>
-        </div>
+            <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Daftar Owner</h2>
+                <p className="mt-1 text-sm text-gray-500">Daftar seluruh data owner yang terdaftar dalam sistem.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 w-full">
+                {actionButtons}
+              </div>
+            </div>
 
-        {/* Filters */}
-        <div className="border-b border-gray-50 px-6 py-4">
-          <div className="flex flex-wrap items-start gap-4">
-            {filterInputs}
-          </div>
-        </div>
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-wrap items-start gap-4">
+                {filterInputs}
+              </div>
+            </div>
 
-        {/* Search */}
-        <div className="border-b border-gray-50 px-6 py-4">
-          {searchBox}
-        </div>
+            <div className="border-b border-gray-50 px-6 py-4">
+              {searchBox}
+            </div>
 
-        {/* Table Content */}
-        <div className="relative w-full">
-          <div className="flex flex-col">
-            <div className="overflow-x-auto">
+            <div className="relative w-full">
+              <div className="flex flex-col">
+                <div className="overflow-x-auto">
 
               <table id="owner-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
                 <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
@@ -1491,728 +1403,728 @@ export default function OwnerOutletPage() {
       </div>
 
       <ImportHistoryModal
-            isOpen={isImportHistoryModalOpen}
-            onClose={() => setIsImportHistoryModalOpen(false)}
-            profile="OWNER_OUTLET"
-            onResume={(batch) => {
-              setImportBatch(batch);
-              setIsImportHistoryModalOpen(false);
-              setIsImportModalOpen(true);
-              pollImportStatus(batch.id);
-            }}
-          />
+        isOpen={isImportHistoryModalOpen}
+        onClose={() => setIsImportHistoryModalOpen(false)}
+        profile="OWNER_OUTLET"
+        onResume={(batch) => {
+          setImportBatch(batch);
+          setIsImportHistoryModalOpen(false);
+          setIsImportModalOpen(true);
+          pollImportStatus(batch.id);
+        }}
+      />
 
-          <ModalShell
-            open={isAddOwnerModalOpen}
-            title="Tambah Owner Baru"
-            subtitle="Pendaftaran pemilik baru beserta outlet pertama."
-            disabled={isAddOwnerSubmitting}
-            onClose={() => setIsAddOwnerModalOpen(false)}
-          >
-            <form onSubmit={handleAddOwnerSubmit} className="space-y-5">
-              <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                  Data Owner
-                </p>
+      <ModalShell
+        open={isAddOwnerModalOpen}
+        title="Tambah Owner Baru"
+        subtitle="Pendaftaran pemilik baru beserta outlet pertama."
+        disabled={isAddOwnerSubmitting}
+        onClose={() => setIsAddOwnerModalOpen(false)}
+      >
+        <form onSubmit={handleAddOwnerSubmit} className="space-y-5">
+          <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+              Data Owner
+            </p>
 
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kode Owner <span className="text-[#C92C1E]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={addOwnerForm.code}
-                      onChange={(e) =>
-                        setAddOwnerForm({ ...addOwnerForm, code: e.target.value })
-                      }
-                      placeholder="Contoh: OWN-001"
-                      className={modalInputClass}
-                      required
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nama Owner <span className="text-[#C92C1E]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={addOwnerForm.name}
-                      onChange={(e) =>
-                        setAddOwnerForm({ ...addOwnerForm, name: e.target.value })
-                      }
-                      placeholder="Contoh: Budi Santoso"
-                      className={modalInputClass}
-                      required
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nama Brand / Usaha
-                    </span>
-                    <input
-                      type="text"
-                      value={addOwnerForm.brand_name}
-                      onChange={(e) =>
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          brand_name: e.target.value,
-                        })
-                      }
-                      placeholder="Contoh: Toko Kopi Sejahtera"
-                      className={modalInputClass}
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nomor Kontak
-                    </span>
-                    <input
-                      type="tel"
-                      value={addOwnerForm.phone}
-                      onChange={(e) =>
-                        setAddOwnerForm({ ...addOwnerForm, phone: e.target.value })
-                      }
-                      placeholder="Contoh: 081234567890"
-                      className={modalInputClass}
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Provinsi
-                    </span>
-                    <select
-                      value={addOwnerForm.province}
-                      onChange={(e) => {
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          province: e.target.value,
-                          city: "",
-                        });
-                        loadCitiesByProvinceName(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={isAddOwnerSubmitting || loadingProvinces}
-                    >
-                      <option value="">Pilih Provinsi</option>
-                      {provinces.map((province) => (
-                        <option key={province.id} value={province.name}>
-                          {province.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kota/Kabupaten
-                    </span>
-                    <select
-                      value={addOwnerForm.city}
-                      onChange={(e) => {
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          city: e.target.value,
-                          district: "",
-                          sub_district: "",
-                        });
-                        loadDistrictsByCityName(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={
-                        isAddOwnerSubmitting ||
-                        !addOwnerForm.province ||
-                        loadingCities
-                      }
-                    >
-                      <option value="">Pilih Kota/Kabupaten</option>
-                      {cities.map((city) => (
-                        <option key={city.id} value={city.name}>
-                          {city.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kecamatan
-                    </span>
-                    <select
-                      value={addOwnerForm.district}
-                      onChange={(e) => {
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          district: e.target.value,
-                          sub_district: "",
-                        });
-                        loadVillagesByDistrictName(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={
-                        isAddOwnerSubmitting ||
-                        !addOwnerForm.city ||
-                        loadingDistricts
-                      }
-                    >
-                      <option value="">Pilih Kecamatan</option>
-                      {districts.map((district) => (
-                        <option key={district.id} value={district.name}>
-                          {district.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kelurahan/Desa
-                    </span>
-                    <select
-                      value={addOwnerForm.sub_district}
-                      onChange={(e) =>
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          sub_district: e.target.value,
-                        })
-                      }
-                      className={modalSelectClass}
-                      disabled={
-                        isAddOwnerSubmitting ||
-                        !addOwnerForm.district ||
-                        loadingVillages
-                      }
-                    >
-                      <option value="">Pilih Kelurahan/Desa</option>
-                      {villages.map((village) => (
-                        <option key={village.id} value={village.name}>
-                          {village.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Alamat Lengkap
-                    </span>
-                    <textarea
-                      value={addOwnerForm.address}
-                      onChange={(e) =>
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          address: e.target.value,
-                        })
-                      }
-                      placeholder="Masukkan detail alamat owner..."
-                      rows={3}
-                      className={modalTextareaClass}
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                  Data Outlet Pertama
-                </p>
-
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nama Outlet Pertama{" "}
-                      <span className="text-[#C92C1E]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={addOwnerForm.outlet_name || ""}
-                      onChange={(e) =>
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          outlet_name: e.target.value,
-                        })
-                      }
-                      placeholder="Contoh: Toko Kopi Sejahtera Pusat"
-                      className={modalInputClass}
-                      required
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nomor Telepon Outlet
-                    </span>
-                    <input
-                      type="tel"
-                      value={addOwnerForm.outlet_phone || ""}
-                      onChange={(e) =>
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          outlet_phone: e.target.value,
-                        })
-                      }
-                      placeholder="Contoh: 081234567890"
-                      className={modalInputClass}
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Provinsi Outlet
-                    </span>
-                    <select
-                      value={addOwnerForm.outlet_province || ""}
-                      onChange={(e) => {
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          outlet_province: e.target.value,
-                          outlet_city: "",
-                        });
-                        loadOutletCities(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={isAddOwnerSubmitting || outletLoadingProvinces}
-                    >
-                      <option value="">Pilih Provinsi</option>
-                      {outletProvinces.map((province) => (
-                        <option key={province.id} value={province.name}>
-                          {province.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kota/Kabupaten Outlet
-                    </span>
-                    <select
-                      value={addOwnerForm.outlet_city || ""}
-                      onChange={(e) => {
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          outlet_city: e.target.value,
-                          outlet_district: "",
-                          outlet_sub_district: "",
-                        });
-                        loadOutletDistricts(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={
-                        isAddOwnerSubmitting ||
-                        !addOwnerForm.outlet_province ||
-                        outletLoadingCities
-                      }
-                    >
-                      <option value="">Pilih Kota/Kabupaten</option>
-                      {outletCities.map((city) => (
-                        <option key={city.id} value={city.name}>
-                          {city.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kecamatan Outlet
-                    </span>
-                    <select
-                      value={addOwnerForm.outlet_district || ""}
-                      onChange={(e) => {
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          outlet_district: e.target.value,
-                          outlet_sub_district: "",
-                        });
-                        loadOutletVillages(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={
-                        isAddOwnerSubmitting ||
-                        !addOwnerForm.outlet_city ||
-                        outletLoadingDistricts
-                      }
-                    >
-                      <option value="">Pilih Kecamatan</option>
-                      {outletDistricts.map((district) => (
-                        <option key={district.id} value={district.name}>
-                          {district.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kelurahan/Desa Outlet
-                    </span>
-                    <select
-                      value={addOwnerForm.outlet_sub_district || ""}
-                      onChange={(e) =>
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          outlet_sub_district: e.target.value,
-                        })
-                      }
-                      className={modalSelectClass}
-                      disabled={
-                        isAddOwnerSubmitting ||
-                        !addOwnerForm.outlet_district ||
-                        outletLoadingVillages
-                      }
-                    >
-                      <option value="">Pilih Kelurahan/Desa</option>
-                      {outletVillages.map((village) => (
-                        <option key={village.id} value={village.name}>
-                          {village.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Alamat Lengkap Outlet
-                    </span>
-                    <textarea
-                      value={addOwnerForm.outlet_address || ""}
-                      onChange={(e) =>
-                        setAddOwnerForm({
-                          ...addOwnerForm,
-                          outlet_address: e.target.value,
-                        })
-                      }
-                      placeholder="Masukkan detail alamat outlet..."
-                      rows={3}
-                      className={modalTextareaClass}
-                      disabled={isAddOwnerSubmitting}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddOwnerModalOpen(false)}
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kode Owner <span className="text-[#C92C1E]">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={addOwnerForm.code}
+                  onChange={(e) =>
+                    setAddOwnerForm({ ...addOwnerForm, code: e.target.value })
+                  }
+                  placeholder="Contoh: OWN-001"
+                  className={modalInputClass}
+                  required
                   disabled={isAddOwnerSubmitting}
-                  className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Batal
-                </button>
+                />
+              </label>
 
-                <button
-                  type="submit"
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nama Owner <span className="text-[#C92C1E]">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={addOwnerForm.name}
+                  onChange={(e) =>
+                    setAddOwnerForm({ ...addOwnerForm, name: e.target.value })
+                  }
+                  placeholder="Contoh: Budi Santoso"
+                  className={modalInputClass}
+                  required
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nama Brand / Usaha
+                </span>
+                <input
+                  type="text"
+                  value={addOwnerForm.brand_name}
+                  onChange={(e) =>
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      brand_name: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: Toko Kopi Sejahtera"
+                  className={modalInputClass}
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nomor Kontak
+                </span>
+                <input
+                  type="tel"
+                  value={addOwnerForm.phone}
+                  onChange={(e) =>
+                    setAddOwnerForm({ ...addOwnerForm, phone: e.target.value })
+                  }
+                  placeholder="Contoh: 081234567890"
+                  className={modalInputClass}
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Provinsi
+                </span>
+                <select
+                  value={addOwnerForm.province}
+                  onChange={(e) => {
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      province: e.target.value,
+                      city: "",
+                    });
+                    loadCitiesByProvinceName(e.target.value);
+                  }}
+                  className={modalSelectClass}
+                  disabled={isAddOwnerSubmitting || loadingProvinces}
+                >
+                  <option value="">Pilih Provinsi</option>
+                  {provinces.map((province) => (
+                    <option key={province.id} value={province.name}>
+                      {province.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kota/Kabupaten
+                </span>
+                <select
+                  value={addOwnerForm.city}
+                  onChange={(e) => {
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      city: e.target.value,
+                      district: "",
+                      sub_district: "",
+                    });
+                    loadDistrictsByCityName(e.target.value);
+                  }}
+                  className={modalSelectClass}
                   disabled={
                     isAddOwnerSubmitting ||
-                    !addOwnerForm.name.trim() ||
-                    !addOwnerForm.code.trim() ||
-                    !addOwnerForm.outlet_name?.trim()
+                    !addOwnerForm.province ||
+                    loadingCities
                   }
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
                 >
-                  {isAddOwnerSubmitting ? (
-                    <>
-                      <SpinnerIcon />
-                      Menyimpan Owner...
-                    </>
-                  ) : (
-                    <>
-                      <PlusIcon />
-                      Simpan Owner Baru
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </ModalShell>
+                  <option value="">Pilih Kota/Kabupaten</option>
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.name}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <ModalShell
-            open={isEditOwnerModalOpen}
-            title="Edit Data Owner"
-            subtitle="Perbarui informasi pemilik owner."
-            disabled={isEditOwnerSubmitting}
-            onClose={() => setIsEditOwnerModalOpen(false)}
-          >
-            <form onSubmit={handleEditOwnerSubmit} className="space-y-5">
-              <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                  Data Owner
-                </p>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kecamatan
+                </span>
+                <select
+                  value={addOwnerForm.district}
+                  onChange={(e) => {
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      district: e.target.value,
+                      sub_district: "",
+                    });
+                    loadVillagesByDistrictName(e.target.value);
+                  }}
+                  className={modalSelectClass}
+                  disabled={
+                    isAddOwnerSubmitting ||
+                    !addOwnerForm.city ||
+                    loadingDistricts
+                  }
+                >
+                  <option value="">Pilih Kecamatan</option>
+                  {districts.map((district) => (
+                    <option key={district.id} value={district.name}>
+                      {district.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Tgl Dibuat
-                    </span>
-                    <input
-                      type="text"
-                      value={editOwnerForm.created_at ? new Date(editOwnerForm.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "-"}
-                      className={modalInputClass + " bg-slate-100 cursor-not-allowed text-gray-500"}
-                      disabled
-                    />
-                  </label>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kelurahan/Desa
+                </span>
+                <select
+                  value={addOwnerForm.sub_district}
+                  onChange={(e) =>
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      sub_district: e.target.value,
+                    })
+                  }
+                  className={modalSelectClass}
+                  disabled={
+                    isAddOwnerSubmitting ||
+                    !addOwnerForm.district ||
+                    loadingVillages
+                  }
+                >
+                  <option value="">Pilih Kelurahan/Desa</option>
+                  {villages.map((village) => (
+                    <option key={village.id} value={village.name}>
+                      {village.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kode Owner <span className="text-[#C92C1E]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={editOwnerForm.code}
-                      onChange={(e) =>
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          code: e.target.value,
-                        })
-                      }
-                      placeholder="Contoh: OWN-001"
-                      className={modalInputClass}
-                      required
-                      disabled={isEditOwnerSubmitting}
-                    />
-                  </label>
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Alamat Lengkap
+                </span>
+                <textarea
+                  value={addOwnerForm.address}
+                  onChange={(e) =>
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      address: e.target.value,
+                    })
+                  }
+                  placeholder="Masukkan detail alamat owner..."
+                  rows={3}
+                  className={modalTextareaClass}
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
+            </div>
+          </div>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nama Owner <span className="text-[#C92C1E]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={editOwnerForm.name}
-                      onChange={(e) =>
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          name: e.target.value,
-                        })
-                      }
-                      placeholder="Contoh: Budi Santoso"
-                      className={modalInputClass}
-                      required
-                      disabled={isEditOwnerSubmitting}
-                    />
-                  </label>
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+              Data Outlet Pertama
+            </p>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nama Brand / Usaha
-                    </span>
-                    <input
-                      type="text"
-                      value={editOwnerForm.brand_name}
-                      onChange={(e) =>
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          brand_name: e.target.value,
-                        })
-                      }
-                      placeholder="Contoh: Toko Kopi Sejahtera"
-                      className={modalInputClass}
-                      disabled={isEditOwnerSubmitting}
-                    />
-                  </label>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nama Outlet Pertama{" "}
+                  <span className="text-[#C92C1E]">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={addOwnerForm.outlet_name || ""}
+                  onChange={(e) =>
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      outlet_name: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: Toko Kopi Sejahtera Pusat"
+                  className={modalInputClass}
+                  required
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nomor Kontak
-                    </span>
-                    <input
-                      type="tel"
-                      value={editOwnerForm.phone}
-                      onChange={(e) =>
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          phone: e.target.value,
-                        })
-                      }
-                      placeholder="Contoh: 081234567890"
-                      className={modalInputClass}
-                      disabled={isEditOwnerSubmitting}
-                    />
-                  </label>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nomor Telepon Outlet
+                </span>
+                <input
+                  type="tel"
+                  value={addOwnerForm.outlet_phone || ""}
+                  onChange={(e) =>
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      outlet_phone: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: 081234567890"
+                  className={modalInputClass}
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Provinsi
-                    </span>
-                    <select
-                      value={editOwnerForm.province}
-                      onChange={(e) => {
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          province: e.target.value,
-                          city: "",
-                        });
-                        loadCitiesByProvinceName(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={isEditOwnerSubmitting || loadingProvinces}
-                    >
-                      <option value="">Pilih Provinsi</option>
-                      {provinces.map((province) => (
-                        <option key={province.id} value={province.name}>
-                          {province.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Provinsi Outlet
+                </span>
+                <select
+                  value={addOwnerForm.outlet_province || ""}
+                  onChange={(e) => {
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      outlet_province: e.target.value,
+                      outlet_city: "",
+                    });
+                    loadOutletCities(e.target.value);
+                  }}
+                  className={modalSelectClass}
+                  disabled={isAddOwnerSubmitting || outletLoadingProvinces}
+                >
+                  <option value="">Pilih Provinsi</option>
+                  {outletProvinces.map((province) => (
+                    <option key={province.id} value={province.name}>
+                      {province.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kota/Kabupaten
-                    </span>
-                    <select
-                      value={editOwnerForm.city}
-                      onChange={(e) => {
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          city: e.target.value,
-                          district: "",
-                          sub_district: "",
-                        });
-                        loadDistrictsByCityName(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={
-                        isEditOwnerSubmitting ||
-                        !editOwnerForm.province ||
-                        loadingCities
-                      }
-                    >
-                      <option value="">Pilih Kota/Kabupaten</option>
-                      {cities.map((city) => (
-                        <option key={city.id} value={city.name}>
-                          {city.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kota/Kabupaten Outlet
+                </span>
+                <select
+                  value={addOwnerForm.outlet_city || ""}
+                  onChange={(e) => {
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      outlet_city: e.target.value,
+                      outlet_district: "",
+                      outlet_sub_district: "",
+                    });
+                    loadOutletDistricts(e.target.value);
+                  }}
+                  className={modalSelectClass}
+                  disabled={
+                    isAddOwnerSubmitting ||
+                    !addOwnerForm.outlet_province ||
+                    outletLoadingCities
+                  }
+                >
+                  <option value="">Pilih Kota/Kabupaten</option>
+                  {outletCities.map((city) => (
+                    <option key={city.id} value={city.name}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kecamatan
-                    </span>
-                    <select
-                      value={editOwnerForm.district}
-                      onChange={(e) => {
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          district: e.target.value,
-                          sub_district: "",
-                        });
-                        loadVillagesByDistrictName(e.target.value);
-                      }}
-                      className={modalSelectClass}
-                      disabled={
-                        isEditOwnerSubmitting ||
-                        !editOwnerForm.city ||
-                        loadingDistricts
-                      }
-                    >
-                      <option value="">Pilih Kecamatan</option>
-                      {districts.map((district) => (
-                        <option key={district.id} value={district.name}>
-                          {district.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kecamatan Outlet
+                </span>
+                <select
+                  value={addOwnerForm.outlet_district || ""}
+                  onChange={(e) => {
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      outlet_district: e.target.value,
+                      outlet_sub_district: "",
+                    });
+                    loadOutletVillages(e.target.value);
+                  }}
+                  className={modalSelectClass}
+                  disabled={
+                    isAddOwnerSubmitting ||
+                    !addOwnerForm.outlet_city ||
+                    outletLoadingDistricts
+                  }
+                >
+                  <option value="">Pilih Kecamatan</option>
+                  {outletDistricts.map((district) => (
+                    <option key={district.id} value={district.name}>
+                      {district.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <label className="space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Kelurahan/Desa
-                    </span>
-                    <select
-                      value={editOwnerForm.sub_district}
-                      onChange={(e) =>
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          sub_district: e.target.value,
-                        })
-                      }
-                      className={modalSelectClass}
-                      disabled={
-                        isEditOwnerSubmitting ||
-                        !editOwnerForm.district ||
-                        loadingVillages
-                      }
-                    >
-                      <option value="">Pilih Kelurahan/Desa</option>
-                      {villages.map((village) => (
-                        <option key={village.id} value={village.name}>
-                          {village.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kelurahan/Desa Outlet
+                </span>
+                <select
+                  value={addOwnerForm.outlet_sub_district || ""}
+                  onChange={(e) =>
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      outlet_sub_district: e.target.value,
+                    })
+                  }
+                  className={modalSelectClass}
+                  disabled={
+                    isAddOwnerSubmitting ||
+                    !addOwnerForm.outlet_district ||
+                    outletLoadingVillages
+                  }
+                >
+                  <option value="">Pilih Kelurahan/Desa</option>
+                  {outletVillages.map((village) => (
+                    <option key={village.id} value={village.name}>
+                      {village.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Alamat Lengkap
-                    </span>
-                    <textarea
-                      value={editOwnerForm.address}
-                      onChange={(e) =>
-                        setEditOwnerForm({
-                          ...editOwnerForm,
-                          address: e.target.value,
-                        })
-                      }
-                      placeholder="Masukkan detail alamat owner..."
-                      rows={3}
-                      className={modalTextareaClass}
-                      disabled={isEditOwnerSubmitting}
-                    />
-                  </label>
-                </div>
-              </div>
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Alamat Lengkap Outlet
+                </span>
+                <textarea
+                  value={addOwnerForm.outlet_address || ""}
+                  onChange={(e) =>
+                    setAddOwnerForm({
+                      ...addOwnerForm,
+                      outlet_address: e.target.value,
+                    })
+                  }
+                  placeholder="Masukkan detail alamat outlet..."
+                  rows={3}
+                  className={modalTextareaClass}
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
+            </div>
+          </div>
 
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditOwnerModalOpen(false)}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAddOwnerModalOpen(false)}
+              disabled={isAddOwnerSubmitting}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              Batal
+            </button>
+
+            <button
+              type="submit"
+              disabled={
+                isAddOwnerSubmitting ||
+                !addOwnerForm.name.trim() ||
+                !addOwnerForm.code.trim() ||
+                !addOwnerForm.outlet_name?.trim()
+              }
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {isAddOwnerSubmitting ? (
+                <>
+                  <SpinnerIcon />
+                  Menyimpan Owner...
+                </>
+              ) : (
+                <>
+                  <PlusIcon />
+                  Simpan Owner Baru
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
+
+      <ModalShell
+        open={isEditOwnerModalOpen}
+        title="Edit Data Owner"
+        subtitle="Perbarui informasi pemilik owner."
+        disabled={isEditOwnerSubmitting}
+        onClose={() => setIsEditOwnerModalOpen(false)}
+      >
+        <form onSubmit={handleEditOwnerSubmit} className="space-y-5">
+          <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+              Data Owner
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Tgl Dibuat
+                </span>
+                <input
+                  type="text"
+                  value={editOwnerForm.created_at ? new Date(editOwnerForm.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "-"}
+                  className={modalInputClass + " bg-slate-100 cursor-not-allowed text-gray-500"}
+                  disabled
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kode Owner <span className="text-[#C92C1E]">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={editOwnerForm.code}
+                  onChange={(e) =>
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      code: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: OWN-001"
+                  className={modalInputClass}
+                  required
                   disabled={isEditOwnerSubmitting}
-                  className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Batal
-                </button>
+                />
+              </label>
 
-                <button
-                  type="submit"
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nama Owner <span className="text-[#C92C1E]">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={editOwnerForm.name}
+                  onChange={(e) =>
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      name: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: Budi Santoso"
+                  className={modalInputClass}
+                  required
+                  disabled={isEditOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nama Brand / Usaha
+                </span>
+                <input
+                  type="text"
+                  value={editOwnerForm.brand_name}
+                  onChange={(e) =>
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      brand_name: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: Toko Kopi Sejahtera"
+                  className={modalInputClass}
+                  disabled={isEditOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Nomor Kontak
+                </span>
+                <input
+                  type="tel"
+                  value={editOwnerForm.phone}
+                  onChange={(e) =>
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      phone: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: 081234567890"
+                  className={modalInputClass}
+                  disabled={isEditOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Provinsi
+                </span>
+                <select
+                  value={editOwnerForm.province}
+                  onChange={(e) => {
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      province: e.target.value,
+                      city: "",
+                    });
+                    loadCitiesByProvinceName(e.target.value);
+                  }}
+                  className={modalSelectClass}
+                  disabled={isEditOwnerSubmitting || loadingProvinces}
+                >
+                  <option value="">Pilih Provinsi</option>
+                  {provinces.map((province) => (
+                    <option key={province.id} value={province.name}>
+                      {province.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kota/Kabupaten
+                </span>
+                <select
+                  value={editOwnerForm.city}
+                  onChange={(e) => {
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      city: e.target.value,
+                      district: "",
+                      sub_district: "",
+                    });
+                    loadDistrictsByCityName(e.target.value);
+                  }}
+                  className={modalSelectClass}
                   disabled={
                     isEditOwnerSubmitting ||
-                    !editOwnerForm.name.trim() ||
-                    !editOwnerForm.code.trim()
+                    !editOwnerForm.province ||
+                    loadingCities
                   }
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
                 >
-                  {isEditOwnerSubmitting ? (
-                    <>
-                      <SpinnerIcon />
-                      Menyimpan...
-                    </>
-                  ) : (
-                    <>
-                      <EditIcon />
-                      Simpan Perubahan
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </ModalShell>
+                  <option value="">Pilih Kota/Kabupaten</option>
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.name}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kecamatan
+                </span>
+                <select
+                  value={editOwnerForm.district}
+                  onChange={(e) => {
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      district: e.target.value,
+                      sub_district: "",
+                    });
+                    loadVillagesByDistrictName(e.target.value);
+                  }}
+                  className={modalSelectClass}
+                  disabled={
+                    isEditOwnerSubmitting ||
+                    !editOwnerForm.city ||
+                    loadingDistricts
+                  }
+                >
+                  <option value="">Pilih Kecamatan</option>
+                  {districts.map((district) => (
+                    <option key={district.id} value={district.name}>
+                      {district.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kelurahan/Desa
+                </span>
+                <select
+                  value={editOwnerForm.sub_district}
+                  onChange={(e) =>
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      sub_district: e.target.value,
+                    })
+                  }
+                  className={modalSelectClass}
+                  disabled={
+                    isEditOwnerSubmitting ||
+                    !editOwnerForm.district ||
+                    loadingVillages
+                  }
+                >
+                  <option value="">Pilih Kelurahan/Desa</option>
+                  {villages.map((village) => (
+                    <option key={village.id} value={village.name}>
+                      {village.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Alamat Lengkap
+                </span>
+                <textarea
+                  value={editOwnerForm.address}
+                  onChange={(e) =>
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      address: e.target.value,
+                    })
+                  }
+                  placeholder="Masukkan detail alamat owner..."
+                  rows={3}
+                  className={modalTextareaClass}
+                  disabled={isEditOwnerSubmitting}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsEditOwnerModalOpen(false)}
+              disabled={isEditOwnerSubmitting}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              Batal
+            </button>
+
+            <button
+              type="submit"
+              disabled={
+                isEditOwnerSubmitting ||
+                !editOwnerForm.name.trim() ||
+                !editOwnerForm.code.trim()
+              }
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {isEditOwnerSubmitting ? (
+                <>
+                  <SpinnerIcon />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  <EditIcon />
+                  Simpan Perubahan
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
 
       <ModalShell
         open={isImportModalOpen}

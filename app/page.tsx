@@ -551,56 +551,6 @@ export default function DashboardOverviewPage() {
           </div>
         ) : null}
 
-        {/* Role Selector Tabs (Allows Admin/Supervisor to preview views if needed) */}
-        {(isAdminRole(effectiveRole) || isSupervisorRole(effectiveRole)) && (
-          <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
-            <span className="px-3 text-xs font-black uppercase tracking-wider text-gray-400">
-              Mode Tampilan Dashboard:
-            </span>
-            <div className="flex gap-1.5">
-              {isAdminRole(effectiveRole) && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTabRole("ADMIN")}
-                  className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition ${
-                    activeTabRole === "ADMIN"
-                      ? "bg-[#C92C1E] text-white shadow-md"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  <IconShield className="w-4 h-4" />
-                  <span>Dashboard Admin</span>
-                </button>
-              )}
-              {(isAdminRole(effectiveRole) || isSupervisorRole(effectiveRole)) && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTabRole("SUPERVISOR")}
-                  className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition ${
-                    activeTabRole === "SUPERVISOR"
-                      ? "bg-[#C92C1E] text-white shadow-md"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  <IconBarChart className="w-4 h-4" />
-                  <span>Dashboard Supervisor</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setActiveTabRole("SALES")}
-                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition ${
-                  activeTabRole === "SALES"
-                    ? "bg-[#C92C1E] text-white shadow-md"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                <IconBriefcase className="w-4 h-4" />
-                <span>Target Sales Per User</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* ========================================================================= */}
         {/* ROLE 1: ADMIN DASHBOARD */}

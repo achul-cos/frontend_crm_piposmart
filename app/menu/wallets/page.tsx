@@ -1154,17 +1154,7 @@ export default function WalletsPage() {
           </p>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Total Ledger
-          </p>
-          <h2 className="text-3xl font-black text-[#C92C1E]">
-            {summary.totalLedger}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Credit, debit, adjustment, refund
-          </p>
-        </div>
+
       </div>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
@@ -1496,72 +1486,6 @@ export default function WalletsPage() {
             </div>
           )}
 
-          {activeTab === "ledger" && (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
-                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                  <tr>
-                    <th className="px-4 py-4 font-black">Ledger</th>
-                    <th className="px-4 py-4 font-black">Owner</th>
-                    <th className="px-4 py-4 font-black">Type</th>
-                    <th className="px-4 py-4 font-black">Direction</th>
-                    <th className="px-4 py-4 font-black">Occurred At</th>
-                    <th className="px-4 py-4 text-right font-black">Amount</th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {ledgers.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
-                        Data ledger tidak ditemukan.
-                      </td>
-                    </tr>
-                  ) : (
-                    ledgers.map((ledger) => (
-                      <tr key={ledger.id} className="transition-colors hover:bg-gray-50">
-                        <td className="px-4 py-4 align-top">
-                          <p className="font-black text-gray-900">
-                            {ledger.code || `TRX-${ledger.id}`}
-                          </p>
-                          <p className="mt-1 text-[11px] font-bold text-gray-400">
-                            {ledger.source_reference || ledger.external_reference || "-"}
-                          </p>
-                        </td>
-
-                        <td className="px-4 py-4 align-top">
-                          <p className="font-black text-gray-900">
-                            {getOwnerName(ledger.owner)}
-                          </p>
-                          <p className="mt-1 text-[11px] font-bold text-gray-400">
-                            {getOwnerCode(ledger.owner)}
-                          </p>
-                        </td>
-
-                        <td className="px-4 py-4 align-top font-medium text-gray-600">
-                          {ledger.transaction_type || "-"}
-                        </td>
-
-                        <td className="px-4 py-4 align-top">
-                          <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-tight text-emerald-700">
-                            {ledger.direction || "-"}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-4 align-top font-medium text-gray-600">
-                          {formatTanggal(ledger.occurred_at || ledger.created_at)}
-                        </td>
-
-                        <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
-                          {formatRupiah(ledger.amount)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
 
           {activeTab === "transfer" && (
             <div className="mt-4 space-y-6">
