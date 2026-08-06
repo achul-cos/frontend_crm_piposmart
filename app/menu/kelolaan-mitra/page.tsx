@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -15,6 +16,7 @@ import {
   createPartnerTypeCommissionRule,
   deactivatePartner,
   deactivatePartnerTypeCommissionRule,
+  deletePartnerType,
   getCatalogPackages,
   getCatalogPlans,
   getPartnerType,
@@ -32,6 +34,74 @@ import {
   type PartnerTypeItem,
 } from "@/app/lib/api";
 import AnalyticsTab from "./AnalyticsTab";
+import { PartnerActivityBadge } from "@/app/components/PartnerActivityBadge";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+
+function AutocompleteFilter({
+  label,
+  placeholder,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const uniqueOptions = useMemo(() => Array.from(new Set(options.filter(Boolean))), [options]);
+
+  const filteredOptions = uniqueOptions.filter((opt) =>
+    opt.toLowerCase().includes(value.toLowerCase())
+  );
+
+  return (
+    <div ref={wrapperRef} className="flex flex-col gap-1.5 w-full relative">
+      <span className="text-xs font-semibold text-black">{label}</span>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+      />
+      {isOpen && value && filteredOptions.length > 0 && (
+        <ul className="absolute left-0 top-full z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {filteredOptions.map((opt, idx) => (
+            <li
+              key={`${opt}-${idx}`}
+              onClick={() => {
+                onChange(opt);
+                setIsOpen(false);
+              }}
+              className="cursor-pointer px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-red-50 hover:text-[#C92C1E]"
+            >
+              {opt}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 type TableMode =
   | "PARTNER_TYPES"
@@ -107,12 +177,24 @@ const EMPTY_TYPE_FORM: TypeFormState = {
   description: "",
 };
 
+function formatThousandDots(val: string | number | null | undefined): string {
+  if (val === null || val === undefined || val === "") return "";
+  const raw = String(val).replace(/\./g, "").trim();
+  if (!/^\d+$/.test(raw)) return String(val);
+  return Number(raw).toLocaleString("id-ID");
+}
+
+function stripThousandDots(val: string | null | undefined): string {
+  if (!val) return "";
+  return val.replace(/\./g, "").trim();
+}
+
 function createEmptyRuleForm(): RuleFormState {
   return {
     planId: "",
     mode: "PERCENTAGE",
     value: "",
-    effectiveFrom: "",
+    effectiveFrom: new Date().toISOString().slice(0, 10),
     effectiveTo: "",
   };
 }
@@ -205,7 +287,7 @@ function formatTierRange(
 
 function getAutoCommissionCategory(
   typeIdentifier?: string | null,
-): AutoCommissionCategory | null {
+): AutoCommissionCategory {
   const typeUpper = (typeIdentifier || "").toUpperCase();
 
   if (
@@ -224,15 +306,8 @@ function getAutoCommissionCategory(
     return "PARTNERSHIP";
   }
 
-  if (
-    typeUpper.includes("REFERRAL") ||
-    typeUpper.includes("REFRAL") ||
-    typeUpper.includes("REF")
-  ) {
-    return "REFERRAL";
-  }
-
-  return null;
+  // Default to REFERRAL for all other partner types (e.g. 12 Bulan Basic -> 120.000)
+  return "REFERRAL";
 }
 
 function ModalShell({
@@ -251,23 +326,21 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-6" onClick={onClose}>
       <div
-        className="w-full max-w-5xl h-[85vh] max-h-[85vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        className="w-full max-w-5xl flex flex-col max-h-[92vh] overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl transition-all"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
-          <div className="flex items-start justify-between gap-4">
+        <div className="flex-shrink-0 border-b border-slate-100 bg-white px-6 py-5 md:px-8">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#C92C1E]">
                 Kelolaan Mitra
-              </p>
-
-              <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
+              </span>
+              <h2 className="mt-1.5 text-xl font-bold tracking-tight text-slate-900">
                 {title}
               </h2>
-
-              <p className="mt-1 text-xs font-medium text-slate-500">
+              <p className="mt-0.5 text-xs font-medium text-slate-500">
                 {subtitle}
               </p>
             </div>
@@ -275,14 +348,17 @@ function ModalShell({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              title="Tutup Modal"
             >
-              Tutup
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8 space-y-6">
           {children}
         </div>
       </div>
@@ -314,6 +390,11 @@ export default function KelolaanMitraPage() {
   const [searchDraft, setSearchDraft] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
+  const [filterMitra, setFilterMitra] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterContact, setFilterContact] = useState("");
+  const [filterTypeCode, setFilterTypeCode] = useState("");
+  const [filterTypeName, setFilterTypeName] = useState("");
   const [typeSearch, setTypeSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -335,6 +416,113 @@ export default function KelolaanMitraPage() {
   const [partnerFormError, setPartnerFormError] = useState("");
   const [typeFormError, setTypeFormError] = useState("");
   const [ruleFormError, setRuleFormError] = useState("");
+
+  const [planMatrixDraft, setPlanMatrixDraft] = useState<
+    Record<number, { mode: "FIXED" | "PERCENTAGE"; value: string }>
+  >({});
+
+  useEffect(() => {
+    if (!plans || plans.length === 0) return;
+    const typeIdentifier = selectedType
+      ? `${selectedType.code} ${selectedType.name}`
+      : editingType
+        ? `${editingType.code} ${editingType.name}`
+        : `${typeForm.code} ${typeForm.name}`;
+
+    const initialDraft: Record<number, { mode: "FIXED" | "PERCENTAGE"; value: string }> = {};
+
+    plans.forEach((plan) => {
+      const activeRule = commissionRules.find(
+        (r) => r.active && r.plan_id !== null && r.plan_id !== undefined && Number(r.plan_id) === Number(plan.id),
+      );
+
+      if (activeRule) {
+        const valStr = activeRule.value || "0";
+        initialDraft[plan.id] = {
+          mode: activeRule.mode === "PERCENTAGE" ? "PERCENTAGE" : "FIXED",
+          value: activeRule.mode === "FIXED" ? formatThousandDots(valStr) : valStr,
+        };
+      } else {
+        const presetVal = getPresetCommissionValue(plan, typeIdentifier);
+        const defaultMode = (selectedType?.commission_mode || editingType?.commission_mode || typeForm.commissionMode || "FIXED") as "FIXED" | "PERCENTAGE";
+        const defaultValue = presetVal
+          ? (defaultMode === "FIXED" ? formatThousandDots(presetVal) : presetVal)
+          : (defaultMode === "FIXED" ? "100.000" : "10");
+        initialDraft[plan.id] = {
+          mode: defaultMode,
+          value: defaultValue,
+        };
+      }
+    });
+
+    setPlanMatrixDraft(initialDraft);
+  }, [plans, commissionRules, selectedType, editingType]);
+
+  const applyPresetToMatrix = (category: "REFERRAL" | "PARTNERSHIP" | "STRATEGIC" | "ZERO") => {
+    const newDraft: Record<number, { mode: "FIXED" | "PERCENTAGE"; value: string }> = {};
+
+    plans.forEach((plan) => {
+      if (category === "ZERO") {
+        newDraft[plan.id] = { mode: "FIXED", value: "0" };
+      } else {
+        const presetVal = getPresetCommissionValue(plan, category);
+        newDraft[plan.id] = {
+          mode: "FIXED",
+          value: presetVal ? formatThousandDots(presetVal) : "0",
+        };
+      }
+    });
+
+    setPlanMatrixDraft(newDraft);
+  };
+
+  const handleDeletePartnerType = async (item: PartnerTypeItem) => {
+    if (!confirm(`Hapus jenis mitra "${item.name}" (${item.code})? Tindakan ini tidak dapat dibatalkan.`)) return;
+    try {
+      await deletePartnerType(item.id);
+      setPartnerTypes((prev) => prev.filter((t) => t.id !== item.id));
+    } catch (error) {
+      alert(getErrorMessage(error));
+    }
+  };
+
+  const handleSaveAllPlanMatrix = async () => {
+    const typeId = editingType?.id || selectedType?.id;
+    if (!typeId) {
+      setRuleFormError("Simpan jenis mitra terlebih dahulu.");
+      return;
+    }
+
+    setSavingRule(true);
+    setRuleFormError("");
+
+    try {
+      const payloads = Object.entries(planMatrixDraft).map(([planIdStr, item]) => ({
+        plan_id: Number(planIdStr),
+        mode: item.mode,
+        value: stripThousandDots(item.value) || "0",
+        effective_from: new Date().toISOString(),
+      }));
+
+      const results = await Promise.allSettled(
+        payloads.map((payload) =>
+          createPartnerTypeCommissionRule(typeId, payload),
+        ),
+      );
+
+      const failures = results.filter((r) => r.status === "rejected").length;
+      if (failures > 0) {
+        setRuleFormError(`Berhasil menyimpan, tetapi ${failures} rule komisi gagal diproses.`);
+      } else {
+        await loadTypeDetail(typeId);
+        alert(`Semua rule komisi per plan untuk jenis mitra "${editingType?.name || selectedType?.name}" berhasil disimpan!`);
+      }
+    } catch (error) {
+      setRuleFormError(getErrorMessage(error));
+    } finally {
+      setSavingRule(false);
+    }
+  };
 
   const isSales = currentRole === "SALES";
   const isAdmin = currentRole === "" || currentRole === "ADMIN";
@@ -433,12 +621,57 @@ export default function KelolaanMitraPage() {
     };
   }, [appliedSearch, page]);
 
+  const uniqueMitraNames = useMemo(
+    () => Array.from(new Set(partners.map((p) => p.name || p.code).filter(Boolean))),
+    [partners]
+  );
+  const uniqueMitraTypes = useMemo(
+    () => Array.from(new Set(partnerTypes.map((t) => t.name || t.code).filter(Boolean))),
+    [partnerTypes]
+  );
+  const uniqueMitraContacts = useMemo(
+    () => Array.from(new Set(partners.map((p) => p.phone || p.email).filter((val): val is string => Boolean(val)))),
+    [partners]
+  );
+
+  const uniqueTypeCodes = useMemo(
+    () => Array.from(new Set(partnerTypes.map((t) => t.code).filter(Boolean))),
+    [partnerTypes]
+  );
+  const uniqueTypeNames = useMemo(
+    () => Array.from(new Set(partnerTypes.map((t) => t.name).filter(Boolean))),
+    [partnerTypes]
+  );
+
   const filteredPartners = useMemo(
     () =>
-      partners.filter((partner) =>
-        typeFilter === "ALL" ? true : partner.partner_type.code === typeFilter,
-      ),
-    [partners, typeFilter],
+      partners.filter((partner) => {
+        if (typeFilter !== "ALL" && partner.partner_type.code !== typeFilter) {
+          return false;
+        }
+        if (searchDraft) {
+          const q = searchDraft.toLowerCase();
+          const combinedStr = `${partner.name || ""} ${partner.code || ""} ${partner.email || ""} ${partner.phone || ""}`.toLowerCase();
+          if (!combinedStr.includes(q)) return false;
+        }
+        if (filterMitra) {
+          const q = filterMitra.toLowerCase();
+          const nameCode = `${partner.name || ""} ${partner.code || ""}`.toLowerCase();
+          if (!nameCode.includes(q)) return false;
+        }
+        if (filterType) {
+          const q = filterType.toLowerCase();
+          const typeStr = `${partner.partner_type.name || ""} ${partner.partner_type.code || ""}`.toLowerCase();
+          if (!typeStr.includes(q)) return false;
+        }
+        if (filterContact) {
+          const q = filterContact.toLowerCase();
+          const contactStr = `${partner.phone || ""} ${partner.email || ""}`.toLowerCase();
+          if (!contactStr.includes(q)) return false;
+        }
+        return true;
+      }),
+    [partners, typeFilter, searchDraft, filterMitra, filterType, filterContact],
   );
 
   const activePartners = useMemo(
@@ -454,21 +687,28 @@ export default function KelolaanMitraPage() {
   const filteredPartnerTypes = useMemo(() => {
     const keyword = typeSearch.trim().toLowerCase();
 
-    if (!keyword) return partnerTypes;
-
-    return partnerTypes.filter((item) =>
-      [
-        item.code,
-        item.name,
-        item.description || "",
-        item.commission_mode,
-        item.commission_value,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(keyword),
-    );
-  }, [partnerTypes, typeSearch]);
+    return partnerTypes.filter((item) => {
+      if (keyword) {
+        const combined = [
+          item.code,
+          item.name,
+          item.description || "",
+          item.commission_mode,
+          item.commission_value,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!combined.includes(keyword)) return false;
+      }
+      if (filterTypeCode && !item.code.toLowerCase().includes(filterTypeCode.toLowerCase())) {
+        return false;
+      }
+      if (filterTypeName && !item.name.toLowerCase().includes(filterTypeName.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [partnerTypes, typeSearch, filterTypeCode, filterTypeName]);
 
   const selectedRulePlan = useMemo(() => {
     if (!ruleForm.planId) return null;
@@ -582,13 +822,31 @@ export default function KelolaanMitraPage() {
       );
   };
 
+  const updateRuleValueForTypeAndPlan = (
+    typeObj: PartnerTypeItem | null,
+    planId: string,
+  ) => {
+    if (!planId) return;
+
+    const selectedPlanObj = plans.find((p) => String(p.id) === planId) || null;
+    const typeIdentifier = typeObj?.code || typeObj?.name || "";
+    const presetVal = getPresetCommissionValue(selectedPlanObj, typeIdentifier);
+
+    if (presetVal) {
+      setRuleForm((current) => ({
+        ...current,
+        mode: "FIXED",
+        value: formatThousandDots(presetVal),
+      }));
+    }
+  };
+
   const handlePlanChange = (planId: string) => {
     const selectedPlanObj = plans.find((p) => String(p.id) === planId) || null;
+    const typeObj = editingType || selectedType;
     const typeIdentifier =
-      editingType?.code ||
-      selectedType?.code ||
-      editingType?.name ||
-      selectedType?.name ||
+      typeObj?.code ||
+      typeObj?.name ||
       typeForm.code ||
       typeForm.name;
 
@@ -598,9 +856,16 @@ export default function KelolaanMitraPage() {
       ...current,
       planId,
       mode: presetVal ? "FIXED" : current.mode,
-      value: presetVal || current.value,
+      value: presetVal ? formatThousandDots(presetVal) : current.value,
     }));
   };
+
+  useEffect(() => {
+    if (ruleForm.planId) {
+      const typeObj = editingType || selectedType;
+      updateRuleValueForTypeAndPlan(typeObj, ruleForm.planId);
+    }
+  }, [editingType, selectedType]);
 
   const loadTypeDetail = async (typeId: number) => {
     setLoadingTypeDetail(true);
@@ -615,6 +880,10 @@ export default function KelolaanMitraPage() {
       setCommissionRules(
         Array.isArray(rulesResult.items) ? rulesResult.items : [],
       );
+
+      if (ruleForm.planId) {
+        updateRuleValueForTypeAndPlan(detailResult, ruleForm.planId);
+      }
     } finally {
       setLoadingTypeDetail(false);
     }
@@ -850,11 +1119,6 @@ export default function KelolaanMitraPage() {
       return;
     }
 
-    if (!editingType && !typeForm.code.trim()) {
-      setTypeFormError("Code jenis mitra wajib diisi.");
-      return;
-    }
-
     if (!typeForm.commissionValue.trim()) {
       setTypeFormError("Nilai komisi dasar wajib diisi.");
       return;
@@ -863,57 +1127,52 @@ export default function KelolaanMitraPage() {
     setSavingType(true);
 
     try {
+      let targetTypeId: number;
+
       if (editingType) {
+        targetTypeId = editingType.id;
         await updatePartnerType(editingType.id, {
           name: typeForm.name.trim(),
           commission_mode: typeForm.commissionMode,
-          commission_value: typeForm.commissionValue.trim(),
+          commission_value: stripThousandDots(typeForm.commissionValue),
           description: typeForm.description.trim() || undefined,
         });
-
-        await refreshTypes(editingType.id);
       } else {
+        const generatedCode = typeForm.code.trim()
+          ? typeForm.code.trim().toUpperCase()
+          : "";
+
         const created = await createPartnerType({
-          code: typeForm.code.trim().toUpperCase(),
+          code: generatedCode,
           name: typeForm.name.trim(),
           commission_mode: typeForm.commissionMode,
-          commission_value: typeForm.commissionValue.trim(),
+          commission_value: stripThousandDots(typeForm.commissionValue),
           description: typeForm.description.trim() || undefined,
         });
-
-        const automaticRules = buildAutomaticRulesForType(
-          created.code,
-          created.name,
-        );
-        let automaticRuleFailure = 0;
-
-        if (automaticRules.length > 0) {
-          const results = await Promise.allSettled(
-            automaticRules.map((payload) =>
-              createPartnerTypeCommissionRule(created.id, payload),
-            ),
-          );
-
-          automaticRuleFailure = results.filter(
-            (result) => result.status === "rejected",
-          ).length;
-        }
-
+        targetTypeId = created.id;
         setEditingType(created);
         setSelectedType(created);
-        await refreshTypes(created.id);
-        setTypeModalTab("rules");
-
-        if (automaticRules.length === 0) {
-          setTypeFormError(
-            "Jenis mitra berhasil disimpan, tetapi rule otomatis hanya tersedia untuk kategori Referral, Partnership/Agen, atau Strategic/Distributor.",
-          );
-        } else if (automaticRuleFailure > 0) {
-          setTypeFormError(
-            `Jenis mitra berhasil disimpan, tetapi ${automaticRuleFailure} rule komisi otomatis gagal dibuat. Silakan cek tab Rule Komisi per Plan.`,
-          );
-        }
       }
+
+      // Save all plan rules from planMatrixDraft
+      if (plans && plans.length > 0 && Object.keys(planMatrixDraft).length > 0) {
+        const payloads = Object.entries(planMatrixDraft).map(([planIdStr, item]) => ({
+          plan_id: Number(planIdStr),
+          mode: item.mode,
+          value: stripThousandDots(item.value) || "0",
+          effective_from: new Date().toISOString(),
+        }));
+
+        await Promise.allSettled(
+          payloads.map((payload) =>
+            createPartnerTypeCommissionRule(targetTypeId, payload),
+          ),
+        );
+      }
+
+      await refreshTypes(targetTypeId);
+      setShowTypeModal(false);
+      alert(`Jenis mitra ${typeForm.name} dan rule komisi per plan berhasil disimpan!`);
     } catch (error) {
       setTypeFormError(getErrorMessage(error));
     } finally {
@@ -990,7 +1249,7 @@ export default function KelolaanMitraPage() {
           ? Number(ruleForm.planId)
           : undefined,
         mode: ruleForm.mode,
-        value: ruleForm.mode === "TIER" ? undefined : ruleForm.value.trim(),
+        value: ruleForm.mode === "TIER" ? undefined : stripThousandDots(ruleForm.value),
         effective_from: formatIsoDate(ruleForm.effectiveFrom) || new Date().toISOString(),
         effective_to: formatIsoDate(ruleForm.effectiveTo, true),
         tiers:
@@ -1002,7 +1261,7 @@ export default function KelolaanMitraPage() {
                   ? Number(tier.maxClosings)
                   : undefined,
                 mode: tier.mode,
-                value: tier.value.trim(),
+                value: stripThousandDots(tier.value),
               }))
             : undefined,
       });
@@ -1102,29 +1361,6 @@ export default function KelolaanMitraPage() {
               berjalan pada basis API backend terbaru.
             </p>
           </div>
-
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-            {canManageTypes ? (
-              <button
-                type="button"
-                onClick={openCreateTypeModal}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
-              >
-                + Tambah Jenis Mitra
-              </button>
-            ) : null}
-
-            {isAdmin ? (
-              <button
-                type="button"
-                onClick={openCreatePartnerModal}
-                disabled={partnerTypes.length === 0}
-                className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-              >
-                + Tambah Mitra
-              </button>
-            ) : null}
-          </div>
         </div>
       </div>
 
@@ -1198,7 +1434,14 @@ export default function KelolaanMitraPage() {
             <button
               key={item.key}
               type="button"
-              onClick={() => setTableMode(item.key as TableMode)}
+              onClick={() => {
+                setTableMode(item.key as TableMode);
+                setFilterMitra("");
+                setFilterType("");
+                setFilterContact("");
+                setFilterTypeCode("");
+                setFilterTypeName("");
+              }}
               className={`rounded-lg px-5 py-2.5 transition-all ${
                 tableMode === item.key
                   ? "bg-white text-[#C92C1E] shadow-sm"
@@ -1215,44 +1458,173 @@ export default function KelolaanMitraPage() {
         <AnalyticsTab />
       ) : (
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-          {tableMode === "PARTNER_TYPES" ? (
-            <input
-              value={typeSearch}
-              onChange={(event) => setTypeSearch(event.target.value)}
-              placeholder="Cari code, nama, atau mode komisi jenis mitra"
-              className="min-w-[240px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-            />
-          ) : (
-            <form onSubmit={handleSearch} className="flex flex-wrap items-center gap-2">
-              <input
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder="Cari nama atau code mitra"
-                className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              />
+        {/* Table Header (Title, Desc, Actions) */}
+        <div className="flex flex-col items-start gap-4 border-b border-gray-100 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              {tableMode === "PARTNER_TYPES"
+                ? "Jenis Mitra"
+                : tableMode === "ACTIVE_PARTNERS"
+                ? "Mitra Aktif"
+                : "Mitra Non Aktif"}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              {tableMode === "PARTNER_TYPES"
+                ? "Pengelolaan tipe mitra, komisi dasar, dan skema aturan komisi per paket langganan."
+                : tableMode === "ACTIVE_PARTNERS"
+                ? "Kelola seluruh data mitra aktif, status aktivitas, dan informasi kontak."
+                : "Daftar mitra yang dalam status nonaktif atau belum diaktifkan kembali."}
+            </p>
+          </div>
 
-              <select
-                value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              >
-                <option value="ALL">Semua Type</option>
-                {partnerTypes.map((item) => (
-                  <option key={item.id} value={item.code}>
-                    {item.name || item.code}
-                  </option>
-                ))}
-              </select>
-
+          <div className="flex flex-wrap items-center gap-3 w-full">
+            {tableMode === "PARTNER_TYPES" && canManageTypes && (
               <button
-                type="submit"
-                className="rounded-lg bg-[#C92C1E] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                type="button"
+                onClick={openCreateTypeModal}
+                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
               >
-                Cari
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Jenis Mitra
               </button>
-            </form>
-          )}
+            )}
+
+            {(tableMode === "ACTIVE_PARTNERS" || tableMode === "INACTIVE_PARTNERS") && isAdmin && (
+              <button
+                type="button"
+                onClick={openCreatePartnerModal}
+                disabled={partnerTypes.length === 0}
+                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Mitra
+              </button>
+            )}
+          </div>
+        </div>
+        {/* Header Filters Grid */}
+        {(tableMode === "ACTIVE_PARTNERS" || tableMode === "INACTIVE_PARTNERS" || tableMode === "PARTNER_TYPES") && (
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 w-full">
+              {(tableMode === "ACTIVE_PARTNERS" || tableMode === "INACTIVE_PARTNERS") && (
+                <>
+                  <AutocompleteFilter
+                    label="Mitra"
+                    placeholder="Filter Mitra..."
+                    value={filterMitra}
+                    onChange={setFilterMitra}
+                    options={uniqueMitraNames}
+                  />
+                  <AutocompleteFilter
+                    label="Type"
+                    placeholder="Filter Type..."
+                    value={filterType}
+                    onChange={setFilterType}
+                    options={uniqueMitraTypes}
+                  />
+                  <AutocompleteFilter
+                    label="Kontak"
+                    placeholder="Filter Kontak..."
+                    value={filterContact}
+                    onChange={setFilterContact}
+                    options={uniqueMitraContacts}
+                  />
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <span className="text-xs font-semibold text-black">Filter Type Mitra</span>
+                    <select
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                    >
+                      <option value="ALL">Semua Type</option>
+                      {partnerTypes.map((item) => (
+                        <option key={item.id} value={item.code}>
+                          {item.name || item.code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {tableMode === "PARTNER_TYPES" && (
+                <>
+                  <AutocompleteFilter
+                    label="Code"
+                    placeholder="Filter Code..."
+                    value={filterTypeCode}
+                    onChange={setFilterTypeCode}
+                    options={uniqueTypeCodes}
+                  />
+                  <AutocompleteFilter
+                    label="Jenis Mitra"
+                    placeholder="Filter Jenis Mitra..."
+                    value={filterTypeName}
+                    onChange={setFilterTypeName}
+                    options={uniqueTypeNames}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Global Search Bar + Column Visibility Control */}
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {tableMode === "PARTNER_TYPES" ? (
+              <div className="flex items-center justify-between w-full gap-3">
+                <div className="relative flex-1 min-w-[220px]">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    value={typeSearch}
+                    onChange={(event) => setTypeSearch(event.target.value)}
+                    placeholder="Cari code, nama, atau mode komisi jenis mitra..."
+                    className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
+
+                <ColumnVisibilityControl
+                  tableId="partner-types-table"
+                  storageKey="column-visibility:partner-types-table"
+                  buttonLabel="Kolom"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between w-full gap-3">
+                <div className="relative flex-1 min-w-[220px]">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    value={searchDraft}
+                    onChange={(event) => {
+                      setSearchDraft(event.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Cari nama, code mitra, email, telepon..."
+                    className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
+
+                <ColumnVisibilityControl
+                  tableId="partners-table"
+                  storageKey="column-visibility:partners-table"
+                  buttonLabel="Kolom"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {pageError ? (
@@ -1263,7 +1635,7 @@ export default function KelolaanMitraPage() {
 
         <div className="overflow-x-auto">
           {tableMode === "PARTNER_TYPES" ? (
-            <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
+            <table id="partner-types-table" data-column-visibility-manual="true" className="w-full min-w-[820px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4 font-bold">Code</th>
@@ -1300,18 +1672,37 @@ export default function KelolaanMitraPage() {
                         {item.description || "Belum ada deskripsi."}
                       </td>
                       <td className="px-4 py-4 text-center align-top">
-                        {canManageTypes ? (
-                          <button
-                            type="button"
-                            onClick={() => void openEditTypeModal(item)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100 mx-auto"
-                            title="Edit Jenis Mitra"
+                        <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/menu/kelolaan-mitra/jenis-mitra/${item.id}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
+                            title="Detail Ringkasan Komisi Mitra"
                           >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                          </button>
-                        ) : (
-                          <span className="text-xs font-bold text-gray-300">-</span>
-                        )}
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                          </Link>
+
+                          {canManageTypes && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditTypeModal(item, "detail")}
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100"
+                                title="Edit Jenis Mitra"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleDeletePartnerType(item)}
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100"
+                                title="Hapus Jenis Mitra"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1319,14 +1710,14 @@ export default function KelolaanMitraPage() {
               </tbody>
             </table>
           ) : (
-            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+            <table id="partners-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4 font-bold">Mitra</th>
                   <th className="px-4 py-4 font-bold">Type</th>
                   <th className="px-4 py-4 font-bold">Kontak</th>
                   <th className="px-4 py-4 font-bold">Komisi Dasar</th>
-                  <th className="px-4 py-4 font-bold">Updated</th>
+                  <th className="px-4 py-4 font-bold">Status</th>
                   <th className="px-4 py-4 text-center font-bold">Aksi</th>
                 </tr>
               </thead>
@@ -1358,7 +1749,13 @@ export default function KelolaanMitraPage() {
                         <p className="mt-1 text-xs text-gray-400">{partner.code}</p>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        {partner.partner_type.name}
+                        <Link
+                          href={`/menu/kelolaan-mitra/jenis-mitra/${partner.partner_type.id}`}
+                          className="font-bold text-[#C92C1E] hover:underline transition-colors"
+                          title="Lihat & kelola komisi jenis mitra"
+                        >
+                          {partner.partner_type.name}
+                        </Link>
                         <span className="mt-1 block text-xs text-gray-400">
                           {partner.partner_type.code}
                         </span>
@@ -1373,7 +1770,7 @@ export default function KelolaanMitraPage() {
                         {formatFlatCommission(partner.partner_type)}
                       </td>
                       <td className="px-4 py-4 align-top">
-                        {formatDateTime(partner.updated_at)}
+                        <PartnerActivityBadge partnerId={partner.id} />
                       </td>
                       <td className="px-4 py-4 text-center align-top">
                         <div className="flex items-center justify-center gap-2">
@@ -1665,154 +2062,130 @@ export default function KelolaanMitraPage() {
       <ModalShell
         open={showTypeModal}
         title={editingType ? "Edit Jenis Mitra" : "Tambah Jenis Mitra"}
-        subtitle="Atur informasi master jenis mitra dan konfigurasi rule komisi aktif."
+        subtitle="Atur informasi jenis mitra dan konfigurasi rule komisi per plan dalam satu halaman."
         onClose={() => setShowTypeModal(false)}
       >
-        <div className="space-y-5">
-          {/* Tab Navigation */}
-          <div className="flex border-b border-slate-200">
-            <button
-              type="button"
-              onClick={() => setTypeModalTab("detail")}
-              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-black transition ${
-                typeModalTab === "detail"
-                  ? "border-[#C92C1E] text-[#C92C1E]"
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-              }`}
-            >
-              📋 Informasi Jenis Mitra
-            </button>
-            <button
-              type="button"
-              onClick={() => setTypeModalTab("rules")}
-              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-black transition ${
-                typeModalTab === "rules"
-                  ? "border-[#C92C1E] text-[#C92C1E]"
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-              }`}
-            >
-              ⚙️ Rule Komisi per Plan
-              {commissionRules.length > 0 && (
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-[#C92C1E]">
-                  {commissionRules.length}
-                </span>
-              )}
-            </button>
-          </div>
+        <form id="type-mitra-form" onSubmit={handleTypeSubmit} className="space-y-6">
+          {typeFormError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700 flex items-center gap-2">
+              <svg className="h-4 w-4 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {typeFormError}
+            </div>
+          )}
 
-          {typeModalTab === "detail" ? (
-            <form
-              onSubmit={handleTypeSubmit}
-              className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs max-w-2xl mx-auto"
-            >
-            {typeFormError ? (
-              <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
-                {typeFormError}
+          {/* Section 1: Informasi Jenis Mitra */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
+            <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
+              <div className="bg-red-50 p-2 rounded-xl border border-red-100 text-[#C92C1E]">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
-            ) : null}
-
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                Master Jenis Mitra
-              </p>
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
-                Komisi dasar ini menjadi fallback ketika tidak ada rule aktif
-                yang lebih spesifik.
-              </p>
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900">1. Informasi Jenis Mitra</h4>
+                <p className="text-[11px] text-slate-500 font-medium">Nama, kode, komisi dasar, dan deskripsi mitra</p>
+              </div>
             </div>
 
-            <label className="block space-y-2">
-              <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                Code <span className="text-slate-400 font-normal lowercase">(opsional)</span>
-              </span>
-              <input
-                value={typeForm.code}
-                onChange={(event) =>
-                  setTypeForm((current) => ({
-                    ...current,
-                    code: event.target.value.toUpperCase(),
-                  }))
-                }
-                disabled={Boolean(editingType)}
-                placeholder="Otomatis jika dikosongkan (cth: DISTRIBUTOR)"
-                className={`${inputClass} uppercase`}
-              />
-            </label>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">
+                  Nama Jenis Mitra <span className="text-red-500">*</span>
+                </label>
+                <input
+                  value={typeForm.name}
+                  onChange={(event) =>
+                    setTypeForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="Contoh: Distributor, Agent, Reseller"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-[#C92C1E]/10"
+                />
+              </div>
 
-            <label className="block space-y-2">
-              <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                Nama Jenis Mitra
-              </span>
-              <input
-                value={typeForm.name}
-                onChange={(event) =>
-                  setTypeForm((current) => ({
-                    ...current,
-                    name: event.target.value,
-                  }))
-                }
-                placeholder="Nama jenis mitra"
-                className={inputClass}
-              />
-            </label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">
+                  Kode Jenis Mitra <span className="text-slate-400 font-normal">(opsional)</span>
+                </label>
+                <input
+                  value={typeForm.code}
+                  onChange={(event) =>
+                    setTypeForm((current) => ({
+                      ...current,
+                      code: event.target.value.toUpperCase(),
+                    }))
+                  }
+                  disabled={Boolean(editingType)}
+                  placeholder="Otomatis jika kosong (cth: DISTRIBUTOR)"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm uppercase text-slate-800 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-[#C92C1E]/10 disabled:bg-slate-50 disabled:text-slate-400"
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label className="block space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">
                   Mode Komisi Dasar
-                </span>
+                </label>
                 <select
                   value={typeForm.commissionMode}
                   onChange={(event) =>
                     setTypeForm((current) => ({
                       ...current,
-                      commissionMode: event.target.value as
-                        | "PERCENTAGE"
-                        | "FIXED",
+                      commissionMode: event.target.value as "PERCENTAGE" | "FIXED",
                     }))
                   }
-                  className={selectClass}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-[#C92C1E]/10"
                 >
-                  <option value="PERCENTAGE">PERCENTAGE</option>
-                  <option value="FIXED">FIXED</option>
+                  <option value="PERCENTAGE">PERCENTAGE (%)</option>
+                  <option value="FIXED">FIXED (Rp)</option>
                 </select>
-              </label>
+              </div>
 
-              <label className="block space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">
                   Nilai Komisi Dasar
-                </span>
+                </label>
                 <div className="relative">
                   {typeForm.commissionMode === "FIXED" ? (
-                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500">
+                    <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
                       Rp
                     </span>
                   ) : null}
                   <input
-                    value={typeForm.commissionValue}
-                    onChange={(event) =>
+                    value={
+                      typeForm.commissionMode === "FIXED"
+                        ? formatThousandDots(typeForm.commissionValue)
+                        : typeForm.commissionValue
+                    }
+                    onChange={(event) => {
+                      const rawVal = event.target.value.replace(/\./g, "");
                       setTypeForm((current) => ({
                         ...current,
-                        commissionValue: event.target.value,
-                      }))
-                    }
+                        commissionValue: rawVal,
+                      }));
+                    }}
                     placeholder={
                       typeForm.commissionMode === "FIXED"
-                        ? "Masukkan nominal komisi"
-                        : "Masukkan persentase komisi"
+                        ? "Masukkan nominal komisi (cth: 120.000)"
+                        : "Masukkan persentase komisi (cth: 10)"
                     }
-                    className={`${inputClass} ${
-                      typeForm.commissionMode === "FIXED" ? "pl-11" : ""
+                    className={`w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-[#C92C1E]/10 ${
+                      typeForm.commissionMode === "FIXED" ? "pl-10" : ""
                     }`}
                   />
                 </div>
-              </label>
+              </div>
             </div>
 
-            <label className="block space-y-2">
-              <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
                 Deskripsi
-              </span>
+              </label>
               <textarea
                 value={typeForm.description}
                 onChange={(event) =>
@@ -1821,484 +2194,157 @@ export default function KelolaanMitraPage() {
                     description: event.target.value,
                   }))
                 }
-                rows={5}
-                placeholder="Deskripsi singkat jenis mitra"
-                className={textareaClass}
+                rows={2}
+                placeholder="Jelaskan peran atau kualifikasi singkat jenis mitra ini..."
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-slate-800 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-[#C92C1E]/10"
               />
-            </label>
-
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
-              Preview komisi dasar:{" "}
-              {typeForm.commissionMode === "PERCENTAGE"
-                ? `${typeForm.commissionValue || 0}%`
-                : formatMoney(typeForm.commissionValue || 0)}
             </div>
+          </div>
 
-            <div className="flex items-center justify-between pt-2">
-              {!editingType ? (
-                <p className="text-[11px] font-medium text-slate-400">
-                  💡 Rule Komisi per Plan dapat diatur setelah Jenis Mitra disimpan.
-                </p>
-              ) : <div />}
-              <button
-                type="submit"
-                disabled={savingType}
-                className="rounded-2xl bg-[#C92C1E] px-6 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-              >
-                {savingType
-                  ? "Menyimpan..."
-                  : editingType
-                    ? "Simpan Perubahan"
-                    : "Simpan Jenis Mitra"}
-              </button>
-            </div>
-          </form>
-          ) : (
-            <div className="space-y-5">
-              <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 md:flex-row md:items-center md:justify-between">
+          {/* Section 2: Rule Komisi per Plan / Paket */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="bg-red-50 p-2 rounded-xl border border-red-100 text-[#C92C1E]">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    Target Jenis Mitra
-                  </p>
-                  <p className="text-sm font-black text-slate-900">
-                    {selectedType?.name || editingType?.name || "Belum ada jenis mitra terpilih"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">Pilih Mitra:</span>
-                  <select
-                    value={selectedType?.id || editingType?.id || ""}
-                    onChange={(e) => {
-                      const targetId = Number(e.target.value);
-                      if (targetId) {
-                        const found = partnerTypes.find((t) => t.id === targetId);
-                        if (found) {
-                          setSelectedType(found);
-                          setEditingType(found);
-                          loadTypeDetail(targetId);
-                        }
-                      }
-                    }}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#C92C1E]"
-                  >
-                    <option value="">-- Pilih Jenis Mitra --</option>
-                    {partnerTypes.map((pt) => (
-                      <option key={pt.id} value={pt.id}>
-                        {pt.name} ({pt.code})
-                      </option>
-                    ))}
-                  </select>
+                  <h4 className="text-sm font-extrabold text-slate-900">2. Matriks Rule Komisi per Plan</h4>
+                  <p className="text-[11px] text-slate-500 font-medium">Atur komisi spesifik untuk setiap paket & tenor di bawah ini.</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.2fr_1fr]">
-            <form
-              onSubmit={handleRuleSubmit}
-              className="space-y-4 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              {ruleFormError ? (
-                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
-                  {ruleFormError}
-                </div>
-              ) : null}
-
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                  Rule Komisi per Plan
-                </p>
-                <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
-                  Backend terbaru mendukung rule spesifik per plan (paket + tenor)
-                  dengan mode persentase, fixed, atau tier bertingkat.
-                </p>
-              </div>
-
-              <label className="block space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                  Plan
-                </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">Preset:</span>
                 <select
-                  value={ruleForm.planId}
-                  onChange={(event) => handlePlanChange(event.target.value)}
-                  className={selectClass}
+                  defaultValue=""
+                  onChange={(e) => {
+                    const val = e.target.value as "REFERRAL" | "PARTNERSHIP" | "STRATEGIC" | "ZERO";
+                    if (val) applyPresetToMatrix(val);
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                 >
-                  <option value="">Semua Plan</option>
-                  {plans.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} ({item.tenure_months} bln)
-                    </option>
-                  ))}
+                  <option value="" disabled>-- Pilih Preset Komisi --</option>
+                  <option value="REFERRAL">Preset Referral</option>
+                  <option value="PARTNERSHIP">Preset Partnership / Agen</option>
+                  <option value="STRATEGIC">Preset Strategic / Distributor</option>
+                  <option value="ZERO">Reset Ke 0</option>
                 </select>
-              </label>
-
-              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">
-                {!selectedRulePlan
-                  ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)."
-                  : `Plan terpilih: ${selectedRulePlan.name} - harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedRulePlan.price || 0))}`}
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Mode Rule
-                  </span>
-                  <select
-                    value={ruleForm.mode}
-                    onChange={(event) =>
-                      handleRuleModeChange(
-                        event.target.value as "PERCENTAGE" | "FIXED" | "TIER",
-                      )
-                    }
-                    className={selectClass}
-                  >
-                    <option value="PERCENTAGE">PERCENTAGE</option>
-                    <option value="FIXED">FIXED</option>
-                    <option value="TIER">TIER</option>
-                  </select>
-                </label>
-
-                {ruleForm.mode !== "TIER" ? (
-                  <label className="block space-y-2">
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Nilai Rule
-                    </span>
-                    <div className="relative">
-                      {ruleForm.mode === "FIXED" ? (
-                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500">
-                          Rp
-                        </span>
-                      ) : null}
-                      <input
-                        value={ruleForm.value}
-                        onChange={(event) =>
-                          setRuleForm((current) => ({
-                            ...current,
-                            value: event.target.value,
-                          }))
-                        }
-                        placeholder={
-                          ruleForm.mode === "FIXED"
-                            ? "Nilai komisi rule"
-                            : "Nilai persen komisi"
-                        }
-                        className={`${inputClass} ${
-                          ruleForm.mode === "FIXED" ? "pl-11" : ""
-                        }`}
-                      />
-                    </div>
-                  </label>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-[#C92C1E]">
-                    Mode TIER memakai daftar tingkatan di bawah, bukan satu
-                    nilai flat.
-                  </div>
-                )}
-              </div>
-
-              {ruleForm.mode === "TIER" ? (
-                <div className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-black text-slate-900">
-                        Tier Komisi
-                      </p>
-                      <p className="mt-1 text-[11px] font-bold text-slate-500">
-                        Atur rentang closing dan nilai komisi tiap level.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={addRuleTier}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-600"
-                    >
-                      + Tier
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {ruleTiers.map((tier, index) => (
-                      <div
-                        key={`${index}-${tier.tierOrder}`}
-                        className="rounded-2xl border border-slate-200 bg-white p-4"
-                      >
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-                          <label className="block space-y-2">
-                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-                              Urutan
-                            </span>
-                            <input
-                              value={tier.tierOrder}
-                              onChange={(event) =>
-                                updateRuleTier(
-                                  index,
-                                  "tierOrder",
-                                  event.target.value,
-                                )
-                              }
-                              className={inputClass}
-                            />
-                          </label>
-
-                          <label className="block space-y-2">
-                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-                              Min Closing
-                            </span>
-                            <input
-                              value={tier.minClosings}
-                              onChange={(event) =>
-                                updateRuleTier(
-                                  index,
-                                  "minClosings",
-                                  event.target.value,
-                                )
-                              }
-                              className={inputClass}
-                            />
-                          </label>
-
-                          <label className="block space-y-2">
-                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-                              Max Closing
-                            </span>
-                            <input
-                              value={tier.maxClosings}
-                              onChange={(event) =>
-                                updateRuleTier(
-                                  index,
-                                  "maxClosings",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="Opsional"
-                              className={inputClass}
-                            />
-                          </label>
-
-                          <label className="block space-y-2">
-                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-                              Mode
-                            </span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-center w-10">#</th>
+                    <th className="px-4 py-3 font-bold">Paket & Plan</th>
+                    <th className="px-4 py-3 font-bold">Tenor</th>
+                    <th className="px-4 py-3 font-bold">Harga Paket</th>
+                    <th className="px-4 py-3 font-bold w-44">Mode Komisi</th>
+                    <th className="px-4 py-3 font-bold w-52">Nilai Komisi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {plans.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-xs font-semibold text-slate-400">
+                        Belum ada katalog plan paket yang terdaftar.
+                      </td>
+                    </tr>
+                  ) : (
+                    plans.map((plan, idx) => {
+                      const draft = planMatrixDraft[plan.id] || { mode: "FIXED", value: "0" };
+                      return (
+                        <tr key={plan.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                          <td className="px-4 py-3 font-bold text-slate-900">
+                            {plan.package?.name || plan.name}
+                            <span className="block text-[11px] font-medium text-slate-400 mt-0.5">{plan.code}</span>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
+                            {plan.tenure_months ? `${plan.tenure_months} Bulan` : "-"}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">
+                            Rp{Number(plan.price || 0).toLocaleString("id-ID")}
+                          </td>
+                          <td className="px-4 py-3">
                             <select
-                              value={tier.mode}
-                              onChange={(event) =>
-                                updateRuleTier(index, "mode", event.target.value)
-                              }
-                              className={selectClass}
+                              value={draft.mode}
+                              onChange={(e) => {
+                                const newMode = e.target.value as "FIXED" | "PERCENTAGE";
+                                setPlanMatrixDraft((prev) => ({
+                                  ...prev,
+                                  [plan.id]: {
+                                    mode: newMode,
+                                    value: newMode === "FIXED" ? formatThousandDots(draft.value) : stripThousandDots(draft.value),
+                                  },
+                                }));
+                              }}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                             >
-                              <option value="PERCENTAGE">PERCENTAGE</option>
-                              <option value="FIXED">FIXED</option>
+                              <option value="FIXED">Nominal (Rp)</option>
+                              <option value="PERCENTAGE">Persen (%)</option>
                             </select>
-                          </label>
-
-                          <label className="block space-y-2">
-                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-                              Nilai
-                            </span>
+                          </td>
+                          <td className="px-4 py-3">
                             <div className="relative">
-                              {tier.mode === "FIXED" ? (
-                                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500">
+                              {draft.mode === "FIXED" && (
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
                                   Rp
                                 </span>
-                              ) : null}
+                              )}
                               <input
-                                value={tier.value}
-                                onChange={(event) =>
-                                  updateRuleTier(
-                                    index,
-                                    "value",
-                                    event.target.value,
-                                  )
-                                }
-                                className={`${inputClass} ${
-                                  tier.mode === "FIXED" ? "pl-11" : ""
+                                type="text"
+                                value={draft.mode === "FIXED" ? formatThousandDots(draft.value) : draft.value}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const clean = draft.mode === "FIXED" ? formatThousandDots(val) : val;
+                                  setPlanMatrixDraft((prev) => ({
+                                    ...prev,
+                                    [plan.id]: {
+                                      ...draft,
+                                      value: clean,
+                                    },
+                                  }));
+                                }}
+                                placeholder={draft.mode === "FIXED" ? "150.000" : "10"}
+                                className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E] ${
+                                  draft.mode === "FIXED" ? "pl-9" : ""
                                 }`}
                               />
                             </div>
-                          </label>
-                        </div>
-
-                        <div className="mt-3 flex items-center justify-between gap-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            Preview:{" "}
-                            {tier.maxClosings
-                              ? `${tier.minClosings} - ${tier.maxClosings}`
-                              : `>= ${tier.minClosings}`}{" "}
-                            closing,{" "}
-                            {tier.mode === "PERCENTAGE"
-                              ? `${tier.value || 0}%`
-                              : formatMoney(tier.value || 0)}
-                          </p>
-
-                          <button
-                            type="button"
-                            onClick={() => removeRuleTier(index)}
-                            className="rounded-xl border border-gray-200 px-3 py-2 text-[10px] font-black text-gray-600"
-                          >
-                            Hapus Tier
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Effective From
-                  </span>
-                  <input
-                    type="date"
-                    value={ruleForm.effectiveFrom}
-                    onChange={(event) =>
-                      setRuleForm((current) => ({
-                        ...current,
-                        effectiveFrom: event.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                  />
-                </label>
-
-                <label className="block space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Effective To
-                  </span>
-                  <input
-                    type="date"
-                    value={ruleForm.effectiveTo}
-                    onChange={(event) =>
-                      setRuleForm((current) => ({
-                        ...current,
-                        effectiveTo: event.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                  />
-                </label>
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={savingRule || !(editingType || selectedType)}
-                  className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  {savingRule ? "Menyimpan Rule..." : "Simpan Commission Rule"}
-                </button>
-              </div>
-            </form>
-
-            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-                    Rule Tersimpan
-                  </p>
-                  <h3 className="mt-2 text-sm font-black text-slate-900">
-                    {selectedType?.name ||
-                      editingType?.name ||
-                      "Jenis mitra belum dipilih"}
-                  </h3>
-                </div>
-
-                {selectedType ? (
-                  <span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-black text-[#C92C1E]">
-                    {selectedType.code}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {loadingTypeDetail ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs font-bold text-slate-400">
-                    Memuat detail rule komisi...
-                  </div>
-                ) : commissionRules.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs font-bold text-slate-400">
-                    Belum ada rule komisi untuk jenis mitra ini.
-                  </div>
-                ) : (
-                  commissionRules.map((rule) => (
-                    <div
-                      key={rule.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                    >
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-black text-slate-900">
-                              {rule.plan_name || "Semua Plan"}
-                            </p>
-
-                            <span
-                              className={`rounded-full px-3 py-1 text-[10px] font-black ${
-                                rule.active
-                                  ? "border border-green-100 bg-green-50 text-green-700"
-                                  : "border border-gray-200 bg-white text-gray-500"
-                              }`}
-                            >
-                              {rule.active ? "ACTIVE" : "INACTIVE"}
-                            </span>
-                          </div>
-
-                          <p className="mt-1 text-[11px] font-bold text-slate-400">
-                            Mode {rule.mode}
-                          </p>
-                          <p className="mt-1 text-[11px] font-bold text-slate-400">
-                            Berlaku {formatDateOnly(rule.effective_from)} sampai{" "}
-                            {formatDateOnly(rule.effective_to)}
-                          </p>
-
-                          {rule.mode !== "TIER" ? (
-                            <p className="mt-2 text-sm font-bold text-slate-600">
-                              Nilai: {formatRuleValue(rule.mode, rule.value)}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        {rule.active ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleDeactivateRule(rule)}
-                            className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-white"
-                          >
-                            Nonaktifkan
-                          </button>
-                        ) : null}
-                      </div>
-
-                      {rule.mode === "TIER" &&
-                      rule.tiers &&
-                      rule.tiers.length > 0 ? (
-                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                          {rule.tiers.map((tier) => (
-                            <div
-                              key={tier.id}
-                              className="rounded-2xl border border-white bg-white px-4 py-3"
-                            >
-                              <p className="text-xs font-black text-slate-900">
-                                Tier {tier.tier_order}
-                              </p>
-                              <p className="mt-1 text-[11px] font-bold text-slate-400">
-                                {formatTierRange(tier)}
-                              </p>
-                              <p className="mt-2 text-sm font-bold text-slate-600">
-                                {formatRuleValue(tier.mode, tier.value)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-              </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
+
+        </form>
+        {/* Fixed Action Buttons */}
+        <div className="flex-shrink-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-6 py-4 md:px-8">
+          <button
+            type="button"
+            onClick={() => setShowTypeModal(false)}
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            form="type-mitra-form"
+            disabled={savingType}
+            className="rounded-xl bg-[#C92C1E] px-6 py-3 text-xs font-bold text-white shadow-md shadow-red-500/20 transition hover:bg-red-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-red-300 flex items-center gap-2"
+          >
+            {savingType ? "Menyimpan..." : "Simpan Jenis Mitra & Rule Komisi"}
+          </button>
         </div>
       </ModalShell>
     </div>

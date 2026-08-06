@@ -69,6 +69,10 @@ const EMPTY_RULE_FORM: RuleFormState = {
   ],
 };
 
+function stripThousandDots(value: string) {
+  return value.replace(/\./g, "").trim();
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   return "Terjadi kesalahan yang tidak diketahui.";
@@ -361,21 +365,22 @@ export default function JenisMitraPage() {
         await updatePartnerType(editingType.id, {
           name: typeForm.name.trim(),
           commission_mode: typeForm.commissionMode,
-          commission_value: typeForm.commissionValue.trim(),
+          commission_value: stripThousandDots(typeForm.commissionValue) || "0",
           description: typeForm.description.trim(),
         });
-        setTypeFormSuccess("Partner type berhasil diperbarui.");
+        setTypeFormSuccess("Jenis mitra berhasil diperbarui.");
         await reloadTypes(editingType.id);
       } else {
         const created = await createPartnerType({
           code: typeForm.code.trim().toUpperCase(),
           name: typeForm.name.trim(),
           commission_mode: typeForm.commissionMode,
-          commission_value: typeForm.commissionValue.trim(),
+          commission_value: stripThousandDots(typeForm.commissionValue) || "0",
           description: typeForm.description.trim() || undefined,
         });
-        setTypeFormSuccess("Partner type baru berhasil dibuat.");
+        setTypeFormSuccess(`Jenis mitra ${created.name} (${created.code}) berhasil dibuat.`);
         await reloadTypes(created.id);
+        setShowTypeForm(false);
       }
     } catch (error) {
       setTypeFormError(getErrorMessage(error));

@@ -16,6 +16,8 @@ import MitraSalesFormModal, {
   type PartnerFormState,
 } from "./MitraSalesFormModal";
 import AnalyticsTab from "./AnalyticsTab";
+import { PartnerActivityBadge } from "@/app/components/PartnerActivityBadge";
+import { PartnerPICLabel } from "@/app/components/PartnerPICLabel";
 
 type TableMode =
   | "PARTNER_TYPES"
@@ -539,74 +541,65 @@ export default function MitraSalesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 p-4">
-            {loadingMaster ? (
-              <div className="rounded-2xl bg-gray-50 p-8 text-center text-sm font-bold text-gray-500">
-                Memuat jenis mitra...
-              </div>
-            ) : filteredPartnerTypes.length === 0 ? (
-              <div className="rounded-2xl bg-gray-50 p-8 text-center text-sm font-bold text-gray-500">
-                Jenis mitra tidak ditemukan.
-              </div>
-            ) : (
-              filteredPartnerTypes.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="font-black text-gray-900">{item.name}</p>
-                      <p className="mt-1 text-xs font-bold text-gray-400">
+          <div className="overflow-x-auto p-0">
+            <table className="w-full min-w-[800px] text-left text-sm text-gray-600">
+              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+                <tr>
+                  <th className="px-4 py-4 font-bold">Kode</th>
+                  <th className="px-4 py-4 font-bold">Jenis Mitra</th>
+                  <th className="px-4 py-4 font-bold">Komisi Dasar</th>
+                  <th className="px-4 py-4 font-bold">Deskripsi</th>
+                  <th className="px-4 py-4 text-center font-bold">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {loadingMaster ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                      Memuat jenis mitra...
+                    </td>
+                  </tr>
+                ) : filteredPartnerTypes.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                      Jenis mitra tidak ditemukan.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPartnerTypes.map((item) => (
+                    <tr key={item.id} className="transition-colors hover:bg-gray-50">
+                      <td className="px-4 py-4 align-top font-bold text-gray-900">
                         {item.code}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <span className="w-max rounded-full bg-red-50 px-3 py-1 text-[10px] font-black text-[#C92C1E]">
-                        {item.commission_mode}
-                      </span>
-
-                      <Link
-                        href={`/menu/mitra-sales/jenis-mitra/${item.id}`}
-                        className="w-max rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition hover:bg-blue-100"
-                      >
-                        Detail
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Mode
-                      </p>
-                      <p className="mt-1 text-sm font-black text-gray-900">
-                        {item.commission_mode || "-"}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Komisi Dasar
-                      </p>
-                      <p className="mt-1 text-sm font-black text-gray-900">
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-bold text-gray-900">{item.name}</p>
+                        <p className="mt-1 text-xs text-gray-400">
+                          Mode dasar {item.commission_mode}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 align-top font-medium text-gray-900">
                         {formatFlatCommission(item)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Deskripsi
-                      </p>
-                      <p className="mt-1 text-sm font-bold text-gray-600">
-                        {item.description || "Belum ada deskripsi."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+                      </td>
+                      <td className="px-4 py-4 align-top max-w-[200px]">
+                        <p className="truncate whitespace-normal text-xs leading-relaxed text-gray-600">
+                          {item.description || "Belum ada deskripsi."}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 text-center align-top">
+                        <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/menu/mitra-sales/jenis-mitra/${item.id}`}
+                            className="rounded-lg bg-blue-50 px-3 py-2 text-[10px] font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                          >
+                            Detail
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : (
@@ -656,141 +649,113 @@ export default function MitraSalesPage() {
             </form>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 p-4">
-            {loading ? (
-              <div className="rounded-2xl bg-gray-50 p-8 text-center text-sm font-bold text-gray-500">
-                Memuat data mitra...
-              </div>
-            ) : visiblePartners.length === 0 ? (
-              <div className="rounded-2xl bg-gray-50 p-8 text-center text-sm font-bold text-gray-500">
-                Data mitra tidak ditemukan.
-              </div>
-            ) : (
-              visiblePartners.map((partner) => (
-                <div
-                  key={partner.id}
-                  className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:border-red-100 hover:bg-red-50/20"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-base font-black text-gray-900">
-                        {partner.name || "-"}
-                      </p>
-                      <p className="mt-1 text-xs font-bold text-gray-400">
-                        {partner.code || `ID #${partner.id}`}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`w-max rounded-full border px-3 py-1 text-[10px] font-black ${getStatusBadgeClass(
-                        partner.status,
-                      )}`}
-                    >
-                      {partner.status || "-"}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Jenis Mitra
-                      </p>
-                      <p className="mt-1 text-sm font-black text-gray-900">
-                        {partner.partner_type?.name || "-"}
-                      </p>
-                      <p className="mt-1 text-[11px] font-bold text-gray-400">
-                        {partner.partner_type?.code || "-"}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Kontak
-                      </p>
-                      <p className="mt-1 text-sm font-black text-gray-900">
-                        {partner.phone || "-"}
-                      </p>
-                      <p className="mt-1 break-words text-[11px] font-bold text-gray-400">
-                        {partner.email || "-"}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Komisi Dasar
-                      </p>
-                      <p className="mt-1 text-sm font-black text-gray-900">
+          <div className="overflow-x-auto p-0">
+            <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+              <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+                <tr>
+                  <th className="px-4 py-4 font-bold">Mitra</th>
+                  <th className="px-4 py-4 font-bold">PIC</th>
+                  <th className="px-4 py-4 font-bold">Jenis Mitra</th>
+                  <th className="px-4 py-4 font-bold">Kontak</th>
+                  <th className="px-4 py-4 font-bold">Komisi Dasar</th>
+                  <th className="px-4 py-4 font-bold">Status</th>
+                  <th className="px-4 py-4 font-bold">Alamat</th>
+                  <th className="px-4 py-4 text-center font-bold">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                      Memuat data mitra...
+                    </td>
+                  </tr>
+                ) : visiblePartners.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                      Data mitra tidak ditemukan.
+                    </td>
+                  </tr>
+                ) : (
+                  visiblePartners.map((partner) => (
+                    <tr key={partner.id} className="transition-colors hover:bg-gray-50">
+                      <td className="px-4 py-4 align-top">
+                        <div className="flex flex-col gap-1">
+                          <p className="font-bold text-gray-900">{partner.name || "-"}</p>
+                          <p className="text-xs text-gray-400">{partner.code || `ID #${partner.id}`}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <PartnerPICLabel partnerId={partner.id} />
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-bold text-gray-900">{partner.partner_type?.name || "-"}</p>
+                        <p className="mt-1 text-xs text-gray-400">{partner.partner_type?.code || "-"}</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-medium text-gray-900">{partner.phone || "-"}</p>
+                        <p className="mt-1 text-xs text-gray-400">{partner.email || "-"}</p>
+                      </td>
+                      <td className="px-4 py-4 align-top font-medium text-gray-900">
                         {formatFlatCommission(partner.partner_type)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Updated
-                      </p>
-                      <p className="mt-1 text-sm font-black text-gray-900">
-                        {formatDateTime(partner.updated_at)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-gray-50 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">
-                        Alamat
-                      </p>
-                      <p className="mt-1 break-words text-sm font-black text-gray-900">
-                        {partner.address || "-"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:justify-end">
-                    <Link
-                      href={`/menu/mitra-sales/detail?id=${partner.id}`}
-                      className="rounded-lg bg-blue-50 px-3 py-2 text-center text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                    >
-                      Detail & PIC
-                    </Link>
-
-                    {tableMode === "ACTIVE_PARTNERS" ? (
-                      <>
-                        <Link
-                          href={`/menu/mitra-sales/detail?id=${partner.id}&tab=referral`}
-                          className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-black text-[#C92C1E] transition-colors hover:bg-red-100"
-                        >
-                          + Lead Afiliasi
-                        </Link>
-
-                        <button
-                          type="button"
-                          onClick={() => openEditPartnerModal(partner)}
-                          className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => void handleDeactivatePartner(partner)}
-                          disabled={saving}
-                          className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-black text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Nonaktif
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => void handleRestorePartner(partner)}
-                        disabled={saving}
-                        className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Pulihkan
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <PartnerActivityBadge partnerId={partner.id} />
+                      </td>
+                      <td className="px-4 py-4 align-top max-w-[200px]">
+                        <p className="truncate whitespace-normal text-xs leading-relaxed text-gray-600">
+                          {partner.address || "-"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                          <Link
+                            href={`/menu/mitra-sales/detail?id=${partner.id}`}
+                            className="rounded-lg bg-blue-50 px-3 py-2 text-center text-[10px] font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                          >
+                            Detail & PIC
+                          </Link>
+                          {tableMode === "ACTIVE_PARTNERS" ? (
+                            <>
+                              <Link
+                                href={`/menu/mitra-sales/detail?id=${partner.id}&tab=referral`}
+                                className="rounded-lg bg-red-50 px-3 py-2 text-center text-[10px] font-black text-[#C92C1E] transition-colors hover:bg-red-100"
+                              >
+                                + Lead Afiliasi
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => openEditPartnerModal(partner)}
+                                className="rounded-lg bg-orange-50 px-3 py-2 text-[10px] font-black text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeactivatePartner(partner)}
+                                disabled={saving}
+                                className="rounded-lg bg-gray-50 px-3 py-2 text-[10px] font-black text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Nonaktif
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleRestorePartner(partner)}
+                              disabled={saving}
+                              className="rounded-lg bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Pulihkan
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
 
           <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
