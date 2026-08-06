@@ -526,10 +526,8 @@ export default function KelolaanMitraPage() {
 
   const isSales = currentRole === "SALES";
   const isAdmin = currentRole === "" || currentRole === "ADMIN";
-  const canManageTypes =
-    currentRole === "" ||
-    currentRole === "ADMIN" ||
-    currentRole === "SUPERVISOR";
+  // Backend: partner-type CRUD (create/update/delete) is ADMIN-only (canManagePartnerType).
+  const canManageTypes = currentRole === "ADMIN";
 
   useEffect(() => {
     if (!showPartnerModal && !showTypeModal) return;

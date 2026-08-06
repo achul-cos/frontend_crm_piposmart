@@ -19,6 +19,7 @@ import {
   bulkSoftDeleteOwners,
   bulkCreateOwnerOutlets,
   getStoredAccessToken,
+  getProfile,
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
@@ -630,6 +631,25 @@ export default function OwnerOutletPage() {
   };
 
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [currentRole, setCurrentRole] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    getProfile()
+      .then((profile) => {
+        if (!cancelled) setCurrentRole(profile.role || "");
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentRole("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Backend: file-Excel exports (/owners/export/download*) are ADMIN-only —
+  // they stream the raw admin master file with no per-actor scoping possible.
+  const canExportOwnerExcel = currentRole === "ADMIN";
 
   // FIX: Menambahkan parameter tanggal (date_from & date_to) dari filter UI
   const handleDownloadExcel = async (type: "owner-outlet" | "owner") => {
@@ -661,6 +681,9 @@ export default function OwnerOutletPage() {
       });
 
       if (!res.ok) {
+        if (res.status === 403) {
+          throw new Error("Anda tidak memiliki izin untuk mengunduh data ini.");
+        }
         const errText = await res.text();
         throw new Error(errText || "Gagal mengunduh file");
       }
@@ -684,7 +707,11 @@ export default function OwnerOutletPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Gagal mengekspor data owner:", error);
-      alert("Terjadi kesalahan saat mengunduh data ekspor.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan saat mengunduh data ekspor.",
+      );
     } finally {
       setIsExporting(false);
     }
@@ -969,9 +996,10 @@ export default function OwnerOutletPage() {
       )}
       <button onClick={() => setIsAddOwnerModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"><PlusIcon className="h-4 w-4" /> Tambah Owner</button>
       <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"><UploadIcon className="h-4 w-4" /> Import Data</button>
+      {canExportOwnerExcel && (
       <div className="relative">
-        <button 
-          onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
+        <button
+          onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
           disabled={isExporting}
           className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:opacity-50"
         >
@@ -998,6 +1026,7 @@ export default function OwnerOutletPage() {
           </div>
         )}
       </div>
+      )}
       <button onClick={() => setIsImportHistoryModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"><HistoryIcon className="h-4 w-4" /> Riwayat</button>
       <button onClick={() => router.push("/menu/owner-outlet/trash")} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"><TrashIcon className="h-4 w-4" /> Hapus</button>
     </>

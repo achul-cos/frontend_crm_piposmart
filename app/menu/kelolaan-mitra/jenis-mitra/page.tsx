@@ -120,7 +120,12 @@ export default function JenisMitraPage() {
   const [typeForm, setTypeForm] = useState<TypeFormState>(EMPTY_TYPE_FORM);
   const [ruleForm, setRuleForm] = useState<RuleFormState>(EMPTY_RULE_FORM);
 
-  const canManage = currentRole === "" || currentRole === "ADMIN" || currentRole === "SUPERVISOR";
+  // Backend: partner-type CRUD (create/update/delete) is ADMIN-only (canManagePartnerType).
+  const canManageTypes = currentRole === "ADMIN";
+  // Backend: creating a commission rule allows ADMIN + SUPERVISOR (CreateCommissionRule).
+  const canCreateRules = currentRole === "ADMIN" || currentRole === "SUPERVISOR";
+  // Backend: deactivating a commission rule is ADMIN-only (DeactivateCommissionRule).
+  const canDeactivateRules = currentRole === "ADMIN";
 
   const selectedPlan = useMemo(() => {
     if (!ruleForm.planId) return null;
@@ -467,7 +472,7 @@ export default function JenisMitraPage() {
               <h1 className="mt-4 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">Master Partner Type dan Rule Komisi</h1>
               <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-gray-500">Halaman ini memakai backend `partner-types` dan `commission-rules`. Rule komisi saat ini package-scoped dan effective-dated, dengan opsi mode TIER bila spesifikasi komisinya bertingkat.</p>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><Link href="/menu/kelolaan-mitra" className="rounded-2xl border border-gray-200 px-5 py-3 text-center text-xs font-black text-gray-600 transition hover:bg-gray-50">Kembali ke Mitra</Link>{canManage ? <button type="button" onClick={startCreateType} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]">+ Tambah Partner Type</button> : null}</div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><Link href="/menu/kelolaan-mitra" className="rounded-2xl border border-gray-200 px-5 py-3 text-center text-xs font-black text-gray-600 transition hover:bg-gray-50">Kembali ke Mitra</Link>{canManageTypes ? <button type="button" onClick={startCreateType} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216]">+ Tambah Partner Type</button> : null}</div>
           </div>
         </div>
       </section>
@@ -542,7 +547,7 @@ export default function JenisMitraPage() {
                           >
                             {isSelected ? "Terpilih" : "Pilih"}
                           </button>
-                          {canManage ? (
+                          {canManageTypes ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -555,7 +560,7 @@ export default function JenisMitraPage() {
                               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                             </button>
                           ) : null}
-                          {canManage ? (
+                          {canManageTypes ? (
                             <button
                               type="button"
                               disabled
@@ -586,7 +591,7 @@ export default function JenisMitraPage() {
                   Komisi dasar di partner type tetap menjadi fallback jika tidak ada rule backend yang cocok.
                 </p>
               </div>
-              {canManage && selectedType ? (
+              {canManageTypes && selectedType ? (
                 <button
                   type="button"
                   onClick={startEditType}
@@ -651,7 +656,7 @@ export default function JenisMitraPage() {
             {ruleFormSuccess ? <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{ruleFormSuccess}</div> : null}
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"><select value={ruleForm.planId} onChange={(event) => handlePlanChange(event.target.value)} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="">Semua Plan</option>{plans.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.tenure_months} bln)</option>)}</select><select value={ruleForm.mode} onChange={(event) => setRuleForm((current) => ({ ...current, mode: event.target.value as "PERCENTAGE" | "FIXED" | "TIER" }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option><option value="TIER">TIER</option></select>{ruleForm.mode === "TIER" ? <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">Mode TIER memakai daftar bracket di bawah.</div> : <input value={ruleForm.value} onChange={(event) => setRuleForm((current) => ({ ...current, value: event.target.value }))} placeholder={ruleForm.mode === "PERCENTAGE" ? "Contoh: 7.5" : "Contoh: 250000"} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" />}<input type="datetime-local" value={ruleForm.effectiveFrom} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><input type="datetime-local" value={ruleForm.effectiveTo} onChange={(event) => setRuleForm((current) => ({ ...current, effectiveTo: event.target.value }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold outline-none focus:border-[#C92C1E]" /><div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-500">{!selectedPlan ? "Rule akan berlaku untuk semua plan (fallback komisi dasar)." : `Plan terpilih: ${selectedPlan.name} — harga ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(selectedPlan.price || 0))}`}</div></div>
             {ruleForm.mode === "TIER" ? <div className="mt-4 space-y-3">{ruleForm.tiers.map((tier, index) => <div key={index} className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-5"><input type="number" min={1} value={tier.min_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, min_closings: Number(event.target.value) || 1 } : item) }))} placeholder="Min closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><input value={tier.max_closings} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, max_closings: event.target.value } : item) }))} placeholder="Max closings" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><select value={tier.mode} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, mode: event.target.value as "PERCENTAGE" | "FIXED" } : item) }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]"><option value="PERCENTAGE">PERCENTAGE</option><option value="FIXED">FIXED</option></select><input value={tier.value} onChange={(event) => setRuleForm((current) => ({ ...current, tiers: current.tiers.map((item, tierIndex) => tierIndex === index ? { ...item, value: event.target.value } : item) }))} placeholder="Nilai komisi tier" className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" /><button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: current.tiers.filter((_, tierIndex) => tierIndex !== index).map((item, itemIndex) => ({ ...item, tier_order: itemIndex + 1 })) }))} disabled={ruleForm.tiers.length === 1} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">Hapus Tier</button></div>)}<button type="button" onClick={() => setRuleForm((current) => ({ ...current, tiers: [...current.tiers, { tier_order: current.tiers.length + 1, min_closings: current.tiers.length + 1, max_closings: "", mode: "PERCENTAGE", value: "" }] }))} className="rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-600 transition hover:bg-gray-50">+ Tambah Tier</button></div> : null}
-            <div className="mt-4 flex justify-end"><button type="submit" disabled={!canManage || savingRule || !selectedTypeId} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingRule ? "Menyimpan Rule..." : "Simpan Commission Rule"}</button></div>
+            <div className="mt-4 flex justify-end"><button type="submit" disabled={!canCreateRules || savingRule || !selectedTypeId} className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-300">{savingRule ? "Menyimpan Rule..." : "Simpan Commission Rule"}</button></div>
           </form>
         </div>
 
@@ -687,7 +692,7 @@ export default function JenisMitraPage() {
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.value || (rule.tiers && rule.tiers.length > 0 ? `${rule.tiers.length} tier` : "-")}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{formatDateTime(rule.effective_from)} - {formatDateTime(rule.effective_to)}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.active ? "ACTIVE" : "INACTIVE"}</td>
-                        <td className="px-4 py-4">{canManage && rule.active ? <button type="button" onClick={() => void handleDeactivateRule(rule)} className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100" title="Nonaktifkan"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></button> : <span className="text-xs font-bold text-gray-300">-</span>}</td>
+                        <td className="px-4 py-4">{canDeactivateRules && rule.active ? <button type="button" onClick={() => void handleDeactivateRule(rule)} className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100" title="Nonaktifkan"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></button> : <span className="text-xs font-bold text-gray-300">-</span>}</td>
                       </tr>
                     ))
                   )}
