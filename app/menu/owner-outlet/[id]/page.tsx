@@ -20,6 +20,22 @@ import {
 } from "@/app/lib/api";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import OwnerOverviewCard from "../OwnerOverviewCard";
+
+function formatIndonesianDate(value?: string | null, includeTime = false) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  
+  const formatted = new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+  }).format(date);
+
+  return includeTime ? `${formatted} WIB` : formatted;
+}
 
 export default function OwnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   usePageTitle("Detail Owner");
@@ -94,8 +110,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addForm.code.trim() || !addForm.name.trim()) {
-      alert("Kode dan Nama Outlet wajib diisi.");
+    if (!addForm.name.trim()) {
+      alert("Nama Outlet wajib diisi.");
       return;
     }
 
@@ -228,6 +244,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       ) : (
         <div className="space-y-6">
+          <OwnerOverviewCard ownerId={ownerId} />
+
           {/* Level 1: Ringkasan (Quick Stats) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
@@ -274,7 +292,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Identitas owner</p>
               </div>
             </div>
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Owner</span>
                 <span className="font-bold text-gray-900">{owner.name}</span>
@@ -282,6 +300,10 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Brand</span>
                 <span className="font-bold text-gray-900">{owner.brand_name || "-"}</span>
+              </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tanggal Dibuat</span>
+                <span className="font-bold text-gray-900">{formatIndonesianDate(owner.created_at)}</span>
               </div>
             </div>
           </div>
@@ -381,6 +403,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                       <th className="px-6 py-4">Kontak</th>
                       <th className="px-6 py-4">Lokasi</th>
                       <th className="px-6 py-4">Alamat Lengkap</th>
+                      <th className="px-6 py-4">Tgl. Dibuat</th>
                       <th className="px-6 py-4 text-center">Status</th>
                       <th className="px-6 py-4 text-center">Aksi</th>
                     </tr>
@@ -395,13 +418,14 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                           {[outlet.sub_district, outlet.district, outlet.city, outlet.province].filter(Boolean).join(", ") || "-"}
                         </td>
                         <td className="px-6 py-4 text-gray-600 font-medium">{outlet.address || "-"}</td>
+                        <td className="px-6 py-4 text-gray-600 font-medium whitespace-nowrap">{formatIndonesianDate(outlet.created_at)}</td>
                         <td className="px-6 py-4 text-center">
                           <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-tight ${
                             (outlet.status || "ACTIVE") === "ACTIVE" 
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
-                              : "bg-red-50 text-red-700 border border-red-200"
+                              : "bg-rose-50 text-rose-700 border border-rose-200"
                           }`}>
-                            <span className={`w-1 h-1 rounded-full ${(outlet.status || "ACTIVE") === "ACTIVE" ? "bg-emerald-500" : "bg-red-500"}`}></span>
+                            <span className={`w-1 h-1 rounded-full ${(outlet.status || "ACTIVE") === "ACTIVE" ? "bg-emerald-500" : "bg-rose-500"}`}></span>
                             {outlet.status || "ACTIVE"}
                           </span>
                         </td>
@@ -551,6 +575,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                       <th className="px-6 py-4">Tipe Order</th>
                       <th className="px-6 py-4">Nama Outlet</th>
                       <th className="px-6 py-4">Paket / Plan</th>
+                      <th className="px-6 py-4">Tgl. Mulai</th>
+                      <th className="px-6 py-4">Tgl. Berakhir</th>
                       <th className="px-6 py-4 text-right">Total Bayar</th>
                       <th className="px-6 py-4 text-center">Status</th>
                       <th className="px-6 py-4">Tanggal Order</th>
@@ -573,6 +599,12 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                           <td className="px-6 py-4 font-bold text-gray-800">{sub.outlet_name || "-"}</td>
                           <td className="px-6 py-4 font-bold text-gray-800">
                             {[sub.package_name, sub.plan_name].filter(Boolean).join(" - ") || "-"}
+                          </td>
+                          <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
+                            {formatIndonesianDate(sub.start_date || sub.created_at)}
+                          </td>
+                          <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
+                            {formatIndonesianDate(sub.end_date)}
                           </td>
                           <td className="px-6 py-4 text-right font-black text-gray-900">
                             Rp {numTotal.toLocaleString("id-ID")}
@@ -631,15 +663,14 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
-                    Kode Outlet <span className="text-[#C92C1E]">*</span>
+                    Kode Outlet <span className="text-gray-400 text-[10px] normal-case tracking-normal">(Opsional — Otomatis jika kosong)</span>
                   </label>
                   <input
                     type="text"
                     value={addForm.code}
                     onChange={(e) => setAddForm({...addForm, code: e.target.value})}
-                    placeholder="Contoh: OUT-001"
+                    placeholder="Kosongkan untuk otomatis (OTL-XXXXX)"
                     className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-[#C92C1E] focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900"
-                    required
                     disabled={isSubmitting}
                   />
                 </div>

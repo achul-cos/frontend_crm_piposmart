@@ -104,7 +104,7 @@ export default function OwnerOverviewCard({ ownerId }: { ownerId: number }) {
           className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wide ${
             ownerStatus.subscription_status === "BERLANGGANAN"
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-gray-200 bg-gray-100 text-gray-600"
+              : "border-red-200 bg-red-50 text-red-700 font-bold"
           }`}
         >
           {ownerStatus.subscription_status === "BERLANGGANAN" ? "Berlangganan" : "Tidak Berlangganan"}

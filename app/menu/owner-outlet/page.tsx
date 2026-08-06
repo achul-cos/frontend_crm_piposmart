@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   fetchOwners,
@@ -88,7 +88,9 @@ function AutocompleteFilter({ label, placeholder, value, onChange, options }: { 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt =>
+  const uniqueOptions = useMemo(() => Array.from(new Set(options.filter(Boolean))), [options]);
+
+  const filteredOptions = uniqueOptions.filter((opt) =>
     opt.toLowerCase().startsWith(value.toLowerCase())
   );
 
@@ -108,9 +110,9 @@ function AutocompleteFilter({ label, placeholder, value, onChange, options }: { 
       />
       {isOpen && value && filteredOptions.length > 0 && (
         <ul className="absolute left-0 top-full z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-          {filteredOptions.map((opt) => (
+          {filteredOptions.map((opt, idx) => (
             <li
-              key={opt}
+              key={`${opt}-${idx}`}
               onClick={() => {
                 onChange(opt);
                 setIsOpen(false);
@@ -315,6 +317,7 @@ export default function OwnerOutletPage() {
     brand_name: "",
     phone: "",
     city: "",
+    status: "",
   });
   const [selectedOwnerIds, setSelectedOwnerIds] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -444,8 +447,12 @@ export default function OwnerOutletPage() {
         brand_name: filters.brand_name,
         phone: filters.phone,
         city: filters.city,
+        status: filters.status || undefined,
+        subscription_status: filters.status || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
+        created_from: startDate || undefined,
+        created_to: endDate || undefined,
         sort,
       });
       setOwners(res.data.items);
@@ -678,7 +685,9 @@ export default function OwnerOutletPage() {
         "Total Call/Bulan": "",
         "Capaian/Bulan": "",
         "Total Closing": "",
-        "Create Date Project": item.owner_created_at ? new Date(item.owner_created_at).toLocaleDateString("id-ID") : "",
+        "Create Date Project": item.owner_created_at && !isNaN(new Date(item.owner_created_at).getTime())
+          ? new Date(item.owner_created_at).toLocaleDateString("id-ID")
+          : "-",
         "Bulan": "",
       }));
 
@@ -734,6 +743,7 @@ export default function OwnerOutletPage() {
     try {
       await bulkSoftDeleteOwners(selectedOwnerIds);
       setSelectedOwnerIds([]);
+      setPagination((prev) => ({ ...prev, page: 1 }));
       loadOwners();
     } catch (err: unknown) {
       alert(getErrorMessage(err, "Gagal menghapus owner terpilih."));
@@ -926,26 +936,29 @@ export default function OwnerOutletPage() {
 
   const getOwnerStatus = (owner: BackendOwner) => {
     const st = (owner.subscription_status || owner.status || "").toUpperCase();
-    if (st === "SUBSCRIBE" || st === "BERLANGGANAN") return "SUBSCRIBE";
+    if (st === "SUBSCRIBE" || st === "BERLANGGANAN" || st === "ACTIVE") return "BERLANGGANAN";
+    if (st === "NEW" || st === "BARU") return "NEW";
+    if (st === "AKAN_JATUH_TEMPO" || st === "AKAN JATUH TEMPO") return "AKAN JATUH TEMPO";
+    if (st === "JATUH_TEMPO" || st === "JATUH TEMPO") return "JATUH TEMPO";
+    if (st === "TELAH_JATUH_TEMPO" || st === "TELAH JATUH TEMPO") return "TELAH JATUH TEMPO";
+    if (st === "EXPIRED" || st === "UNSUBSCRIBE") return "UNSUBSCRIBE";
+    if (st === "NOT_SUBSCRIBE" || st === "NOT SUBSCRIBE" || st === "TIDAK BERLANGGANAN") return "TIDAK BERLANGGANAN";
     if (st === "TRIAL") return "TRIAL";
-    if (st === "NOT_SUBSCRIBE" || st === "NOT SUBSCRIBE" || st === "TIDAK BERLANGGANAN") return "NOT SUBSCRIBE";
-    if (st === "ACTIVE") return "SUBSCRIBE";
-    return st || "NOT SUBSCRIBE";
+    return st || "TIDAK BERLANGGANAN";
   };
 
   const getOwnerStatusBadgeStyle = (status: string) => {
-    switch (status) {
-      case "SUBSCRIBE":
-        return "border border-emerald-200 bg-emerald-50 text-emerald-700";
-      case "TRIAL":
-        return "border border-violet-300 bg-violet-50 text-violet-800";
-      case "NOT SUBSCRIBE":
-      default:
-        return "border border-red-200 bg-red-50 text-red-700";
+    const st = (status || "").toUpperCase();
+    if (st.includes("BERLANGGANAN") || st === "SUBSCRIBE" || st === "ACTIVE") {
+      return "border border-emerald-200 bg-emerald-50 text-emerald-700";
     }
+    if (st === "TRIAL" || st === "NEW" || st === "BARU") {
+      return "border border-blue-200 bg-blue-50 text-blue-700";
+    }
+    return "border border-red-200 bg-red-50 text-red-700 font-bold";
   };
 
-  const subscribeCount = owners.filter((o) => getOwnerStatus(o) === "SUBSCRIBE").length;
+  const subscribeCount = owners.filter((o) => getOwnerStatus(o) === "BERLANGGANAN").length;
   const trialCount = owners.filter((o) => getOwnerStatus(o) === "TRIAL").length;
   const notSubscribeCount = owners.length - subscribeCount - trialCount;
 
@@ -996,7 +1009,7 @@ export default function OwnerOutletPage() {
           </div>
           <div className="mt-1">
             <h2 className="text-3xl font-black text-gray-900">{subscribeCount}</h2>
-            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner yang berlangganan minimal di 1 outlet.</p>
+            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner yang berlangganan (Halaman Ini).</p>
           </div>
         </div>
       </div>
@@ -1018,7 +1031,7 @@ export default function OwnerOutletPage() {
         <div className="flex flex-col">
           <div className="flex justify-between items-start">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Belum Berlangganan</p>
-            <div className="h-3 w-3 rounded-full bg-slate-400"></div>
+            <div className="h-3 w-3 rounded-full bg-red-500"></div>
           </div>
           <div className="mt-1">
             <h2 className="text-3xl font-black text-gray-900">{notSubscribeCount}</h2>
@@ -1077,9 +1090,10 @@ export default function OwnerOutletPage() {
   const uniqueBrands = Array.from(new Set(owners.map(o => o.brand_name).filter(Boolean))) as string[];
   const uniquePhones = Array.from(new Set(owners.map(o => o.phone).filter(Boolean))) as string[];
   const uniqueCities = Array.from(new Set(owners.map(o => o.city).filter(Boolean))) as string[];
+  const ownerStatusOptions = ["BERLANGGANAN", "TRIAL", "TIDAK BERLANGGANAN"];
 
   const filterInputs = (
-    <div className="grid grid-cols-2 gap-4 w-full md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-4 w-full md:grid-cols-3 lg:grid-cols-7">
       <AutocompleteFilter
         label="Nama Owner"
         placeholder="Filter Nama..."
@@ -1120,6 +1134,24 @@ export default function OwnerOutletPage() {
         }}
         options={uniqueCities}
       />
+      <div className="flex flex-col gap-1.5 w-full">
+        <span className="text-xs font-semibold text-black">Status</span>
+        <select
+          value={filters.status || ""}
+          onChange={(e) => {
+            setFilters((prev) => ({ ...prev, status: e.target.value }));
+            setPagination((prev) => ({ ...prev, page: 1 }));
+          }}
+          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+        >
+          <option value="">Semua Status</option>
+          {ownerStatusOptions.map((st) => (
+            <option key={st} value={st}>
+              {st}
+            </option>
+          ))}
+        </select>
+      </div>
       <label className="flex flex-col gap-1.5 w-full">
         <span className="text-xs font-semibold text-black">Dari Tanggal</span>
         <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]" />
@@ -1230,14 +1262,15 @@ export default function OwnerOutletPage() {
                       />
                     </th>
                     <th className="w-12 px-4 py-4 text-center font-bold">No.</th>
+                    {renderSortableHeader("code", "Kode Owner")}
                     {renderSortableHeader("name", "Nama Owner")}
                     {renderSortableHeader("brand_name", "Brand")}
                     {renderSortableHeader("phone", "Kontak")}
                     {renderSortableHeader("city", "Lokasi")}
+                    <th className="px-4 py-4 font-bold text-left">Saldo Aplikasi</th>
                     {renderSortableHeader("created_at", "Tgl. Dibuat")}
                     {renderSortableHeader("status", "Status")}
                     {renderSortableHeader("outlet_count", "Outlet")}
-                    {renderSortableHeader("wallet_balance", "Saldo Aplikasi")}
                     <th className="px-4 py-4 text-center font-bold">Aksi</th>
                   </tr>
                 </thead>
@@ -1245,13 +1278,13 @@ export default function OwnerOutletPage() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
+                      <td colSpan={11} className="px-6 py-10 text-center text-gray-500">
                         Memuat data...
                       </td>
                     </tr>
                   ) : owners.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
+                      <td colSpan={11} className="px-6 py-10 text-center text-gray-500">
                         Tidak ada data owner ditemukan.
                       </td>
                     </tr>
@@ -1304,6 +1337,9 @@ export default function OwnerOutletPage() {
                           <td className="px-4 py-4 text-center font-bold text-gray-900">
                             {(pagination.page - 1) * pagination.limit + owners.indexOf(owner) + 1}
                           </td>
+                          <td className="px-4 py-4 align-top font-bold text-gray-900 whitespace-nowrap">
+                            {owner.code || "-"}
+                          </td>
                           <td className="px-4 py-4 align-top font-bold text-gray-900">
                             {owner.name}
                           </td>
@@ -1313,6 +1349,9 @@ export default function OwnerOutletPage() {
                           <td className="px-4 py-4 align-top">{owner.phone}</td>
                           <td className="px-4 py-4 align-top">
                             {[owner.sub_district, owner.district, owner.city, owner.province].filter(Boolean).join(", ") || "-"}
+                          </td>
+                          <td className="px-4 py-4 align-top text-left whitespace-nowrap font-semibold">
+                            <WalletBalanceCell ownerId={owner.id} />
                           </td>
                           <td className="px-4 py-4 align-top whitespace-nowrap">
                             {owner.created_at ? new Date(owner.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : "-"}
@@ -1335,9 +1374,6 @@ export default function OwnerOutletPage() {
                             <span className="inline-flex items-center justify-center rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-700">
                               {owner.outlet_count || 0}
                             </span>
-                          </td>
-                          <td className="px-4 py-4 align-top text-left whitespace-nowrap">
-                            <WalletBalanceCell ownerId={owner.id} />
                           </td>
                           <td
                             className="px-4 py-4 text-center"

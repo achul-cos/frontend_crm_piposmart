@@ -27,7 +27,7 @@ function shouldHideByDefault(label: string) {
     return false;
   }
 
-  if (["payment", "wallet", "ledger", "saldo owner", "saldo aplikasi"].includes(normalized)) {
+  if (["payment", "wallet", "ledger"].includes(normalized)) {
     return true;
   }
 
@@ -67,11 +67,36 @@ export default function ColumnVisibilityControl({
       }));
 
       setColumns(headers);
+
+      let initialHidden: number[] | null = null;
+      if (!hasLoadedPreferenceRef.current) {
+        hasLoadedPreferenceRef.current = true;
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              const allowed = new Set(headers.map((c) => c.index));
+              initialHidden = parsed.filter(
+                (v): v is number => typeof v === "number" && allowed.has(v)
+              );
+            }
+          } catch {}
+        }
+        
+        if (initialHidden === null) {
+          initialHidden = headers
+            .filter((c) => shouldHideByDefault(c.label))
+            .map((c) => c.index);
+        }
+      }
+
       setHiddenColumns((current) => {
-        if (hasLoadedPreferenceRef.current || current.length > 0) return current;
-        return headers
-          .filter((column) => shouldHideByDefault(column.label))
-          .map((column) => column.index);
+        if (initialHidden !== null) {
+          return initialHidden;
+        }
+        const allowed = new Set(headers.map((c) => c.index));
+        return current.filter((idx) => allowed.has(idx));
       });
     };
 
@@ -94,40 +119,11 @@ export default function ColumnVisibilityControl({
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [tableId]);
+  }, [tableId, storageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined" || columns.length === 0) return;
-
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) {
-      hasLoadedPreferenceRef.current = false;
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
-
-      const allowed = new Set(columns.map((column) => column.index));
-      const sanitized = parsed.filter(
-        (value): value is number =>
-          typeof value === "number" && allowed.has(value)
-      );
-
-      hasLoadedPreferenceRef.current = true;
-      const timer = window.setTimeout(() => {
-        setHiddenColumns(sanitized);
-      }, 0);
-
-      return () => window.clearTimeout(timer);
-    } catch {
-      // abaikan preference rusak
-    }
-  }, [columns, storageKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || columns.length === 0) return;
+    if (!hasLoadedPreferenceRef.current) return;
     localStorage.setItem(storageKey, JSON.stringify(hiddenColumns));
   }, [columns, hiddenColumns, storageKey]);
 
@@ -196,7 +192,20 @@ export default function ColumnVisibilityControl({
     });
   };
 
-  if (columns.length === 0) return null;
+  if (columns.length === 0) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-400 shadow-sm opacity-60 cursor-not-allowed"
+      >
+        <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        {buttonLabel}
+      </button>
+    );
+  }
 
   return (
     <div className="relative">
