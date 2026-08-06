@@ -41,6 +41,7 @@ import CallPage, { CallFormResult } from "./call/page";
 import ActionButtons, { EditProfileModal } from "./action/page";
 import AnalyticsTab from "./AnalyticsTab";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import LeadFormModal from "./LeadFormModal";
 
 interface NasabahItem {
@@ -51,6 +52,7 @@ interface NasabahItem {
   no: number;
   pic: string;
   picRole?: string;
+  previousPic?: string;
   tanggalDibagikan: string;
   statusAkun: string;
   kodeBaris: string;
@@ -531,16 +533,14 @@ export default function DataKelolaanPage() {
     return [...supervisorList, ...salesList];
   }, [supervisorList, salesList]);
 
-  const [filterMode, setFilterMode] = useState<"harian" | "bulanan">("harian");
-
+  const [search, setSearch] = useState("");
   const [searchKodeOwner, setSearchKodeOwner] = useState("");
   const [searchNamaOwner, setSearchNamaOwner] = useState("");
   const [searchNamaBrand, setSearchNamaBrand] = useState("");
-  const [startDateFilter, setStartDateFilter] = useState(() => getTodayInputDate());
-  const [endDateFilter, setEndDateFilter] = useState(() => getTodayInputDate());
-  const [startMonthFilter, setStartMonthFilter] = useState("");
-  const [endMonthFilter, setEndMonthFilter] = useState("");
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
   const [picFilter, setPicFilter] = useState("Semua");
+  const [previousPicFilter, setPreviousPicFilter] = useState<string[]>([]);
   const [skorFilter, setSkorFilter] = useState("Semua");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
@@ -616,6 +616,21 @@ export default function DataKelolaanPage() {
   const [isSalesState, setIsSalesState] = useState(false);
   const [activeTodayDate, setActiveTodayDate] = useState(() => getTodayInputDate());
 
+  const formatIndonesianDate = useCallback((value?: string | null, includeTime = false) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    
+    const formatted = new Intl.DateTimeFormat("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+    }).format(date);
+
+    return formatted;
+  }, []);
+
   const mapBackendLeadToNasabahItem = useCallback((lead: BackendLead): NasabahItem => {
     const mainOutletName = lead.outlet?.name || (lead.outlet_id ? `Outlet #${lead.outlet_id}` : "-");
     const primaryCode = lead.outlet?.code || lead.owner?.code || "-";
@@ -624,7 +639,8 @@ export default function DataKelolaanPage() {
       no: lead.id,
       pic: lead.current_owner?.name || "-",
       picRole: lead.current_owner_role,
-      tanggalDibagikan: lead.created_at,
+      previousPic: lead.previous_pic || "-",
+      tanggalDibagikan: lead.assigned_at || lead.created_at,
       statusAkun: lead.status,
       kodeBaris: lead.code,
       kodeOwner: primaryCode,
@@ -659,7 +675,7 @@ export default function DataKelolaanPage() {
   const loadOwnersFromBackend = useCallback(() => {
     setIsLoading(true);
 
-    const q = [searchKodeOwner, searchNamaOwner, searchNamaBrand]
+    const q = [search, searchKodeOwner, searchNamaOwner, searchNamaBrand]
       .filter(Boolean)
       .join(" ");
 
@@ -684,11 +700,8 @@ export default function DataKelolaanPage() {
       params.score = skorFilter;
     }
 
-    if (filterMode === "harian") {
-      // Temporarily disabled to avoid hiding all leads by default since backend only checks next_follow_up_at
-      // if (startDateFilter) params.follow_up_from = startDateFilter;
-      // if (endDateFilter) params.follow_up_to = endDateFilter;
-    }
+    if (startDateFilter) params.created_from = startDateFilter;
+    if (endDateFilter) params.created_to = endDateFilter;
 
     if (sort && sort !== "no" && sort !== "-no") {
       // Map frontend sort keys to backend sort keys
@@ -725,46 +738,71 @@ export default function DataKelolaanPage() {
     mapBackendLeadToNasabahItem,
     currentPage,
     rowsPerPage,
+    search,
     searchKodeOwner,
     searchNamaOwner,
     searchNamaBrand,
     picFilter,
     skorFilter,
-    filterMode,
     startDateFilter,
     endDateFilter,
     sort
   ]);
 
   useEffect(() => {
-    const userName = localStorage.getItem("piposmart_user_name");
-    const currentUserRole = localStorage.getItem("piposmart_user_role") || "SALES";
+    getProfile()
+      .then((me) => {
+        if (me) {
+          const userRole = me.role_code || me.role || localStorage.getItem("piposmart_user_role") || "ADMIN";
+          const userName = me.name || localStorage.getItem("piposmart_user_name") || "User";
 
-    if (userName) setLoggedInUser(userName);
-    if (currentUserRole) setLoggedInRole(currentUserRole);
+          setLoggedInUser(userName);
+          setLoggedInRole(userRole);
+          localStorage.setItem("piposmart_user_name", userName);
+          localStorage.setItem("piposmart_user_role", userRole);
 
-    const isAdmin = isAdminRole(currentUserRole);
-    const isSupervisor = isSupervisorRole(currentUserRole);
-    const isSales = isSalesRole(currentUserRole);
+          const isAdmin = isAdminRole(userRole);
+          const isSupervisor = isSupervisorRole(userRole);
+          const isSales = isSalesRole(userRole);
 
-    setIsAdminState(isAdmin);
-    setIsSupervisorState(isSupervisor);
-    setIsSalesState(isSales);
+          setIsAdminState(isAdmin);
+          setIsSupervisorState(isSupervisor);
+          setIsSalesState(isSales);
 
-    if (isAdmin) {
-      getSalesList().then(setSalesList).catch(console.error);
-      getSupervisorList().then(setSupervisorList).catch(console.error);
-    } else if (isSupervisor) {
-      getSalesList().then(setSalesList).catch(console.error);
-      getProfile().then(me => {
-        if (me && me.id) {
-          setSupervisorList(prev => {
-            if (prev.find(s => s.id === me.id)) return prev;
-            return [...prev, { id: me.id, name: me.name, role_code: "SUPERVISOR" } as unknown as UserResponse];
-          });
+          if (isAdmin) {
+            getSalesList().then(setSalesList).catch(console.error);
+            getSupervisorList().then(setSupervisorList).catch(console.error);
+          } else if (isSupervisor) {
+            getSalesList().then(setSalesList).catch(console.error);
+            if (me.id) {
+              setSupervisorList([{ id: me.id, name: me.name, role_code: "SUPERVISOR" } as unknown as UserResponse]);
+            }
+          }
         }
-      }).catch(console.error);
-    }
+      })
+      .catch((err) => {
+        console.error("Failed to load profile in lead page:", err);
+        const currentUserRole = localStorage.getItem("piposmart_user_role") || "ADMIN";
+        const userName = localStorage.getItem("piposmart_user_name") || "Admin";
+
+        setLoggedInUser(userName);
+        setLoggedInRole(currentUserRole);
+
+        const isAdmin = isAdminRole(currentUserRole);
+        const isSupervisor = isSupervisorRole(currentUserRole);
+        const isSales = isSalesRole(currentUserRole);
+
+        setIsAdminState(isAdmin);
+        setIsSupervisorState(isSupervisor);
+        setIsSalesState(isSales);
+
+        if (isAdmin) {
+          getSalesList().then(setSalesList).catch(console.error);
+          getSupervisorList().then(setSupervisorList).catch(console.error);
+        } else if (isSupervisor) {
+          getSalesList().then(setSalesList).catch(console.error);
+        }
+      });
 
     loadOwnersFromBackend();
 
@@ -779,16 +817,11 @@ export default function DataKelolaanPage() {
 
       if (today !== activeTodayDate) {
         setActiveTodayDate(today);
-
-        if (filterMode === "harian") {
-          setStartDateFilter(today);
-          setEndDateFilter(today);
-        }
       }
     }, 60000);
 
     return () => window.clearInterval(interval);
-  }, [activeTodayDate, filterMode]);
+  }, [activeTodayDate]);
 
   useEffect(() => {
     const isAnyPopupOpen = editModalOpen || bulkPicModalOpen;
@@ -1424,72 +1457,43 @@ export default function DataKelolaanPage() {
 
 
 
-  const displayData = useMemo(() => {
-    const groupedMap = new Map<string, NasabahItem>();
+  const uniquePreviousPics = useMemo(() => {
+    const set = new Set<string>();
+    const supervisorNames = new Set(supervisorList.map((s) => s.name));
 
     dataNasabah.forEach((item) => {
-      const groupKey = [
-        String(item.kodeOwner || "").trim(),
-        String(item.projectBrand || "").trim().toLowerCase(),
-      ].join("::");
-
-      const existingItem = groupedMap.get(groupKey);
-
-      if (!existingItem) {
-        const sameOwnerRows = dataNasabah.filter(
-          (row) =>
-            String(row.kodeOwner || "").trim() === String(item.kodeOwner || "").trim() &&
-            String(row.projectBrand || "").trim().toLowerCase() ===
-              String(item.projectBrand || "").trim().toLowerCase(),
-        );
-
-        const outletRows = sameOwnerRows
-          .flatMap((row) => {
-            const listFromOutlets = row.outlets?.length
-              ? row.outlets.map((outletItem) => ({
-                  namaOutlet: outletItem.namaOutlet,
-                  noHpOutlet: outletItem.noHpOutlet || row.noHpOutlet || "",
-                }))
-              : [];
-
-            return [
-              ...listFromOutlets,
-              ...(row.outlet
-                ? [{ namaOutlet: row.outlet, noHpOutlet: row.noHpOutlet || "" }]
-                : []),
-            ];
-          })
-          .map((outletItem) => ({
-            namaOutlet: String(outletItem.namaOutlet || "").trim(),
-            noHpOutlet: String(outletItem.noHpOutlet || "").trim(),
-          }))
-          .filter((outletItem) => outletItem.namaOutlet);
-
-        const uniqueOutlets = Array.from(
-          new Map(
-            outletRows.map((outletItem) => [
-              outletItem.namaOutlet.toLowerCase(),
-              outletItem,
-            ]),
-          ).values(),
-        );
-
-        groupedMap.set(groupKey, {
-          ...item,
-          outlets: uniqueOutlets,
-          outlet: uniqueOutlets[0]?.namaOutlet || item.outlet || "",
+      if (item.previousPic && item.previousPic !== "-") {
+        item.previousPic.split(",").forEach((name) => {
+          const trimmed = name.trim();
+          if (trimmed && trimmed !== "-" && !supervisorNames.has(trimmed)) {
+            set.add(trimmed);
+          }
         });
       }
     });
+    salesList.forEach((pic) => set.add(pic.name));
+    return Array.from(set).filter(Boolean);
+  }, [dataNasabah, salesList, supervisorList]);
 
-    return Array.from(groupedMap.values());
-  }, [dataNasabah]);
+  const displayData = useMemo(() => {
+    if (previousPicFilter.length > 0) {
+      if (previousPicFilter.includes("__NONE__")) {
+        return [];
+      }
+      return dataNasabah.filter((item) => {
+        if (!item.previousPic || item.previousPic === "-") return true;
+        const pics = item.previousPic.split(",").map((s) => s.trim()).filter(Boolean);
+        return pics.every((p) => previousPicFilter.includes(p));
+      });
+    }
+    return dataNasabah;
+  }, [dataNasabah, previousPicFilter]);
 
 
   useEffect(() => {
     setCurrentPage(1);
   }, [
-    filterMode,
+    search,
     searchKodeOwner,
     searchNamaOwner,
     searchNamaBrand,
@@ -1497,8 +1501,6 @@ export default function DataKelolaanPage() {
     skorFilter,
     startDateFilter,
     endDateFilter,
-    startMonthFilter,
-    endMonthFilter,
     rowsPerPage,
   ]);
 
@@ -1708,9 +1710,13 @@ export default function DataKelolaanPage() {
       existingOutletKeysAfterEdit.add(outletKey);
     });
 
-    saveDataNasabah(nextData);
+    // Tutup modal dan perbarui state lokal dulu (optimistic)
     closeEditModal();
+    saveDataNasabah(nextData);
 
+    let picAssigned = false;
+
+    // 1. Update profil owner di backend
     if (normalizedEditingItem.ownerId && modalMode === "profil") {
       try {
         await updateOwner(normalizedEditingItem.ownerId, {
@@ -1724,27 +1730,47 @@ export default function DataKelolaanPage() {
       }
     }
 
-    if (normalizedEditingItem.pic && normalizedEditingItem.no) {
+    // 2. Assign PIC jika berubah
+    if (normalizedEditingItem.pic && normalizedEditingItem.pic !== "-" && normalizedEditingItem.no) {
       const originalItem = dataNasabah.find(item => item.no === normalizedEditingItem.no);
-      if (originalItem && originalItem.pic !== normalizedEditingItem.pic) {
-        const targetUser = combinedPicList.find(p => p.name === normalizedEditingItem.pic);
+      const picChanged = !originalItem || originalItem.pic !== normalizedEditingItem.pic;
+
+      if (picChanged) {
+        // Cari di supervisorList dulu, lalu salesList
+        const targetSupervisor = supervisorList.find(s => s.name === normalizedEditingItem.pic);
+        const targetSales = salesList.find(s => s.name === normalizedEditingItem.pic);
+        const targetUser = targetSupervisor || targetSales || combinedPicList.find(p => p.name === normalizedEditingItem.pic);
+
         if (targetUser) {
           try {
-            if (targetUser.role === "SUPERVISOR" || targetUser.role === "Supervisor") {
+            const isTargetSupervisor = Boolean(targetSupervisor) ||
+              targetUser.role_code === "SUPERVISOR" ||
+              targetUser.role?.toUpperCase() === "SUPERVISOR";
+
+            if (isTargetSupervisor) {
               await bulkAssignSupervisorToLeads([normalizedEditingItem.no], targetUser.id);
             } else {
               await bulkAssignSalesToLeads([normalizedEditingItem.no], targetUser.id);
             }
-            console.log("Successfully assigned PIC on backend");
+            picAssigned = true;
+            console.log("Successfully assigned PIC on backend", targetUser.name, isTargetSupervisor ? "(SUPERVISOR)" : "(SALES)");
           } catch (err: any) {
             console.error("Failed to assign PIC on backend", err?.message || err);
+            alert(`Gagal memperbarui PIC: ${err?.message || "Kesalahan server"}`);
           }
+        } else {
+          console.warn("Target user not found in supervisorList or salesList for pic:", normalizedEditingItem.pic);
         }
       }
     }
 
+    // 3. Reload dari backend untuk sinkronisasi data terbaru
     loadOwnersFromBackend();
-    alert("Data profil berhasil diperbarui.");
+    if (picAssigned) {
+      alert("Data profil dan PIC berhasil diperbarui.");
+    } else {
+      alert("Data profil berhasil diperbarui.");
+    }
   };
 
   const renderFilterHeader = (key: string, label: string, value: string, setter: (val: string) => void) => {
@@ -1805,10 +1831,11 @@ export default function DataKelolaanPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 font-sans text-[#1C1C1E]">
-      {/* Menu Header */}
-      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
-        <div className="p-5 border-b-2 border-[#C92C1E] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-6">
+      
+      {/* 1. Header Card */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-1">
               <span>Menu</span>
@@ -1817,334 +1844,324 @@ export default function DataKelolaanPage() {
               </svg>
               <span className="text-[#C92C1E]">Lead & Kepemilikan</span>
             </div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Manajemen Lead & Kepemilikan</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+              Manajemen Lead & Kepemilikan
+            </h1>
+            <p className="mt-1 text-sm text-gray-500 max-w-3xl">
               Kelola data lead, perpindahan kepemilikan PIC, aktivitas follow up, dan proses import data customer.
             </p>
           </div>
         </div>
       </div>
 
+      {/* 2. Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
+          <div className="flex flex-col">
+            <p className="text-xs font-bold uppercase tracking-wider text-red-100">Total Lead</p>
+            <div className="mt-1">
+              <h2 className="text-3xl font-black text-white">{summaryData.totalCustomer}</h2>
+              <p className="mt-1 text-[10px] text-red-200 font-medium">Jumlah seluruh lead terdaftar.</p>
+            </div>
+          </div>
+          <div className="absolute -right-4 -top-4 opacity-10 pointer-events-none">
+            <svg className="h-32 w-32 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.001 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+          </div>
+        </div>
 
+        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-start">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Lead Potensi</p>
+              <div className="h-3 w-3 rounded-full bg-amber-400"></div>
+            </div>
+            <div className="mt-1">
+              <h2 className="text-3xl font-black text-gray-900">{summaryData.totalCustomerPotensi}</h2>
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">Skor 2, remark 2, atau sedang/akan training.</p>
+            </div>
+          </div>
+        </div>
 
-      {/* SUMMARY CUSTOMER */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryMetricCard
-          title="Total Owner"
-          value={summaryData.totalCustomer}
-          description="Jumlah semua owner yang masuk ke data kelolaan."
-          isPrimary={true}
-        />
+        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-start">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Lead Kemungkinan</p>
+              <div className="h-3 w-3 rounded-full bg-blue-400"></div>
+            </div>
+            <div className="mt-1">
+              <h2 className="text-3xl font-black text-gray-900">{summaryData.totalCustomerKemungkinan}</h2>
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">PIC valid dan skor/remark terakhir 1.</p>
+            </div>
+          </div>
+        </div>
 
-        <SummaryMetricCard
-          title="Total Owner Potensi"
-          value={summaryData.totalCustomerPotensi}
-          description="Owner skor 2, remark terakhir 2, atau sedang/akan training."
-        />
-
-        <SummaryMetricCard
-          title="Total Owner Kemungkinan"
-          value={summaryData.totalCustomerKemungkinan}
-          description="Owner dengan PIC valid dan skor/remark terakhir 1."
-        />
-
-        <SummaryMetricCard
-          title="Total Owner Berlangganan"
-          value={summaryData.totalCustomerBerlangganan}
-          description="Owner berlangganan aktif selain trial."
-        />
-
-        <SummaryMetricCard
-          title="Perbandingan Owner Berlangganan"
-          value={formatPercentValue(summaryData.perbandinganBerlangganan)}
-          description="Total berlangganan dibanding total owner."
-        />
+        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col">
+            <div className="flex justify-between items-start">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Berlangganan</p>
+              <div className="h-3 w-3 rounded-full bg-emerald-400"></div>
+            </div>
+            <div className="mt-1">
+              <h2 className="text-3xl font-black text-gray-900">{summaryData.totalCustomerBerlangganan}</h2>
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">{formatPercentValue(summaryData.perbandinganBerlangganan)} dari total lead.</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Tabs / Segmented Control */}
-      <div className="flex bg-gray-100 p-1.5 rounded-xl w-max shadow-sm border border-gray-200/50">
-        <button
-          onClick={() => setActiveTab('list')}
-          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all ${
-            activeTab === 'list'
-              ? 'bg-white text-[#C92C1E] shadow-sm'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
-          }`}
-        >
-          Daftar Lead
-        </button>
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-            activeTab === 'analytics'
-              ? 'bg-white text-[#C92C1E] shadow-sm'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
-          }`}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-          </svg>
-          Analitik
-        </button>
+      {/* 3. Tabs */}
+      <div className="space-y-4">
+        <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+          <div className="flex text-sm font-bold">
+            {(
+              [
+                { key: "list", label: "Daftar Lead" },
+                { key: "analytics", label: "Analitik" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-all ${
+                  activeTab === tab.key
+                    ? "bg-white text-[#C92C1E] shadow-sm"
+                    : "text-gray-500 hover:bg-gray-200 hover:text-gray-900"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {activeTab === 'analytics' ? (
+      {activeTab === "analytics" ? (
         <AnalyticsTab />
       ) : (
-        <>
-      {/* PANEL FILTER & SEARCHING */}
-      <div className="bg-white rounded-2xl border border-gray-200/60 shadow-xs overflow-hidden">
-      <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start">
-          <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner">
-            <button
-              onClick={() => {
-                const today = getTodayInputDate();
+        <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          
+          {/* Table Header (Title, Subtitle, Actions) */}
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Daftar Lead</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Daftar seluruh data lead yang terdaftar dalam sistem beserta PIC dan status remark.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 w-full">
+              <button
+                onClick={() => setIsManualAddModalOpen(true)}
+                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"
+              >
+                <PlusIcon /> Tambah Data Manual
+              </button>
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+              >
+                <UploadIcon /> Import Excel
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+              >
+                <DownloadIcon /> Export Excel
+              </button>
+              <button
+                onClick={() => setIsImportHistoryModalOpen(true)}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Riwayat Import
+              </button>
+              <Link
+                href="/menu/lead/trash"
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"
+              >
+                <TrashIcon className="h-4 w-4" /> Riwayat Hapus ({trashCount})
+              </Link>
 
-                setFilterMode("harian");
-                setStartDateFilter(today);
-                setEndDateFilter(today);
-                setStartMonthFilter("");
-                setEndMonthFilter("");
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
-                filterMode === "harian"
-                  ? "bg-[#C92C1E] text-white shadow-md"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
-            >
-              Harian
-            </button>
-            <button
-              onClick={() => {
-                setFilterMode("bulanan");
-                setStartDateFilter("");
-                setEndDateFilter("");
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
-                filterMode === "bulanan"
-                  ? "bg-[#C92C1E] text-white shadow-md"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
-            >
-              Bulanan
-            </button>
+              {!selectionMode ? (
+                <button
+                  onClick={() => handleStartSelectionMode("edit")}
+                  className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100"
+                >
+                  <EditIcon className="h-4 w-4" />
+                  {isAdminState ? "Pilih untuk Assign Supervisor" : isSupervisorState ? "Pilih untuk Assign Sales" : "Pilih untuk Lepas Lead (Invalid)"}
+                </button>
+              ) : null}
+
+              {!selectionMode ? (
+                <button
+                  onClick={() => handleStartSelectionMode("delete")}
+                  className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                  Pilih untuk Hapus
+                </button>
+              ) : (
+                <>
+                  <div
+                    className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
+                      selectionAction === "edit"
+                        ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border border-red-200 bg-red-50 text-red-700"
+                    }`}
+                  >
+                    Mode: {selectionAction === "edit" ? "Edit PIC" : "Hapus Data"}
+                  </div>
+
+                  <button
+                    onClick={handleCancelSelectionMode}
+                    className="rounded-xl border border-gray-900 bg-gray-900 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-black"
+                  >
+                    Batal Pilih
+                  </button>
+
+                  {selectionAction === "edit" && (
+                    <button
+                      onClick={openBulkPicModal}
+                      disabled={selectedIds.length === 0}
+                      className="rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isAdminState ? "Assign Supervisor Terpilih" : isSupervisorState ? "Assign Sales Terpilih" : "Lepas Lead Terpilih"} ({selectedIds.length})
+                    </button>
+                  )}
+
+                  {selectionAction === "delete" && (
+                    <>
+                      <select
+                        value={deleteTargetMode}
+                        onChange={(event) => setDeleteTargetMode(event.target.value as DeleteTargetMode)}
+                        className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 outline-none focus:border-red-500"
+                      >
+                        <option value="selected">
+                          Yang dicentang ({selectedIds.length})
+                        </option>
+                        <option value="page">
+                          Halaman ini ({currentPageIds.length})
+                        </option>
+                        <option value="filtered">
+                          Semua hasil filter ({backendTotal})
+                        </option>
+                        <option value="custom">
+                          Jumlah tertentu
+                        </option>
+                      </select>
+
+                      {deleteTargetMode === "custom" && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={backendTotal}
+                          value={deleteCustomLimit}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) => {
+                            const rawValue = event.target.value.replace(/\D/g, "");
+                            setDeleteCustomLimit(rawValue);
+                          }}
+                          onBlur={() => {
+                            const safeLimit = getCustomDeleteLimit();
+                            setDeleteCustomLimit(safeLimit > 0 ? String(safeLimit) : "1");
+                          }}
+                          className="w-24 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-sm font-bold text-red-700 outline-none focus:border-red-500"
+                          title="Jumlah data dari hasil filter"
+                        />
+                      )}
+
+                      <button
+                        onClick={handleConfirmDeleteBulk}
+                        disabled={dataNasabah.length === 0 || getDeleteTargetItems().length === 0}
+                        className="rounded-xl border border-red-600 bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Hapus {getDeleteTargetItems().length} Data
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
-          {filterMode === "harian" ? (
-            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600">
-              <input
-                type="date"
-                value={startDateFilter}
-                onChange={(e) => setStartDateFilter(e.target.value)}
-                className="bg-transparent focus:outline-none text-gray-700 cursor-pointer"
-              />
-              <span className="text-gray-300">s/d</span>
-              <input
-                type="date"
-                value={endDateFilter}
-                onChange={(e) => setEndDateFilter(e.target.value)}
-                className="bg-transparent focus:outline-none text-gray-700 cursor-pointer"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600">
-              <select
-                value={startMonthFilter}
-                onChange={(e) => setStartMonthFilter(e.target.value)}
-                className="bg-transparent focus:outline-none text-gray-700 font-bold cursor-pointer"
-              >
-                <option value="">Awal...</option>
-                {LIST_BULAN.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-              <span className="text-gray-300">s/d</span>
-              <select
-                value={endMonthFilter}
-                onChange={(e) => setEndMonthFilter(e.target.value)}
-                className="bg-transparent focus:outline-none text-gray-700 font-bold cursor-pointer"
-              >
-                <option value="">Akhir...</option>
-                {LIST_BULAN.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
-          >
-            <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            Export Excel
-          </button>
-
-          <button
-            onClick={() => setIsImportHistoryModalOpen(true)}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] flex items-center gap-2"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Riwayat Import
-          </button>
-
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 shadow-sm"
-          >
-            <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Import Excel
-          </button>
-
-          <button
-            onClick={() => setIsManualAddModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700 shadow-sm shadow-red-200"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Tambah Data Manual
-          </button>
-        </div>
-      </div>
-      {/* TABLE HEADER ACTIONS */}
-      <div className="px-4 py-3 border-b border-gray-100 flex flex-col md:flex-row md:items-end md:justify-between gap-4 bg-white">
-        <div>
-          <h2 className="text-base font-black text-gray-800 uppercase tracking-tight">
-            Tabel Data Lead & Kepemilikan
-          </h2>
-          <p className="mt-1 text-xs text-gray-500">
-            Menampilkan daftar lead sesuai filter aktif, PIC terakhir, dan skor remark terbaru.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/menu/lead/trash"
-              className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-black hover:bg-gray-50 transition cursor-pointer flex items-center gap-1.5"
-            >
-              <TrashIcon className="w-3.5 h-3.5 text-gray-500" />
-              Riwayat Hapus ({trashCount})
-            </Link>
-
-            {!selectionMode ? (
-              <button
-                onClick={() => handleStartSelectionMode("edit")}
-                className="px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1.5"
-              >
-                <EditIcon className="w-3.5 h-3.5" />
-                {isAdminState ? "Pilih untuk Assign Supervisor" : isSupervisorState ? "Pilih untuk Assign Sales" : "Pilih untuk Lepas Lead (Invalid)"}
-              </button>
-            ) : null}
-
-            {!selectionMode ? (
-              <button
-                onClick={() => handleStartSelectionMode("delete")}
-                className="px-3.5 py-2 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-black hover:bg-red-100 transition cursor-pointer flex items-center gap-1.5"
-              >
-                <TrashIcon className="w-3.5 h-3.5" />
-                Pilih untuk Hapus
-              </button>
-            ) : (
-              <>
-                <div
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black ${
-                    selectionAction === "edit"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-red-50 text-red-700 border border-red-200"
-                  }`}
+          {/* Global Search & Column Visibility Bar */}
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex w-full items-center gap-3 md:w-96">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setCurrentPage(1);
+                    loadOwnersFromBackend();
+                  }}
+                  className="relative flex-1"
                 >
-                  Mode: {selectionAction === "edit" ? "Edit PIC" : "Hapus Data"}
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Cari kode, nama owner, outlet, brand, PIC..."
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </form>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600">
+                  <span className="text-gray-400">Tanggal:</span>
+                  <input
+                    type="date"
+                    value={startDateFilter}
+                    onChange={(e) => {
+                      setStartDateFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="bg-transparent focus:outline-none text-gray-700 cursor-pointer"
+                  />
+                  <span className="text-gray-300">s/d</span>
+                  <input
+                    type="date"
+                    value={endDateFilter}
+                    onChange={(e) => {
+                      setEndDateFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="bg-transparent focus:outline-none text-gray-700 cursor-pointer"
+                  />
+                  {(startDateFilter || endDateFilter) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDateFilter("");
+                        setEndDateFilter("");
+                        setCurrentPage(1);
+                      }}
+                      className="ml-1 text-gray-400 hover:text-red-600 font-bold"
+                      title="Reset filter tanggal"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
-                <button
-                  onClick={handleCancelSelectionMode}
-                  className="px-3.5 py-2 bg-gray-900 border border-gray-900 text-white rounded-xl text-xs font-black hover:bg-black transition cursor-pointer"
-                >
-                  Batal Pilih
-                </button>
-
-                {selectionAction === "edit" && (
-                  <button
-                    onClick={openBulkPicModal}
-                    disabled={selectedIds.length === 0}
-                    className="px-3.5 py-2 bg-emerald-600 border border-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {isAdminState ? "Assign Supervisor Terpilih" : isSupervisorState ? "Assign Sales Terpilih" : "Lepas Lead Terpilih"} ({selectedIds.length})
-                  </button>
-                )}
-
-                {selectionAction === "delete" && (
-                  <>
-                    <select
-                      value={deleteTargetMode}
-                      onChange={(event) => setDeleteTargetMode(event.target.value as DeleteTargetMode)}
-                      className="px-3.5 py-2 bg-white border border-red-200 text-red-700 rounded-xl text-xs font-black outline-none focus:border-red-500 cursor-pointer"
-                    >
-                      <option value="selected">
-                        Yang dicentang ({selectedIds.length})
-                      </option>
-                      <option value="page">
-                        Halaman ini ({currentPageIds.length})
-                      </option>
-                      <option value="filtered">
-                        Semua hasil filter ({backendTotal})
-                      </option>
-                      <option value="custom">
-                        Jumlah tertentu
-                      </option>
-                    </select>
-
-                    {deleteTargetMode === "custom" && (
-                      <input
-                        type="number"
-                        min={1}
-                        max={backendTotal}
-                        value={deleteCustomLimit}
-                        onFocus={(event) => event.currentTarget.select()}
-                        onChange={(event) => {
-                          const rawValue = event.target.value.replace(/\D/g, "");
-                          setDeleteCustomLimit(rawValue);
-                        }}
-                        onBlur={() => {
-                          const safeLimit = getCustomDeleteLimit();
-                          setDeleteCustomLimit(safeLimit > 0 ? String(safeLimit) : "1");
-                        }}
-                        className="w-24 px-3 py-2 bg-white border border-red-200 text-red-700 rounded-xl text-xs font-black outline-none focus:border-red-500"
-                        title="Jumlah data dari hasil filter"
-                      />
-                    )}
-
-                    <button
-                      onClick={handleConfirmDeleteBulk}
-                      disabled={dataNasabah.length === 0 || getDeleteTargetItems().length === 0}
-                      className="px-3.5 py-2 bg-red-600 border border-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Hapus {getDeleteTargetItems().length} Data
-                    </button>
-                  </>
-                )}
-              </>
-            )}
+                <ColumnVisibilityControl tableId="lead-table" storageKey="column-visibility:lead-table" buttonLabel="Kolom" />
+              </div>
+            </div>
           </div>
-        </div>
 
-      {/* TABLE WORKSPACE */}
-        <div className="max-w-full overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+          {/* Table WorkSpace */}
+          <div className="max-w-full overflow-x-auto">
+          <table id="lead-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
             <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
               <tr>
                 {selectionMode && (
@@ -2165,189 +2182,304 @@ export default function DataKelolaanPage() {
                 {renderFilterHeader("namaOwner", "Nama Owner", searchNamaOwner, setSearchNamaOwner)}
                 {renderFilterHeader("projectBrand", "Brand", searchNamaBrand, setSearchNamaBrand)}
                 <th className="px-4 py-4 min-w-[150px] font-bold">Kontak</th>
-                    <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
-                      <div 
-                        className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
-                        onClick={() => setOpenFilter(openFilter === 'pic' ? null : 'pic')}
-                      >
-                        <span className="flex items-center gap-1.5 text-center truncate max-w-[120px]">
-                          {picFilter === 'Semua' ? 'PIC Sales' : (
-                            picFilter === 'No PIC' ? 'Belum Ada PIC' :
-                            picFilter === 'ROLE:ADMIN' ? 'Semua Admin' :
-                            picFilter === 'ROLE:SUPERVISOR' ? 'Semua Supervisor' :
-                            picFilter === 'ROLE:SALES' ? 'Semua Sales' : picFilter
+                <th className="px-4 py-4 min-w-[140px] font-bold whitespace-nowrap">Tgl Dibuat</th>
+                <th className="px-4 py-4 min-w-[180px] font-bold whitespace-nowrap">Tgl Dibagikan</th>
+                <th className="px-4 py-4 min-w-[160px] font-bold relative group whitespace-nowrap">
+                  <div 
+                    className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
+                    onClick={() => setOpenFilter(openFilter === 'prevPic' ? null : 'prevPic')}
+                  >
+                    <span className="flex items-center gap-1.5 text-center truncate max-w-[130px]">
+                      {previousPicFilter.length === 0 ? 'PIC Sebelumnya' : `${previousPicFilter.length} Terpilih`}
+                    </span>
+                    <svg 
+                      className={`w-3.5 h-3.5 transition-colors ml-1 flex-shrink-0 ${previousPicFilter.length > 0 ? 'text-[#C92C1E]' : 'text-gray-400 group-hover:text-gray-600'}`} 
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    >
+                      <title>Filter PIC Sebelumnya</title>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                  </div>
+                  {openFilter === 'prevPic' && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-60 bg-white border border-gray-200 rounded-xl shadow-xl z-20 p-3 text-left">
+                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+                          <span className="text-xs font-bold text-gray-800">PIC Sebelumnya</span>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              if (previousPicFilter.length === 0) {
+                                setPreviousPicFilter(["__NONE__"]);
+                              } else {
+                                setPreviousPicFilter([]);
+                              }
+                            }}
+                            className="text-[10px] text-red-600 hover:underline font-bold"
+                          >
+                            {previousPicFilter.length === 0 ? "Hapus Semua" : "Pilih Semua"}
+                          </button>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                          {uniquePreviousPics.length === 0 ? (
+                            <div className="text-xs text-gray-400 py-2 text-center italic">Tidak ada data PIC sebelumnya</div>
+                          ) : (
+                            uniquePreviousPics.map((picName) => {
+                              const isChecked = previousPicFilter.length === 0 || previousPicFilter.includes(picName);
+                              return (
+                                <label key={picName} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        const next = [...previousPicFilter.filter(p => p !== "__NONE__"), picName];
+                                        if (next.length >= uniquePreviousPics.length) {
+                                          setPreviousPicFilter([]);
+                                        } else {
+                                          setPreviousPicFilter(next);
+                                        }
+                                      } else {
+                                        const current = previousPicFilter.length === 0 ? uniquePreviousPics : previousPicFilter;
+                                        const next = current.filter(p => p !== picName);
+                                        setPreviousPicFilter(next.length === 0 ? ["__NONE__"] : next);
+                                      }
+                                    }}
+                                    className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                                  />
+                                  <span className="truncate">{picName}</span>
+                                </label>
+                              );
+                            })
                           )}
-                        </span>
-                        <svg 
-                          className={`w-3.5 h-3.5 transition-colors ml-1 flex-shrink-0 ${picFilter !== 'Semua' ? 'text-[#C92C1E]' : 'text-gray-400 group-hover:text-gray-600'}`} 
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                        >
-                          <title>Filter PIC Sales</title>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                        </svg>
+                        </div>
                       </div>
-                      {openFilter === 'pic' && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-20 p-2 transform origin-top text-left">
-                            <div className="flex items-center gap-2 mb-2">
-                              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                              </svg>
-                              <span className="text-sm font-semibold text-gray-600">Filter PIC Sales</span>
-                            </div>
-                            <select
-                              value={picFilter}
-                              onChange={(e) => {
-                                setPicFilter(e.target.value);
-                                setOpenFilter(null);
-                              }}
-                              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-700 shadow-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] transition-all"
-                            >
-                              <option value="Semua">Semua PIC</option>
-                              <option value="No PIC">Belum Ada PIC</option>
-                              <optgroup label="Berdasarkan Role">
-                                <option value="ROLE:ADMIN">Semua Admin</option>
-                                <option value="ROLE:SUPERVISOR">Semua Supervisor</option>
-                                <option value="ROLE:SALES">Semua Sales</option>
-                              </optgroup>
-                              <optgroup label="Berdasarkan Nama PIC">
-                                {combinedPicList.map((pic) => (
-                                  <option key={`${pic.id}-${pic.name}`} value={pic.name}>
-                                    {pic.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            </select>
-                          </div>
-                        </>
+                    </>
+                  )}
+                </th>
+                <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
+                  <div 
+                    className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
+                    onClick={() => setOpenFilter(openFilter === 'pic' ? null : 'pic')}
+                  >
+                    <span className="flex items-center gap-1.5 text-center truncate max-w-[120px]">
+                      {picFilter === 'Semua' ? 'PIC Sales' : (
+                        picFilter === 'No PIC' ? 'Belum Ada PIC' :
+                        picFilter === 'ROLE:ADMIN' ? 'Semua Admin' :
+                        picFilter === 'ROLE:SUPERVISOR' ? 'Semua Supervisor' :
+                        picFilter === 'ROLE:SALES' ? 'Semua Sales' : picFilter
                       )}
-                    </th>
-
-                    <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
-                      <div 
-                        className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
-                        onClick={() => setOpenFilter(openFilter === 'skor' ? null : 'skor')}
-                      >
-                        <span className="flex items-center gap-1.5 text-center truncate max-w-[120px]">
-                          {skorFilter === 'Semua' ? 'Skor' : (LIST_SKOR.find(s => s.value === skorFilter)?.label || skorFilter)}
-                        </span>
-                        <svg 
-                          className={`w-3.5 h-3.5 transition-colors ml-1 flex-shrink-0 ${skorFilter !== 'Semua' ? 'text-[#C92C1E]' : 'text-gray-400 group-hover:text-gray-600'}`} 
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    </span>
+                    <svg 
+                      className={`w-3.5 h-3.5 transition-colors ml-1 flex-shrink-0 ${picFilter !== 'Semua' ? 'text-[#C92C1E]' : 'text-gray-400 group-hover:text-gray-600'}`} 
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    >
+                      <title>Filter PIC Sales</title>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                  </div>
+                  {openFilter === 'pic' && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-20 p-2 transform origin-top text-left">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                          </svg>
+                          <span className="text-sm font-semibold text-gray-600">Filter PIC Sales</span>
+                        </div>
+                        <select
+                          value={picFilter}
+                          onChange={(e) => {
+                            setPicFilter(e.target.value);
+                            setOpenFilter(null);
+                          }}
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-700 shadow-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] transition-all"
                         >
-                          <title>Filter Skor</title>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                        </svg>
+                          <option value="Semua">Semua PIC</option>
+                          <option value="No PIC">Belum Ada PIC</option>
+                          <optgroup label="Berdasarkan Role">
+                            <option value="ROLE:ADMIN">Semua Admin</option>
+                            <option value="ROLE:SUPERVISOR">Semua Supervisor</option>
+                            <option value="ROLE:SALES">Semua Sales</option>
+                          </optgroup>
+                          <optgroup label="Berdasarkan Nama PIC">
+                            {combinedPicList.map((pic) => (
+                              <option key={`${pic.id}-${pic.name}`} value={pic.name}>
+                                {pic.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
                       </div>
-                      {openFilter === 'skor' && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-20 p-2 transform origin-top text-left">
-                            <div className="flex items-center gap-2 mb-2">
-                              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                              </svg>
-                              <span className="text-sm font-semibold text-gray-600">Filter Skor</span>
-                            </div>
-                            <select
-                              value={skorFilter}
-                              onChange={(e) => {
-                                setSkorFilter(e.target.value);
-                                setOpenFilter(null);
-                              }}
-                              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-700 shadow-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] transition-all"
-                            >
-                              <option value="Semua">Semua Skor</option>
-                              {LIST_SKOR.map((skor) => (
-                                <option key={skor.value} value={skor.value}>
-                                  {skor.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </>
-                      )}
-                    </th>
-                    <th className="px-4 py-4 text-center font-bold">Action</th>
-              </tr>
-            </thead>
+                    </>
+                  )}
+                </th>
 
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {displayData.length === 0 ? (
-                <tr>
+                <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
+                  <div 
+                    className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
+                    onClick={() => setOpenFilter(openFilter === 'skor' ? null : 'skor')}
+                  >
+                    <span className="flex items-center gap-1.5 text-center truncate max-w-[120px]">
+                      {skorFilter === 'Semua' ? 'Skor' : (LIST_SKOR.find(s => s.value === skorFilter)?.label || skorFilter)}
+                    </span>
+                    <svg 
+                      className={`w-3.5 h-3.5 transition-colors ml-1 flex-shrink-0 ${skorFilter !== 'Semua' ? 'text-[#C92C1E]' : 'text-gray-400 group-hover:text-gray-600'}`} 
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    >
+                      <title>Filter Skor</title>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                  </div>
+                  {openFilter === 'skor' && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)}></div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-20 p-2 transform origin-top text-left">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                          </svg>
+                          <span className="text-sm font-semibold text-gray-600">Filter Skor</span>
+                        </div>
+                        <select
+                          value={skorFilter}
+                          onChange={(e) => {
+                            setSkorFilter(e.target.value);
+                            setOpenFilter(null);
+                          }}
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-700 shadow-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] transition-all"
+                        >
+                          <option value="Semua">Semua Skor</option>
+                          {LIST_SKOR.map((skor) => (
+                            <option key={skor.value} value={skor.value}>
+                              {skor.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </th>
+                <th className="px-4 py-4 text-center font-bold">Action</th>
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-gray-100 bg-white">
+          {displayData.length === 0 ? (
+            <tr>
+              <td
+                colSpan={11 + (selectionMode ? 1 : 0)}
+                className="p-8 text-center text-gray-400 font-bold italic"
+              >
+                Data tidak ditemukan pada rentang filter ini.
+              </td>
+            </tr>
+          ) : (
+            paginatedData.map((row, idx) => (
+              <tr
+                key={`lead-row-${row.no || idx}-${row.kodeOutlet || idx}`}
+                className={`transition-colors ${
+                  selectionMode ? "cursor-pointer" : ""
+                } ${
+                  selectionMode ? "select-none" : ""
+                } ${
+                  selectedIds.includes(row.no)
+                    ? "bg-red-100/70 hover:bg-red-100"
+                    : "hover:bg-gray-50"
+                }`}
+                onMouseDown={(e) => {
+                  if (!selectionMode || e.button !== 0) return;
+                  handleRowMouseDown(row.no, selectedIds.includes(row.no));
+                }}
+                onMouseEnter={() => {
+                  if (selectionMode) handleRowMouseEnter(row.no);
+                }}
+                onMouseMove={() => {
+                  // Tandai mouse sudah bergerak agar drag-select bisa aktif
+                  if (isDragging && !hasMoved.current) hasMoved.current = true;
+                }}
+              >
+                {selectionMode && (
                   <td
-                    colSpan={8 + (selectionMode ? 1 : 0)}
-                    className="p-8 text-center text-gray-400 font-bold italic"
+                    className="px-4 py-4 text-center"
                   >
-                    Data tidak ditemukan pada rentang filter ini.
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(row.no)}
+                      readOnly
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
+                    />
                   </td>
-                </tr>
-              ) : (
-                paginatedData.map((row, idx) => (
-                  <tr
-                    key={`lead-row-${row.no || idx}-${row.kodeOutlet || idx}`}
-                    className={`transition-colors ${
-                      selectionMode ? "cursor-pointer" : ""
-                    } ${
-                      selectionMode ? "select-none" : ""
-                    } ${
-                      selectedIds.includes(row.no)
-                        ? "bg-red-100/70 hover:bg-red-100"
-                        : "hover:bg-gray-50"
-                    }`}
-                    onMouseDown={(e) => {
-                      if (!selectionMode || e.button !== 0) return;
-                      handleRowMouseDown(row.no, selectedIds.includes(row.no));
-                    }}
-                    onMouseEnter={() => {
-                      if (selectionMode) handleRowMouseEnter(row.no);
-                    }}
-                    onMouseMove={() => {
-                      // Tandai mouse sudah bergerak agar drag-select bisa aktif
-                      if (isDragging && !hasMoved.current) hasMoved.current = true;
-                    }}
-                  >
-                    {selectionMode && (
-                      <td
-                        className="px-4 py-4 text-center"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(row.no)}
-                          readOnly
-                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
-                        />
-                      </td>
-                    )}
+                )}
 
-                        <td className="px-4 py-4 text-center align-top font-medium text-gray-500 whitespace-nowrap">
-                          {startDataIndex + idx + 1}
-                        </td>
+                    <td className="px-4 py-4 text-center align-top font-medium text-gray-500 whitespace-nowrap">
+                      {startDataIndex + idx + 1}
+                    </td>
 
-                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[150px]">
-                          {row.kodeOutlet || row.kodeOwner || "-"}
-                        </td>
+                    <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[150px]">
+                      {row.kodeOutlet || row.kodeOwner || "-"}
+                    </td>
 
-                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[220px]">
-                          <div className="font-bold text-gray-900 font-sans">
-                            {row.namaOutlet || "-"}
-                          </div>
-                        </td>
+                    <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[220px]">
+                      <div className="font-bold text-gray-900 font-sans">
+                        {row.namaOutlet || "-"}
+                      </div>
+                    </td>
 
-                        <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[200px]">
-                          <div className="font-medium text-gray-800">
-                            {row.namaOwner || "-"}
-                          </div>
-                        </td>
+                    <td className="px-4 py-4 align-top font-medium text-gray-900 whitespace-normal break-words max-w-[200px]">
+                      <div className="font-bold text-gray-900">
+                        {row.namaOwner || "-"}
+                      </div>
+                      {row.kodeOwner && row.kodeOwner !== "-" && (
+                        <div className="text-xs font-medium text-gray-400 mt-0.5">
+                          ({row.kodeOwner})
+                        </div>
+                      )}
+                    </td>
 
-                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[200px]">
-                          {row.projectBrand || "-"}
-                        </td>
+                    <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[200px]">
+                      {row.projectBrand || "-"}
+                    </td>
 
-                        <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[160px]">
-                          {row.noHpOutlet && row.noHpOutlet !== "-" ? row.noHpOutlet : (row.noHpOwner || "-")}
-                        </td>
+                    <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[160px]">
+                      {row.noHpOutlet && row.noHpOutlet !== "-" ? row.noHpOutlet : (row.noHpOwner || "-")}
+                    </td>
+
+                    <td className="px-4 py-4 align-top text-gray-700 whitespace-nowrap font-medium text-xs">
+                      {formatIndonesianDate(row.createDateProject)}
+                    </td>
+
+                    <td className="px-4 py-4 align-top text-gray-700 whitespace-nowrap font-medium text-xs">
+                      {formatIndonesianDate(row.tanggalDibagikan, true)}
+                    </td>
+
+                    <td className="px-4 py-4 align-top text-gray-700 whitespace-normal break-words max-w-[180px] text-xs font-medium">
+                      {(() => {
+                        if (!row.previousPic || row.previousPic === "-") {
+                          return <span className="text-gray-400 font-medium">-</span>;
+                        }
+                        const picList = row.previousPic
+                          .split(",")
+                          .map((name) => name.trim())
+                          .filter((name) => name && name !== "-");
+
+                        if (picList.length === 0) {
+                          return <span className="text-gray-400 font-medium">-</span>;
+                        }
+
+                        return (
+                          <ul className="space-y-1 list-none p-0 m-0">
+                            {picList.map((trimmed, index) => (
+                              <li key={index} className="flex items-start gap-1.5 text-gray-800 font-semibold">
+                                <span className="text-slate-400 font-bold select-none min-w-[16px]">{index + 1}.</span>
+                                <span>{trimmed}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      })()}
+                    </td>
 
                         <td className="px-4 py-4 align-top text-center">
                           <PicBadge
@@ -2443,7 +2575,6 @@ export default function DataKelolaanPage() {
           </div>
         </div>
       </div>
-        </>
       )}
 
       <CallPage
