@@ -432,11 +432,10 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <body
-          className={`antialiased font-sans transition-colors duration-300 ${
-            isDarkMode
-              ? "bg-[#0F172A] text-gray-100"
-              : "bg-[#FAF9F6] text-[#2C2C2E]"
-          }`}
+          className={`antialiased font-sans transition-colors duration-300 ${isDarkMode
+            ? "bg-[#0F172A] text-gray-100"
+            : "bg-[#FAF9F6] text-[#2C2C2E]"
+            }`}
         >
           <AutoTableColumnVisibilityEnhancer />
           {children}
@@ -453,11 +452,10 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <body
-          className={`antialiased font-sans transition-colors duration-300 ${
-            isDarkMode
-              ? "bg-[#0F172A] text-gray-100"
-              : "bg-[#FAF9F6] text-[#2C2C2E]"
-          }`}
+          className={`antialiased font-sans transition-colors duration-300 ${isDarkMode
+            ? "bg-[#0F172A] text-gray-100"
+            : "bg-[#FAF9F6] text-[#2C2C2E]"
+            }`}
         >
           <div className="flex min-h-screen items-center justify-center">
             <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm font-bold text-gray-500 shadow-sm">
@@ -476,50 +474,40 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body
-        className={`antialiased font-sans transition-colors duration-300 ${
-          isDarkMode
-            ? "bg-[#0F172A] text-gray-100"
-            : "bg-[#FAF9F6] text-[#2C2C2E]"
-        }`}
+        className={`antialiased font-sans transition-colors duration-300 ${isDarkMode
+          ? "bg-[#0F172A] text-gray-100"
+          : "bg-[#FAF9F6] text-[#2C2C2E]"
+          }`}
       >
         <AutoTableColumnVisibilityEnhancer />
         <div className="flex min-h-screen">
           <aside
-            className={`fixed z-30 flex h-full flex-col justify-between border-r p-4 transition-all duration-300 ${
-              isDarkMode
-                ? "border-slate-800 bg-slate-950"
-                : "border-gray-200/80 bg-white"
-            } ${isSidebarOpen ? "w-64" : "w-20"}`}
+            className={`fixed z-30 flex h-full flex-col justify-between border-r p-4 transition-all duration-300 ${isDarkMode
+              ? "border-slate-800 bg-slate-950"
+              : "border-gray-200/80 bg-white"
+              } ${isSidebarOpen ? "w-64" : "w-20"}`}
           >
             <div className="flex min-h-0 flex-1 flex-col">
               <div
-                className={`flex min-h-[65px] shrink-0 items-center justify-between border-b pb-4 ${
-                  isDarkMode ? "border-slate-800" : "border-gray-100"
-                }`}
+                className={`flex min-h-[65px] shrink-0 items-center justify-between border-b pb-4 ${isDarkMode ? "border-slate-800" : "border-gray-100"
+                  }`}
               >
                 {isSidebarOpen && (
                   <div className="transition-all duration-200">
-                    <span
-                      className={`block text-[10px] font-bold uppercase tracking-widest ${
-                        isDarkMode ? "text-slate-500" : "text-gray-400"
-                      }`}
-                    >
-                      WORKSPACE
-                    </span>
-
-                    <h2 className="mt-0.5 text-lg font-black tracking-tight text-[#C92C1E]">
-                      Piposmart CRM
-                    </h2>
+                    <img
+                      src="/assets/logo teks.png"
+                      alt="Piposmart Logo"
+                      className="h-15 max-h-10 w-auto object-contain"
+                    />
                   </div>
                 )}
 
                 <button
                   onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className={`flex items-center justify-center rounded-xl border p-2 text-[#C92C1E] transition-all duration-200 hover:border-red-200 hover:bg-red-50 ${
-                    isDarkMode
-                      ? "border-slate-800 bg-slate-900"
-                      : "border-gray-200/60 bg-gray-50"
-                  } ${!isSidebarOpen ? "w-full text-center" : ""}`}
+                  className={`flex items-center justify-center rounded-xl border p-2 text-[#C92C1E] transition-all duration-200 hover:border-red-200 hover:bg-red-50 ${isDarkMode
+                    ? "border-slate-800 bg-slate-900"
+                    : "border-gray-200/60 bg-gray-50"
+                    } ${!isSidebarOpen ? "w-full text-center" : ""}`}
                   title={isSidebarOpen ? "Tutup Menu" : "Buka Menu"}
                 >
                   <svg
@@ -541,126 +529,114 @@ export default function RootLayout({
               <nav className="scrollbar-none flex-1 space-y-1 overflow-y-auto pt-4 pr-1">
                 {isSidebarOpen
                   ? menuGroups.map((group) => {
-                      const isOpen = openGroups[group.title] ?? true;
-                      return (
-                        <div key={group.title} className="pb-1">
-                          <button
-                            type="button"
-                            onClick={() => toggleGroup(group.title)}
-                            className="flex w-full items-center justify-between rounded-lg px-4 py-2 text-left"
-                          >
-                            <span
-                              className={`text-[10px] font-black uppercase tracking-widest ${
-                                isDarkMode ? "text-slate-500" : "text-gray-400"
-                              }`}
-                            >
-                              {group.title}
-                            </span>
-                            <ChevronDownIcon
-                              className={`h-3.5 w-3.5 transition-transform duration-200 ${
-                                isDarkMode ? "text-slate-500" : "text-gray-400"
-                              } ${
-                                isOpen ? "rotate-0" : "-rotate-90"
-                              }`}
-                            />
-                          </button>
-
-                          {isOpen && (
-                            <div className="space-y-1">
-                              {group.items.map((item) => {
-                                const isActive =
-                                  pathname === item.href ||
-                                  (item.href !== "/" && pathname.startsWith(item.href));
-
-                                return (
-                                  <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
-                                      isActive
-                                        ? "bg-[#C92C1E] text-white shadow-sm"
-                                        : isDarkMode
-                                          ? "text-slate-300 hover:bg-red-950/30 hover:text-red-300"
-                                          : "text-gray-600 hover:bg-red-50 hover:text-[#C92C1E]"
-                                    }`}
-                                  >
-                                    {item.icon(
-                                      `w-5 h-5 shrink-0 transition-colors ${
-                                        isActive ? "text-white" : item.colorClass
-                                      }`,
-                                    )}
-                                    <span className="truncate text-sm font-semibold">
-                                      {item.text}
-                                    </span>
-                                  </Link>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  : flatMenuItems.map((item) => {
-                      const isActive =
-                        pathname === item.href ||
-                        (item.href !== "/" && pathname.startsWith(item.href));
-
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          title={item.text}
-                          className={`flex items-center justify-center rounded-xl px-0 py-3 transition-all duration-200 ${
-                            isActive
-                              ? "bg-[#C92C1E] text-white shadow-sm"
-                              : isDarkMode
-                                ? "text-slate-300 hover:bg-red-950/30 hover:text-red-300"
-                                : "text-gray-600 hover:bg-red-50 hover:text-[#C92C1E]"
-                          }`}
+                    const isOpen = openGroups[group.title] ?? true;
+                    return (
+                      <div key={group.title} className="pb-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(group.title)}
+                          className="flex w-full items-center justify-between rounded-lg px-4 py-2 text-left"
                         >
-                          {item.icon(
-                            `w-5 h-5 shrink-0 transition-colors ${
-                              isActive ? "text-white" : item.colorClass
-                            }`,
-                          )}
-                        </Link>
-                      );
-                    })}
+                          <span
+                            className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? "text-slate-500" : "text-gray-400"
+                              }`}
+                          >
+                            {group.title}
+                          </span>
+                          <ChevronDownIcon
+                            className={`h-3.5 w-3.5 transition-transform duration-200 ${isDarkMode ? "text-slate-500" : "text-gray-400"
+                              } ${isOpen ? "rotate-0" : "-rotate-90"
+                              }`}
+                          />
+                        </button>
+
+                        {isOpen && (
+                          <div className="space-y-1">
+                            {group.items.map((item) => {
+                              const isActive =
+                                pathname === item.href ||
+                                (item.href !== "/" && pathname.startsWith(item.href));
+
+                              return (
+                                <Link
+                                  key={item.href}
+                                  href={item.href}
+                                  className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${isActive
+                                    ? "bg-[#C92C1E] text-white shadow-sm"
+                                    : isDarkMode
+                                      ? "text-slate-300 hover:bg-red-950/30 hover:text-red-300"
+                                      : "text-gray-600 hover:bg-red-50 hover:text-[#C92C1E]"
+                                    }`}
+                                >
+                                  {item.icon(
+                                    `w-5 h-5 shrink-0 transition-colors ${isActive ? "text-white" : item.colorClass
+                                    }`,
+                                  )}
+                                  <span className="truncate text-sm font-semibold">
+                                    {item.text}
+                                  </span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                  : flatMenuItems.map((item) => {
+                    const isActive =
+                      pathname === item.href ||
+                      (item.href !== "/" && pathname.startsWith(item.href));
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        title={item.text}
+                        className={`flex items-center justify-center rounded-xl px-0 py-3 transition-all duration-200 ${isActive
+                          ? "bg-[#C92C1E] text-white shadow-sm"
+                          : isDarkMode
+                            ? "text-slate-300 hover:bg-red-950/30 hover:text-red-300"
+                            : "text-gray-600 hover:bg-red-50 hover:text-[#C92C1E]"
+                          }`}
+                      >
+                        {item.icon(
+                          `w-5 h-5 shrink-0 transition-colors ${isActive ? "text-white" : item.colorClass
+                          }`,
+                        )}
+                      </Link>
+                    );
+                  })}
               </nav>
             </div>
 
             <div
-              className={`space-y-3 border-t pt-4 ${
-                isDarkMode ? "border-slate-800" : "border-gray-100"
-              }`}
+              className={`space-y-3 border-t pt-4 ${isDarkMode ? "border-slate-800" : "border-gray-100"
+                }`}
             >
               <div
-                className={`rounded-2xl border p-3 transition-all duration-200 ${
-                  isDarkMode
-                    ? "border-slate-800 bg-slate-900/80"
-                    : "border-red-100 bg-red-50/60"
-                } ${!isSidebarOpen ? "p-2" : ""}`}
+                className={`rounded-2xl border p-3 transition-all duration-200 ${isDarkMode
+                  ? "border-slate-800 bg-slate-900/80"
+                  : "border-red-100 bg-red-50/60"
+                  } ${!isSidebarOpen ? "p-2" : ""}`}
                 title={`${loggedInUser} • ${loggedInRole} • Klik profile untuk setting`}
               >
                 <div className="flex items-center gap-2">
                   <Link
                     href="/menu/setting"
-                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl transition ${
-                      !isSidebarOpen ? "justify-center" : ""
-                    }`}
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl transition ${!isSidebarOpen ? "justify-center" : ""
+                      }`}
                   >
                     <ProfileTagIcon
-                      className={`h-4 w-4 shrink-0 ${
-                        isDarkMode ? "text-red-300" : "text-[#C92C1E]"
-                      }`}
+                      className={`h-4 w-4 shrink-0 ${isDarkMode ? "text-red-300" : "text-[#C92C1E]"
+                        }`}
                     />
 
                     {isSidebarOpen && (
                       <div className="min-w-0 flex-1">
                         <p
-                          className={`truncate text-xs font-black leading-tight ${
-                            isDarkMode ? "text-white" : "text-gray-900"
-                          }`}
+                          className={`truncate text-xs font-black leading-tight ${isDarkMode ? "text-white" : "text-gray-900"
+                            }`}
                         >
                           {loggedInUser}
                         </p>
@@ -676,11 +652,10 @@ export default function RootLayout({
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition ${
-                        isDarkMode
-                          ? "border-red-900/50 bg-red-950/40 text-red-300 hover:bg-red-950"
-                          : "border-red-100 bg-white text-red-600 hover:bg-red-50"
-                      }`}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition ${isDarkMode
+                        ? "border-red-900/50 bg-red-950/40 text-red-300 hover:bg-red-950"
+                        : "border-red-100 bg-white text-red-600 hover:bg-red-50"
+                        }`}
                       title="Keluar"
                     >
                       <LogoutIcon className="h-4 w-4" />
@@ -692,11 +667,10 @@ export default function RootLayout({
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className={`mt-2 flex h-9 w-full items-center justify-center rounded-xl border transition ${
-                      isDarkMode
-                        ? "border-red-900/50 bg-red-950/40 text-red-300"
-                        : "border-red-100 bg-white text-red-600"
-                    }`}
+                    className={`mt-2 flex h-9 w-full items-center justify-center rounded-xl border transition ${isDarkMode
+                      ? "border-red-900/50 bg-red-950/40 text-red-300"
+                      : "border-red-100 bg-white text-red-600"
+                      }`}
                     title="Keluar"
                   >
                     <LogoutIcon className="h-4 w-4" />
@@ -705,9 +679,8 @@ export default function RootLayout({
               </div>
 
               <div
-                className={`flex items-center px-1 text-[11px] font-semibold ${
-                  isSidebarOpen ? "justify-between" : "justify-center"
-                } ${isDarkMode ? "text-slate-500" : "text-gray-400"}`}
+                className={`flex items-center px-1 text-[11px] font-semibold ${isSidebarOpen ? "justify-between" : "justify-center"
+                  } ${isDarkMode ? "text-slate-500" : "text-gray-400"}`}
               >
                 {isSidebarOpen && <span>v0.1 • Underdevelopment</span>}
                 <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-500" />
@@ -716,9 +689,8 @@ export default function RootLayout({
           </aside>
 
           <main
-            className={`min-h-screen flex-1 p-8 transition-all duration-300 ${
-              isDarkMode ? "bg-[#0F172A]" : "bg-[#FAF9F6]"
-            } ${isSidebarOpen ? "ml-64" : "ml-20"}`}
+            className={`min-h-screen flex-1 p-8 transition-all duration-300 ${isDarkMode ? "bg-[#0F172A]" : "bg-[#FAF9F6]"
+              } ${isSidebarOpen ? "ml-64" : "ml-20"}`}
           >
             <div className="w-full max-w-full">{children}</div>
           </main>

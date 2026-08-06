@@ -342,8 +342,11 @@ export interface OwnerListParams {
   limit?: number;
   sort?: string;
   status?: string;
+  subscription_status?: string;
   start_date?: string;
   end_date?: string;
+  created_from?: string;
+  created_to?: string;
   scope?: "active" | "trash" | "unscoped";
 }
 
@@ -731,6 +734,8 @@ export interface BackendLead {
   last_interaction_at?: string;
   next_follow_up_at?: string;
   invalidated_at?: string;
+  assigned_at?: string;
+  previous_pic?: string;
   created_at: string;
   updated_at: string;
 }
@@ -1549,6 +1554,7 @@ export interface UserResponse {
   email: string;
   phone: string;
   role: string;
+  role_code?: string;
   status: string;
   is_active: boolean;
 }
@@ -2100,6 +2106,18 @@ export async function updatePartnerType(
   return data.data;
 }
 
+export async function deletePartnerType(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner-types/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (res.status !== 204) {
+    await handleResponse<never>(res);
+  }
+}
+
 export async function listPartners(
   params: PartnerListParams = {},
 ): Promise<PartnerListData> {
@@ -2496,7 +2514,7 @@ export async function getPartnerType(id: number): Promise<PartnerTypeItem> {
 export async function listPartnerTypeCommissionRules(
   partnerTypeId: number,
   params: PartnerCommissionRuleListParams = {},
-): Promise<PartnerCommissionRuleListData> {
+): Promise<{ items: PartnerCommissionRuleItem[] }> {
   const qs = buildQueryString({
     plan_id: params.plan_id,
     active_only: params.active_only === undefined ? undefined : String(params.active_only),
@@ -2508,8 +2526,10 @@ export async function listPartnerTypeCommissionRules(
     headers: getAuthHeaders(),
   });
 
-  const data = await handleResponse<ApiEnvelope<PartnerCommissionRuleListData>>(res);
-  return data.data;
+  const data = await handleResponse<ApiEnvelope<any>>(res);
+  const raw = data.data;
+  const items = Array.isArray(raw) ? raw : (raw?.items || []);
+  return { items };
 }
 
 export async function getPartnerTypeCommissionRule(
@@ -2603,6 +2623,7 @@ export interface OutletOwnerBrief {
   email?: string;
   brand_name?: string;
   message?: string;
+  created_at?: string;
 }
 
 export interface OutletSubscriptionSummary {
@@ -2622,6 +2643,8 @@ export interface OutletOverviewItem {
   phone?: string;
   province?: string;
   city?: string;
+  district?: string;
+  sub_district?: string;
   address?: string;
   status: string;
   subscription_summary: OutletSubscriptionSummary;
@@ -2804,11 +2827,13 @@ export async function getGlobalOutlet(outletId: number): Promise<OutletDetail> {
 // punya create/update level-global), tapi dipicu dari halaman Kelolaan
 // Outlet lewat OwnerSearchPicker, bukan dari halaman Data Owner.
 export interface CreateOutletPayload {
-  code: string;
+  code?: string;
   name: string;
   phone?: string;
   province?: string;
   city?: string;
+  district?: string;
+  sub_district?: string;
   address?: string;
 }
 

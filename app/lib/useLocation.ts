@@ -123,7 +123,20 @@ export function useLocation() {
 
   const loadAllForEdit = useCallback(async (provinceName?: string, cityName?: string, districtName?: string) => {
     if (!provinceName) return;
-    const province = provinces.find((p) => p.name === provinceName);
+
+    let currentProvinces = provinces;
+    if (currentProvinces.length === 0) {
+      try {
+        const resP = await fetch("https://www.emsifa.com/api-wilayah-indonesia/api/provinces.json");
+        currentProvinces = await resP.json();
+        setProvinces(currentProvinces);
+      } catch (err) {
+        console.error("Failed to load provinces in loadAllForEdit", err);
+        return;
+      }
+    }
+
+    const province = currentProvinces.find((p) => p.name === provinceName);
     if (!province) return;
 
     setLoadingCities(true);
