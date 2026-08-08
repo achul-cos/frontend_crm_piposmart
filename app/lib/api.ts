@@ -1921,7 +1921,12 @@ export interface PartnerItem {
   name: string;
   phone?: string | null;
   email?: string | null;
+  province?: string | null;
+  city?: string | null;
+  district?: string | null;
+  sub_district?: string | null;
   address?: string | null;
+  pic_name?: string | null;
   bank_account_masked?: string | null;
   status: "ACTIVE" | "INACTIVE";
   created_at: string;
@@ -2031,6 +2036,10 @@ export interface UpdatePartnerPayload {
   name?: string;
   phone?: string;
   email?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  sub_district?: string;
   address?: string;
   bank_account?: string;
   status?: "ACTIVE" | "INACTIVE";

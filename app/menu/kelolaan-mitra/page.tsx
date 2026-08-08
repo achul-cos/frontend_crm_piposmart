@@ -116,6 +116,10 @@ type PartnerFormState = {
   phone: string;
   email: string;
   address: string;
+  province: string;
+  city: string;
+  district: string;
+  sub_district: string;
   bankAccount: string;
   status: "ACTIVE" | "INACTIVE";
 };
@@ -165,6 +169,10 @@ const EMPTY_PARTNER_FORM: PartnerFormState = {
   phone: "",
   email: "",
   address: "",
+  province: "",
+  city: "",
+  district: "",
+  sub_district: "",
   bankAccount: "",
   status: "ACTIVE",
 };
@@ -930,6 +938,10 @@ export default function KelolaanMitraPage() {
       phone: partner.phone || "",
       email: partner.email || "",
       address: partner.address || "",
+      province: partner.province || "",
+      city: partner.city || "",
+      district: partner.district || "",
+      sub_district: partner.sub_district || "",
       bankAccount: "",
       status: partner.status,
     });
@@ -1082,6 +1094,10 @@ export default function KelolaanMitraPage() {
           phone: partnerForm.phone.trim() || undefined,
           email: partnerForm.email.trim() || undefined,
           address: partnerForm.address.trim() || undefined,
+          province: partnerForm.province.trim() || undefined,
+          city: partnerForm.city.trim() || undefined,
+          district: partnerForm.district.trim() || undefined,
+          sub_district: partnerForm.sub_district.trim() || undefined,
           bank_account: partnerForm.bankAccount.trim() || undefined,
           status: partnerForm.status,
         });
@@ -1093,6 +1109,10 @@ export default function KelolaanMitraPage() {
           phone: partnerForm.phone.trim() || undefined,
           email: partnerForm.email.trim() || undefined,
           address: partnerForm.address.trim() || undefined,
+          province: partnerForm.province.trim() || undefined,
+          city: partnerForm.city.trim() || undefined,
+          district: partnerForm.district.trim() || undefined,
+          sub_district: partnerForm.sub_district.trim() || undefined,
           bank_account: partnerForm.bankAccount.trim() || undefined,
           status: partnerForm.status,
         });
@@ -2034,6 +2054,61 @@ export default function KelolaanMitraPage() {
                       }))
                     }
                     placeholder="Nomor rekening"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Provinsi
+                  </span>
+                  <input
+                    value={partnerForm.province}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        province: event.target.value,
+                      }))
+                    }
+                    placeholder="Provinsi"
+                    className={inputClass}
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Kabupaten/Kota
+                  </span>
+                  <input
+                    value={partnerForm.city}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                    placeholder="Kabupaten atau Kota"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Kecamatan
+                  </span>
+                  <input
+                    value={partnerForm.district}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        district: event.target.value,
+                      }))
+                    }
+                    placeholder="Kecamatan"
                     className={inputClass}
                   />
                 </label>

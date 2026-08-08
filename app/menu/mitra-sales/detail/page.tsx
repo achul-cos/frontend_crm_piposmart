@@ -208,6 +208,7 @@ function MitraSalesDetailPageInner() {
   const [referralLeadId, setReferralLeadId] = useState("");
   const [referralDate, setReferralDate] = useState("");
   const [referralNote, setReferralNote] = useState("");
+  const [openForm, setOpenForm] = useState<"PIC" | "INTERACTION" | "REFERRAL">("PIC");
 
   // Sprint 15a — status keaktifan bulanan: sudah/belum PIC sales memasukkan
   // data referral lead untuk mitra ini pada bulan yang dipilih.
@@ -496,82 +497,111 @@ function MitraSalesDetailPageInner() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kode Mitra</p><p className="mt-2 text-sm font-black text-slate-900">{partner.code}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Nama Owner/Mitra</p><p className="mt-2 text-sm font-black text-slate-900">{partner.owner_name || partner.name}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status</p><p className="mt-2 text-sm font-black text-slate-900">{partner.status}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Telepon</p><p className="mt-2 text-sm font-black text-slate-900">{partner.phone || "-"}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Email</p><p className="mt-2 text-sm font-black text-slate-900">{partner.email || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Provinsi</p><p className="mt-2 text-sm font-black text-slate-900">{partner.province || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kabupaten/Kota</p><p className="mt-2 text-sm font-black text-slate-900">{partner.city || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kecamatan</p><p className="mt-2 text-sm font-black text-slate-900">{partner.district || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kelurahan</p><p className="mt-2 text-sm font-black text-slate-900">{partner.sub_district || "-"}</p></div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Alamat</p><p className="mt-2 text-sm font-black leading-6 text-slate-900">{partner.address || "Alamat belum diisi"}</p></div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Alamat</p><p className="mt-2 text-sm font-black leading-6 text-slate-900">{[partner.address, partner.sub_district, partner.district, partner.city, partner.province].filter(Boolean).join(", ") || "Alamat belum diisi"}</p></div>
         </div>
       </SectionCard>
 
-      <SectionCard title="Pengelolaan & Operasional Sales Mitra" subtitle="Form penugasan PIC Sales, penambahan Lead Afiliasi Mitra, dan pencatatan interaksi.">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <SectionCard title="Operasional Harian" subtitle="Semua fitur aksi dikelompokkan vertikal agar alur kerja terasa berurutan saat melakukan follow up partner.">
+        <div className="flex flex-col gap-4">
           {/* PIC Sales Assignment Form */}
-          <form onSubmit={handleAssignPic} className="rounded-[26px] border border-slate-200 bg-slate-50/70 p-5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-xs font-black text-[#C92C1E]">1</span>
-              <p className="text-xs font-black text-slate-950">Penugasan PIC Sales</p>
-            </div>
-            <p className="mt-2 text-[11px] font-medium text-slate-500">Sales dapat mengatur dan mengambil alih tanggung jawab mitra ini.</p>
-            <div className="mt-4 space-y-3">
-              <select value={assignUserId} onChange={(event) => setAssignUserId(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
-                <option value="">Pilih Sales PIC</option>
-                {salesUsers.map((user) => <option key={user.id} value={user.id}>{user.name} ({humanizeRole(user.role)})</option>)}
-              </select>
-              <div className="flex flex-col gap-2">
-                <button type="submit" disabled={saving} className="w-full rounded-2xl bg-[#C92C1E] px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300">Simpan PIC Sales</button>
-                {activeAssignment ? <button type="button" onClick={() => void handleReleasePic()} disabled={saving} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Lepas PIC Aktif</button> : null}
-              </div>
-            </div>
-          </form>
-
-          {/* Form Lead Afiliasi Mitra */}
-          <form onSubmit={handleReferralSubmit} className={`rounded-[26px] border bg-white p-5 ${focusReferral ? "border-red-300 shadow-[0_0_0_4px_rgba(201,44,30,0.08)]" : "border-red-100 bg-[linear-gradient(135deg,#fff_0%,#fff7f5_100%)]"}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C92C1E] text-xs font-black text-white">2</span>
-                <p className="text-xs font-black text-slate-950">Tambah Lead Afiliasi Mitra</p>
-              </div>
-              <Link href="/menu/lead?action=create" className="text-[10px] font-bold text-[#C92C1E] underline hover:text-red-700">+ Lead Baru</Link>
-            </div>
-            <p className="mt-2 text-[11px] font-medium text-slate-500">Daftarkan Lead yang berafiliasi dengan Mitra untuk pelacakan komisi.</p>
-            <div className="mt-4 space-y-3">
+          <div className="rounded-[26px] border border-slate-200 bg-white">
+            <div className="flex items-center justify-between p-5 pb-4 cursor-pointer" onClick={() => setOpenForm(openForm === "PIC" ? "" as any : "PIC")}>
               <div>
-                <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Pilih Lead</label>
-                <select value={referralLeadId} onChange={(event) => setReferralLeadId(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
-                  <option value="">-- Pilih Lead Terdaftar --</option>
-                  {leads.map((lead) => <option key={lead.id} value={lead.id}>{leadLabel(lead)}</option>)}
-                </select>
+                <p className="text-sm font-black text-slate-950">Assign PIC</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">Tentukan sales yang bertanggung jawab atas hubungan mitra ini.</p>
               </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Tanggal Referensi</label>
-                <input type="datetime-local" value={referralDate} onChange={(event) => setReferralDate(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Catatan Afiliasi</label>
-                <textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} rows={2} placeholder="Misal: Direkomendasikan saat event / rekomendasi cabang" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              </div>
-              <button type="submit" disabled={saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">+ Hubungkan Lead Afiliasi</button>
+              <button type="button" className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black text-slate-600 transition hover:bg-slate-50">
+                {openForm === "PIC" ? "Sembunyikan Form ▲" : "Tampilkan Form ▼"}
+              </button>
             </div>
-          </form>
+            {openForm === "PIC" && (
+              <form onSubmit={handleAssignPic} className="border-t border-slate-100 p-5">
+                <div className="space-y-4">
+                  <select value={assignUserId} onChange={(event) => setAssignUserId(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                    <option value="">Pilih sales</option>
+                    {salesUsers.map((user) => <option key={user.id} value={user.id}>{user.name} ({humanizeRole(user.role)})</option>)}
+                  </select>
+                  <div className="flex flex-col gap-2">
+                    <button type="submit" disabled={saving} className="w-full rounded-2xl bg-[#C92C1E] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300">Simpan PIC</button>
+                    {activeAssignment ? <button type="button" onClick={() => void handleReleasePic()} disabled={saving} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Lepas PIC Aktif</button> : null}
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
 
           {/* Form Interaksi Mitra */}
-          <form onSubmit={handleInteractionSubmit} className={`rounded-[26px] border bg-white p-5 ${focusInteraction ? "border-red-300 shadow-[0_0_0_4px_rgba(201,44,30,0.08)]" : "border-slate-200"}`}>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-700">3</span>
-              <p className="text-xs font-black text-slate-950">Catat Interaksi Mitra</p>
+          <div className="rounded-[26px] border border-slate-200 bg-white">
+            <div className="flex items-center justify-between p-5 pb-4 cursor-pointer" onClick={() => setOpenForm(openForm === "INTERACTION" ? "" as any : "INTERACTION")}>
+              <div>
+                <p className="text-sm font-black text-slate-950">Form Interaksi</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">Catat call atau chat terakhir agar histori komunikasi mitra tetap rapi.</p>
+              </div>
+              <button type="button" className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black text-slate-600 transition hover:bg-slate-50">
+                {openForm === "INTERACTION" ? "Sembunyikan Form ▲" : "Tampilkan Form ▼"}
+              </button>
             </div>
-            <p className="mt-2 text-[11px] font-medium text-slate-500">Catat hasil komunikasi Call/Chat dengan mitra ini.</p>
-            <div className="mt-4 space-y-3">
-              <select value={interactionType} onChange={(event) => setInteractionType(event.target.value as "CALL" | "CHAT")} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
-                <option value="CALL">CALL (Telepon)</option>
-                <option value="CHAT">CHAT (WhatsApp / Message)</option>
-              </select>
-              <input type="datetime-local" max={new Date().toISOString().slice(0, 16)} value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={2} placeholder="Hasil pembahasan dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
-              <button type="submit" disabled={saving} className="w-full rounded-2xl border border-slate-900 bg-white px-5 py-3 text-xs font-black text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed">Simpan Log Interaksi</button>
+            {openForm === "INTERACTION" && (
+              <form onSubmit={handleInteractionSubmit} className="border-t border-slate-100 p-5">
+                <div className="space-y-4">
+                  <select value={interactionType} onChange={(event) => setInteractionType(event.target.value as "CALL" | "CHAT")} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                    <option value="CALL">CALL (Telepon)</option>
+                    <option value="CHAT">CHAT (WhatsApp / Message)</option>
+                  </select>
+                  <input type="datetime-local" max={new Date().toISOString().slice(0, 16)} value={interactionAt} onChange={(event) => setInteractionAt(event.target.value)} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  <textarea value={interactionNote} onChange={(event) => setInteractionNote(event.target.value)} rows={2} placeholder="Hasil pembahasan dengan mitra" className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  <button type="submit" disabled={saving} className="w-full rounded-2xl border border-slate-900 bg-white px-5 py-3 text-xs font-black text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed">Simpan Log Interaksi</button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          {/* Form Lead Afiliasi Mitra */}
+          <div className="rounded-[26px] border border-slate-200 bg-white">
+            <div className="flex items-center justify-between p-5 pb-4 cursor-pointer" onClick={() => setOpenForm(openForm === "REFERRAL" ? "" as any : "REFERRAL")}>
+              <div>
+                <div className="flex items-center gap-3">
+                  <p className="text-sm font-black text-slate-950">Form Referral</p>
+                  <Link href="/menu/lead?action=create" className="text-[10px] font-bold text-[#C92C1E] underline hover:text-red-700" onClick={(e) => e.stopPropagation()}>+ Lead Baru</Link>
+                </div>
+                <p className="mt-1 text-xs font-medium text-slate-500">Catat lead dari jaringan partner ini agar jejak closing dan komisinya saling nyambung.</p>
+              </div>
+              <button type="button" className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black text-slate-600 transition hover:bg-slate-50">
+                {openForm === "REFERRAL" ? "Sembunyikan Form ▲" : "Tampilkan Form ▼"}
+              </button>
             </div>
-          </form>
+            {openForm === "REFERRAL" && (
+              <form onSubmit={handleReferralSubmit} className="border-t border-slate-100 p-5">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Pilih Lead</label>
+                    <select value={referralLeadId} onChange={(event) => setReferralLeadId(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]">
+                      <option value="">-- Pilih Lead Terdaftar --</option>
+                      {leads.map((lead) => <option key={lead.id} value={lead.id}>{leadLabel(lead)}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Tanggal Referensi</label>
+                    <input type="datetime-local" value={referralDate} onChange={(event) => setReferralDate(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Catatan Afiliasi</label>
+                    <textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} rows={2} placeholder="Misal: Direkomendasikan saat event / rekomendasi cabang" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold outline-none focus:border-[#C92C1E]" />
+                  </div>
+                  <button type="submit" disabled={saving} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">+ Hubungkan Lead Afiliasi</button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       </SectionCard>
 
@@ -613,7 +643,7 @@ function MitraSalesDetailPageInner() {
           <div>
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Riwayat Penugasan PIC</h3>
             <div className="mt-3 space-y-3">
-              {assignmentHistory.length === 0 ? <EmptyState message="Belum ada riwayat assignment." /> : assignmentHistory.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-900">{item.user_name || `User #${item.user_id}`}</p><p className="mt-1 text-[11px] font-bold text-slate-400">{humanizeRole(item.user_role)} • assign {formatDateTime(item.assigned_at)}</p><p className="mt-1 text-[11px] font-bold text-slate-400">Release {formatDateTime(item.unassigned_at)}</p></div>)}
+              {assignmentHistory.length === 0 ? <EmptyState message="Belum ada riwayat assignment." /> : assignmentHistory.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-900">{salesUsers.find(u => u.id === item.user_id)?.name || item.user_name || `User #${item.user_id}`}</p><p className="mt-2 text-[11px] font-bold text-slate-600">Peran: {humanizeRole(item.user_role)}</p><p className="mt-1 text-[11px] font-bold text-slate-600">Ditugaskan pada: {formatDateTime(item.assigned_at)}</p><p className="mt-1 text-[11px] font-bold text-slate-600">Dilepas pada: {item.unassigned_at ? formatDateTime(item.unassigned_at) : "-"}</p></div>)}
             </div>
           </div>
           <div>

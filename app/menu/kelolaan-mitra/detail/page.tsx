@@ -439,11 +439,16 @@ function PartnerDetailPageInner() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kode</p><p className="mt-2 text-sm font-black text-slate-900">{partner.code}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Nama Owner/Mitra</p><p className="mt-2 text-sm font-black text-slate-900">{partner.owner_name || partner.name}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status</p><p className="mt-2 text-sm font-black text-slate-900">{partner.status}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Telepon</p><p className="mt-2 text-sm font-black text-slate-900">{partner.phone || "-"}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Email</p><p className="mt-2 text-sm font-black text-slate-900">{partner.email || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Provinsi</p><p className="mt-2 text-sm font-black text-slate-900">{partner.province || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kabupaten/Kota</p><p className="mt-2 text-sm font-black text-slate-900">{partner.city || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kecamatan</p><p className="mt-2 text-sm font-black text-slate-900">{partner.district || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kelurahan</p><p className="mt-2 text-sm font-black text-slate-900">{partner.sub_district || "-"}</p></div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Alamat</p><p className="mt-2 text-sm font-black leading-6 text-slate-900">{partner.address || "Alamat belum diisi"}</p></div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Alamat</p><p className="mt-2 text-sm font-black leading-6 text-slate-900">{[partner.address, partner.sub_district, partner.district, partner.city, partner.province].filter(Boolean).join(", ") || "Alamat belum diisi"}</p></div>
         </div>
       </SectionCard>
 
@@ -573,7 +578,7 @@ function PartnerDetailPageInner() {
           <div>
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Riwayat Assignment PIC</h3>
             <div className="mt-3 space-y-3">
-              {assignmentHistory.length === 0 ? <EmptyState message="Belum ada riwayat assignment." /> : assignmentHistory.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-900">{item.user_name || `User #${item.user_id}`}</p><p className="mt-1 text-[11px] font-bold text-slate-400">{humanizeRole(item.user_role)} • assign {formatDateTime(item.assigned_at)}</p><p className="mt-1 text-[11px] font-bold text-slate-400">Release {formatDateTime(item.unassigned_at)}</p></div>)}
+              {assignmentHistory.length === 0 ? <EmptyState message="Belum ada riwayat assignment." /> : assignmentHistory.map((item) => <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-900">{salesUsers.find(u => u.id === item.user_id)?.name || item.user_name || `User #${item.user_id}`}</p><p className="mt-2 text-[11px] font-bold text-slate-600">Peran: {humanizeRole(item.user_role)}</p><p className="mt-1 text-[11px] font-bold text-slate-600">Ditugaskan pada: {formatDateTime(item.assigned_at)}</p><p className="mt-1 text-[11px] font-bold text-slate-600">Dilepas pada: {item.unassigned_at ? formatDateTime(item.unassigned_at) : "-"}</p></div>)}
             </div>
           </div>
           <div>

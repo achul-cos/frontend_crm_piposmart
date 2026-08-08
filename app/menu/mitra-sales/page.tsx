@@ -33,6 +33,10 @@ const EMPTY_PARTNER_FORM: PartnerFormState = {
   name: "",
   phone: "",
   email: "",
+  province: "",
+  city: "",
+  district: "",
+  subDistrict: "",
   address: "",
   bankAccount: "",
   status: "ACTIVE",
@@ -254,6 +258,10 @@ export default function MitraSalesPage() {
       name: partner.name || "",
       phone: partner.phone || "",
       email: partner.email || "",
+      province: partner.province || "",
+      city: partner.city || "",
+      district: partner.district || "",
+      subDistrict: partner.sub_district || "",
       address: partner.address || "",
       bankAccount: "",
       status: partner.status || "ACTIVE",
@@ -307,6 +315,10 @@ export default function MitraSalesPage() {
           name: partnerForm.name.trim(),
           phone: partnerForm.phone.trim() || undefined,
           email: partnerForm.email.trim() || undefined,
+          province: partnerForm.province.trim() || undefined,
+          city: partnerForm.city.trim() || undefined,
+          district: partnerForm.district.trim() || undefined,
+          sub_district: partnerForm.subDistrict.trim() || undefined,
           address: partnerForm.address.trim() || undefined,
           bank_account: partnerForm.bankAccount.trim() || undefined,
           status: partnerForm.status,
@@ -320,6 +332,10 @@ export default function MitraSalesPage() {
           name: partnerForm.name.trim(),
           phone: partnerForm.phone.trim() || undefined,
           email: partnerForm.email.trim() || undefined,
+          province: partnerForm.province.trim() || undefined,
+          city: partnerForm.city.trim() || undefined,
+          district: partnerForm.district.trim() || undefined,
+          sub_district: partnerForm.subDistrict.trim() || undefined,
           address: partnerForm.address.trim() || undefined,
           bank_account: partnerForm.bankAccount.trim() || undefined,
           status: partnerForm.status,
@@ -704,7 +720,7 @@ export default function MitraSalesPage() {
                       </td>
                       <td className="px-4 py-4 align-top max-w-[200px]">
                         <p className="truncate whitespace-normal text-xs leading-relaxed text-gray-600">
-                          {partner.address || "-"}
+                          {[partner.address, partner.sub_district, partner.district, partner.city, partner.province].filter(Boolean).join(", ") || "-"}
                         </p>
                       </td>
                       <td className="px-4 py-4 align-top">

@@ -9,6 +9,10 @@ export type PartnerFormState = {
   name: string;
   phone: string;
   email: string;
+  province: string;
+  city: string;
+  district: string;
+  subDistrict: string;
   address: string;
   bankAccount: string;
   status: "ACTIVE" | "INACTIVE";
@@ -281,9 +285,60 @@ export default function MitraSalesFormModal({
                 />
               </label>
 
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Provinsi
+                </span>
+                <input
+                  value={form.province}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      province: event.target.value,
+                    }))
+                  }
+                  placeholder="Provinsi"
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Kota / Kabupaten
+                </span>
+                <input
+                  value={form.city}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      city: event.target.value,
+                    }))
+                  }
+                  placeholder="Kota / Kabupaten"
+                  className={inputClass}
+                />
+              </label>
+
               <label className="space-y-2 md:col-span-2">
                 <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                  Alamat
+                  Kecamatan
+                </span>
+                <input
+                  value={form.district}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      district: event.target.value,
+                    }))
+                  }
+                  placeholder="Kecamatan"
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Alamat Lengkap
                 </span>
                 <textarea
                   value={form.address}
