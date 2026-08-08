@@ -149,7 +149,7 @@ export default function OutletFormModal({
 
             <div className="mt-4 space-y-4">
               <label className="space-y-2 block">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-black">
                   Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <OwnerSearchPicker value={owner} onChange={setOwner} disabled={mode === "edit"} />
