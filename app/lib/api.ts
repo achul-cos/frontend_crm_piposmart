@@ -2948,6 +2948,8 @@ export interface OutletSubscriptionStatusItem {
   owner: OutletOwnerBrief;
   subscription_status_code: string;
   subscription_status_label: string;
+  due_status_code: string;
+  due_status_label: string;
   remaining_days?: number;
   remaining_days_display: string;
   last_subscription_end?: string;
@@ -2977,8 +2979,13 @@ export interface ListOutletSubscriptionStatusesParams {
   city?: string;
   owner_id?: number;
   subscription_status?: string;
+  status_langganan?: string;
+  status_jatuh_tempo?: string;
   month?: string;
   due_date?: string;
+  due_date_reference?: string;
+  due_date_start?: string;
+  due_date_end?: string;
   page?: number;
   limit?: number;
   sort?: string;

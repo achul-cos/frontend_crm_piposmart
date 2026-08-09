@@ -157,148 +157,156 @@ export default function OutletFormModal({
                   <OwnerSearchPicker value={owner} onChange={setOwner} disabled={mode === "edit"} />
                 </label>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="space-y-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Nama Outlet <span className="text-[#C92C1E]">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Contoh: Toko Kopi Sejahtera Pusat"
+                      className={modalInputClass}
+                      required
+                      disabled={isSaving}
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kode Outlet (Opsional)
+                    </span>
+                    <input
+                      type="text"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      placeholder="Biarkan kosong untuk auto-generate"
+                      className={modalInputClass}
+                      disabled={isSaving}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Nomor Telepon Outlet
+                    </span>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Contoh: 081234567890"
+                      className={modalInputClass}
+                      disabled={isSaving}
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Provinsi Outlet
+                    </span>
+                    <select
+                      value={province}
+                      onChange={(e) => {
+                        setProvince(e.target.value);
+                        setCity("");
+                        setDistrict("");
+                        setSubDistrict("");
+                        loadCitiesByProvinceName(e.target.value);
+                      }}
+                      className={modalSelectClass}
+                      disabled={isSaving || loadingProvinces}
+                    >
+                      <option value="">Pilih Provinsi</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.name}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kota/Kabupaten Outlet
+                    </span>
+                    <select
+                      value={city}
+                      onChange={(e) => {
+                        setCity(e.target.value);
+                        setDistrict("");
+                        setSubDistrict("");
+                        loadDistrictsByCityName(e.target.value);
+                      }}
+                      className={modalSelectClass}
+                      disabled={isSaving || !province || loadingCities}
+                    >
+                      <option value="">Pilih Kota/Kabupaten</option>
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kecamatan Outlet
+                    </span>
+                    <select
+                      value={district}
+                      onChange={(e) => {
+                        setDistrict(e.target.value);
+                        setSubDistrict("");
+                        loadVillagesByDistrictName(e.target.value);
+                      }}
+                      className={modalSelectClass}
+                      disabled={isSaving || !city || loadingDistricts}
+                    >
+                      <option value="">Pilih Kecamatan</option>
+                      {districts.map((d) => (
+                        <option key={d.id} value={d.name}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Kelurahan/Desa Outlet
+                    </span>
+                    <select
+                      value={subDistrict}
+                      onChange={(e) => setSubDistrict(e.target.value)}
+                      className={modalSelectClass}
+                      disabled={isSaving || !district || loadingVillages}
+                    >
+                      <option value="">Pilih Kelurahan/Desa</option>
+                      {villages.map((v) => (
+                        <option key={v.id} value={v.name}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <label className="block space-y-2">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Nama Outlet <span className="text-[#C92C1E]">*</span>
+                    Alamat Lengkap Outlet
                   </span>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Contoh: Toko Kopi Sejahtera Pusat"
-                    className={modalInputClass}
-                    required
+                  <textarea
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Masukkan detail alamat outlet..."
+                    rows={3}
+                    className={modalTextareaClass}
                     disabled={isSaving}
                   />
                 </label>
-                <label className="space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Kode Outlet (Opsional)
-                  </span>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="Biarkan kosong untuk auto-generate"
-                    className={modalInputClass}
-                    disabled={isSaving}
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="space-y-2 md:col-span-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Nomor Telepon Outlet
-                  </span>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Contoh: 081234567890"
-                    className={modalInputClass}
-                    disabled={isSaving}
-                  />
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Provinsi Outlet
-                  </span>
-                  <select
-                    value={province}
-                    onChange={(e) => {
-                      setProvince(e.target.value);
-                      setCity("");
-                      setDistrict("");
-                      setSubDistrict("");
-                      loadCitiesByProvinceName(e.target.value);
-                    }}
-                    className={modalSelectClass}
-                    disabled={isSaving || loadingProvinces}
-                  >
-                    <option value="">Pilih Provinsi</option>
-                    {provinces.map((p) => (
-                      <option key={p.id} value={p.name}>{p.name}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Kota/Kabupaten Outlet
-                  </span>
-                  <select
-                    value={city}
-                    onChange={(e) => {
-                      setCity(e.target.value);
-                      setDistrict("");
-                      setSubDistrict("");
-                      loadDistrictsByCityName(e.target.value);
-                    }}
-                    className={modalSelectClass}
-                    disabled={isSaving || !province || loadingCities}
-                  >
-                    <option value="">Pilih Kota/Kabupaten</option>
-                    {cities.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Kecamatan Outlet
-                  </span>
-                  <select
-                    value={district}
-                    onChange={(e) => {
-                      setDistrict(e.target.value);
-                      setSubDistrict("");
-                      loadVillagesByDistrictName(e.target.value);
-                    }}
-                    className={modalSelectClass}
-                    disabled={isSaving || !city || loadingDistricts}
-                  >
-                    <option value="">Pilih Kecamatan</option>
-                    {districts.map((d) => (
-                      <option key={d.id} value={d.name}>{d.name}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                    Kelurahan/Desa Outlet
-                  </span>
-                  <select
-                    value={subDistrict}
-                    onChange={(e) => setSubDistrict(e.target.value)}
-                    className={modalSelectClass}
-                    disabled={isSaving || !district || loadingVillages}
-                  >
-                    <option value="">Pilih Kelurahan/Desa</option>
-                    {villages.map((v) => (
-                      <option key={v.id} value={v.name}>{v.name}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <label className="space-y-2 block">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                  Alamat Lengkap Outlet
-                </span>
-                <textarea
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Masukkan detail alamat outlet..."
-                  rows={3}
-                  className={modalTextareaClass}
-                  disabled={isSaving}
-                />
-              </label>
               </div>
             </div>
           </div>

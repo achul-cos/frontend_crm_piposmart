@@ -99,13 +99,20 @@ type TableState = "umum" | "langganan" | "sampah" | "analytics";
 
 const SUBSCRIPTION_STATUS_OPTIONS = [
   { value: "", label: "Semua Status" },
+  { value: "TRIAL", label: "Trial" },
+  { value: "TIDAK_AKTIF", label: "Tidak Aktif" },
+  { value: "NEW", label: "New" },
   { value: "BERLANGGANAN", label: "Berlangganan" },
-  { value: "NEW", label: "NEW" },
+  { value: "RENEWAL", label: "Renewal" },
+];
+
+const DUE_STATUS_OPTIONS = [
+  { value: "", label: "Semua Status" },
+  { value: "BELUM_JATUH_TEMPO", label: "Belum Jatuh Tempo" },
   { value: "AKAN_JATUH_TEMPO", label: "Akan Jatuh Tempo" },
   { value: "JATUH_TEMPO", label: "Jatuh Tempo" },
   { value: "TELAH_JATUH_TEMPO", label: "Telah Jatuh Tempo" },
-  { value: "EXPIRED", label: "Unsubscribe" },
-  { value: "NOT_SUBSCRIBE", label: "Tidak Berlangganan" },
+  { value: "TRIAL", label: "Trial" },
 ];
 
 const TIME_STATUS_OPTIONS = [
@@ -123,8 +130,8 @@ function getOutletTimeStatus(createdAtStr?: string, filterMonthStr?: string): st
   const createdM = date.getMonth() + 1;
   const createdMonthStr = `${createdY}-${createdM.toString().padStart(2, "0")}`;
 
-  if (filterMonthStr === createdMonthStr) return "New";
-  if (filterMonthStr < createdMonthStr) return "Existing";
+  if (createdMonthStr === filterMonthStr) return "New";
+  if (createdMonthStr < filterMonthStr) return "Existing";
   return "Future";
 }
 
@@ -139,6 +146,17 @@ function currentDateValue(): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getStartOfMonth(monthStr: string): string {
+  return monthStr ? `${monthStr}-01` : "";
+}
+
+function getEndOfMonth(monthStr: string): string {
+  if (!monthStr) return "";
+  const [year, month] = monthStr.split("-");
+  const lastDay = new Date(Number(year), Number(month), 0).getDate();
+  return `${monthStr}-${String(lastDay).padStart(2, "0")}`;
 }
 
 const isDueStatus = (status: string) =>
@@ -208,19 +226,23 @@ export default function KelolaanOutletPage() {
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [subscriptionStatus, setSubscriptionStatus] = useState("");
+  const [statusLangganan, setStatusLangganan] = useState("");
+  const [month, setMonth] = useState(currentMonthValue());
+  const [statusJatuhTempo, setStatusJatuhTempo] = useState("");
+  const [dueDateReference, setDueDateReference] = useState(currentDateValue());
+  const [dueDateStart, setDueDateStart] = useState(getStartOfMonth(currentMonthValue()));
+  const [dueDateEnd, setDueDateEnd] = useState(getEndOfMonth(currentMonthValue()));
   const [timeStatusFilter, setTimeStatusFilter] = useState("");
+
   const [filterCode, setFilterCode] = useState("");
   const [filterName, setFilterName] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
   const [filterCity, setFilterCity] = useState("");
   const [filterPlan, setFilterPlan] = useState("");
-  const [month, setMonth] = useState(currentMonthValue());
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [page, setPage] = useState(1);
   const limit = 10;
-
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -255,12 +277,17 @@ export default function KelolaanOutletPage() {
   const subscriptionParams = useMemo(
     () => ({
       q: search || undefined,
-      subscription_status: subscriptionStatus || undefined,
+      subscription_status: statusLangganan || undefined,
+      status_langganan: statusLangganan || undefined,
+      status_jatuh_tempo: statusJatuhTempo || undefined,
       month,
+      due_date_reference: dueDateReference || undefined,
+      due_date_start: dueDateStart || undefined,
+      due_date_end: dueDateEnd || undefined,
       page,
       limit,
     }),
-    [search, subscriptionStatus, month, page],
+    [search, statusLangganan, statusJatuhTempo, month, dueDateReference, dueDateStart, dueDateEnd, page],
   );
 
   const overviewQuery = useGlobalOutletsQuery(
@@ -418,7 +445,7 @@ export default function KelolaanOutletPage() {
     bulkSelect.clear();
     setBulkResultMessage(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableState, page, search, subscriptionStatus, month, timeStatusFilter, filterCode, filterName, filterOwner, filterCity, filterPlan, createdFrom, createdTo]);
+  }, [tableState, page, search, statusLangganan, statusJatuhTempo, dueDateReference, month, dueDateStart, dueDateEnd, timeStatusFilter, filterCode, filterName, filterOwner, filterCity, filterPlan]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const visibleCount =
@@ -786,7 +813,10 @@ export default function KelolaanOutletPage() {
                           type="month"
                           value={month}
                           onChange={(e) => {
-                            setMonth(e.target.value);
+                            const val = e.target.value;
+                            setMonth(val);
+                            setDueDateStart(getStartOfMonth(val));
+                            setDueDateEnd(getEndOfMonth(val));
                             setPage(1);
                           }}
                           className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
@@ -820,71 +850,172 @@ export default function KelolaanOutletPage() {
                   )}
 
                   {tableState === "langganan" && (
-                    <>
-                      <AutocompleteFilter
-                        label="Kode Outlet"
-                        placeholder="Filter Kode..."
-                        value={filterCode}
-                        onChange={setFilterCode}
-                        options={uniqueSubCodes}
-                      />
-                      <AutocompleteFilter
-                        label="Nama Outlet"
-                        placeholder="Filter Nama Outlet..."
-                        value={filterName}
-                        onChange={setFilterName}
-                        options={uniqueSubNames}
-                      />
-                      <AutocompleteFilter
-                        label="Owner"
-                        placeholder="Filter Owner..."
-                        value={filterOwner}
-                        onChange={setFilterOwner}
-                        options={uniqueSubOwners}
-                      />
-                      <AutocompleteFilter
-                        label="Paket / Plan"
-                        placeholder="Filter Paket..."
-                        value={filterPlan}
-                        onChange={setFilterPlan}
-                        options={uniqueSubPlans}
-                      />
-                      <div className="flex flex-col gap-1.5 w-full">
-                        <span className="text-xs font-semibold text-black">Status Langganan</span>
-                        <select
-                          value={subscriptionStatus}
-                          onChange={(e) => {
-                            const nextStatus = e.target.value;
-                            setSubscriptionStatus(nextStatus);
-                            setPage(1);
-                            if (isDueStatus(nextStatus)) {
-                              if (month.length !== 10) setMonth(currentDateValue());
-                            } else {
-                              if (month.length === 10) setMonth(month.slice(0, 7));
-                            }
-                          }}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                        >
-                          {SUBSCRIPTION_STATUS_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <label className="flex flex-col gap-1.5 w-full">
-                        <span className="text-xs font-semibold text-black">Periode Tanggal / Bulan</span>
-                        <input
-                          type={isDueStatus(subscriptionStatus) ? "date" : "month"}
-                          value={month}
-                          onChange={(e) => {
-                            setMonth(e.target.value);
-                            setPage(1);
-                          }}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                    <div className="col-span-full flex flex-col gap-4 w-full">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-end gap-4">
+                        <AutocompleteFilter
+                          label="Kode Outlet"
+                          placeholder="Filter Kode..."
+                          value={filterCode}
+                          onChange={setFilterCode}
+                          options={uniqueSubCodes}
                         />
-                      </label>
-                    </>
+                        <AutocompleteFilter
+                          label="Nama Outlet"
+                          placeholder="Filter Nama Outlet..."
+                          value={filterName}
+                          onChange={setFilterName}
+                          options={uniqueSubNames}
+                        />
+                        <AutocompleteFilter
+                          label="Owner"
+                          placeholder="Filter Owner..."
+                          value={filterOwner}
+                          onChange={setFilterOwner}
+                          options={uniqueSubOwners}
+                        />
+                        <AutocompleteFilter
+                          label="Paket / Plan"
+                          placeholder="Filter Paket..."
+                          value={filterPlan}
+                          onChange={setFilterPlan}
+                          options={uniqueSubPlans}
+                        />
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <span className="text-xs font-semibold text-black">Status Langganan</span>
+                          <select
+                            value={statusLangganan}
+                            onChange={(e) => {
+                              setStatusLangganan(e.target.value);
+                              setPage(1);
+                            }}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          >
+                            {SUBSCRIPTION_STATUS_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <label className="flex flex-col gap-1.5 w-full">
+                          <span className="text-xs font-semibold text-black">Bulan Acuan</span>
+                          <input
+                            type="month"
+                            value={month}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setMonth(val);
+                              setDueDateStart(getStartOfMonth(val));
+                              setDueDateEnd(getEndOfMonth(val));
+                              setPage(1);
+                            }}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          />
+                        </label>
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <span className="text-xs font-semibold text-black">Status Jatuh Tempo</span>
+                          <select
+                            value={statusJatuhTempo}
+                            onChange={(e) => {
+                              setStatusJatuhTempo(e.target.value);
+                              setPage(1);
+                            }}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          >
+                            {DUE_STATUS_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="dueDateReference" className="text-xs font-semibold text-black">Acuan Jatuh Tempo</label>
+                            {dueDateReference && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDueDateReference("");
+                                  setPage(1);
+                                }}
+                                className="text-[10px] font-bold text-[#C92C1E] hover:underline"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                          <input
+                            id="dueDateReference"
+                            type="date"
+                            value={dueDateReference}
+                            onChange={(e) => {
+                              setDueDateReference(e.target.value);
+                              setPage(1);
+                            }}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="dueDateStart" className="text-xs font-semibold text-black">Dari Tanggal</label>
+                            {dueDateStart && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDueDateStart("");
+                                  setPage(1);
+                                }}
+                                className="text-[10px] font-bold text-[#C92C1E] hover:underline"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                          <input
+                            id="dueDateStart"
+                            type="date"
+                            min={month ? `${month}-01` : undefined}
+                            max={month ? `${month}-${new Date(Number(month.split('-')[0]), Number(month.split('-')[1]), 0).getDate()}` : undefined}
+                            value={dueDateStart}
+                            onChange={(e) => {
+                              setDueDateStart(e.target.value);
+                              setPage(1);
+                            }}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="dueDateEnd" className="text-xs font-semibold text-black">Sampai Tanggal</label>
+                            {dueDateEnd && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDueDateEnd("");
+                                  setPage(1);
+                                }}
+                                className="text-[10px] font-bold text-[#C92C1E] hover:underline"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                          <input
+                            id="dueDateEnd"
+                            type="date"
+                            min={month ? `${month}-01` : undefined}
+                            max={month ? `${month}-${new Date(Number(month.split('-')[0]), Number(month.split('-')[1]), 0).getDate()}` : undefined}
+                            value={dueDateEnd}
+                            onChange={(e) => {
+                              setDueDateEnd(e.target.value);
+                              setPage(1);
+                            }}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1268,6 +1399,7 @@ function getStatusDisplayLabel(code?: string, fallbackLabel?: string): string {
   if (c === "EXPIRED" || c === "UNSUBSCRIBE" || c === "KEDALUWARSA") return "UNSUBSCRIBE";
   if (c === "NOT_SUBSCRIBE" || c === "NOT SUBSCRIBE" || c === "TIDAK BERLANGGANAN") return "TIDAK BERLANGGANAN";
   if (c === "TRIAL") return "TRIAL";
+  if (c === "BELUM_JATUH_TEMPO" || c === "BELUM JATUH TEMPO") return "BELUM JATUH TEMPO";
   return fallbackLabel || code || "";
 }
 
@@ -1281,6 +1413,7 @@ function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] })
           <th className="px-4 py-4 font-bold">Owner</th>
           <th className="px-4 py-4 font-bold">Paket / Plan</th>
           <th className="px-4 py-4 text-center font-bold">Status Langganan</th>
+          <th className="px-4 py-4 text-center font-bold">Status Jatuh Tempo</th>
           <th className="px-4 py-4 font-bold">Sisa Hari</th>
           <th className="px-4 py-4 font-bold">Tgl Mulai</th>
           <th className="px-4 py-4 font-bold">Tgl Berakhir</th>
@@ -1290,7 +1423,7 @@ function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] })
       <tbody className="divide-y divide-gray-100 bg-white">
         {items.length === 0 ? (
           <tr>
-            <td colSpan={9} className="p-8 text-center text-sm font-medium text-gray-400">
+            <td colSpan={10} className="p-8 text-center text-sm font-medium text-gray-400">
               Tidak ada data langganan yang cocok untuk bulan ini.
             </td>
           </tr>
@@ -1310,6 +1443,17 @@ function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] })
               )}`}>
                 {getStatusDisplayLabel(item.subscription_status_code, item.subscription_status_label)}
               </span>
+            </td>
+            <td className="px-4 py-4 align-top text-center">
+              {item.due_status_code || item.due_status_label ? (
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getSubscriptionStatusBadgeClass(
+                  item.due_status_code || item.due_status_label
+                )}`}>
+                  {getStatusDisplayLabel(item.due_status_code, item.due_status_label)}
+                </span>
+              ) : (
+                <span className="text-gray-400">—</span>
+              )}
             </td>
             <td className="px-4 py-4 align-top">{item.remaining_days_display}</td>
             <td className="px-4 py-4 align-top whitespace-nowrap">{formatIndonesianDate(item.subscription_start_date || item.created_at)}</td>

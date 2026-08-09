@@ -100,7 +100,7 @@ export default function OwnerSearchPicker({
           setIsOpen(true);
         }}
         placeholder="Cari kode atau nama owner..."
-        className="w-full rounded-xl border border-gray-200 bg-white p-2.5 text-xs font-bold outline-none focus:border-[#C92C1E]"
+        className="w-full rounded-xl border border-gray-200 bg-white p-2.5 text-xs font-bold text-black outline-none focus:border-[#C92C1E]"
       />
 
       {isOpen && query.trim().length >= 2 && (
