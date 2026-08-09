@@ -1,13 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { KeyRound } from 'lucide-react';
 import { authFetchJson } from '@/app/lib/api';
+import {
+  RowActionButton,
+  RowActionGroup,
+  EditActionButton,
+} from '@/app/components/table/RowActionButton';
 import KelolaUserFormModal, {
   type UserFormState,
   type UserItem,
   type UserRole,
   type UserStatus,
 } from "./KelolaUserFormModal";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 
 const EMPTY_FORM: UserFormState = {
   name: "",
@@ -868,62 +875,51 @@ export default function KelolaUserPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-            Total User
-          </p>
-          <h2 className="text-3xl font-black">{totalUsers}</h2>
-        </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Total User"
+          value={totalUsers}
+          description="Seluruh akun login internal CRM."
+          tone="accent"
+          silhouette="users"
+        />
+        <QuickInfoCard
+          label="User Aktif"
+          value={activeUsers}
+          description="Akun yang sedang aktif dipakai."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="User Nonaktif"
+          value={inactiveUsers}
+          description="Akun yang sedang dinonaktifkan."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
 
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            User Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{activeUsers}</h2>
-        </div>
-
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            User Nonaktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{inactiveUsers}</h2>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Admin
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">{totalAdmin}</h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Akses penuh ke sistem.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Supervisor
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {totalSupervisor}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Monitoring dan pengawasan sales.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Sales
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">{totalSales}</h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Akun untuk follow up dan aktivitas sales.
-          </p>
-        </div>
-      </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Admin"
+          value={totalAdmin}
+          description="Akses penuh ke seluruh sistem."
+          tone="violet"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Supervisor"
+          value={totalSupervisor}
+          description="Monitoring dan pengawasan sales."
+          tone="sky"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Sales"
+          value={totalSales}
+          description="Akun untuk aktivitas follow up lapangan."
+          tone="amber"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
@@ -1057,33 +1053,24 @@ export default function KelolaUserPage() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openEditModal(user);
-                          }}
-                          className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
+                    <td
+                      className="px-4 py-4 text-center"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <RowActionGroup>
+                        <EditActionButton
                           title="Edit User"
-                        >
-                          Edit
-                        </button>
+                          onClick={() => openEditModal(user)}
+                        />
 
-                        <button
-                          type="button"
+                        <RowActionButton
+                          icon={KeyRound}
+                          tone="edit"
+                          title={resettingId === user.id ? "Reset..." : "Reset Password"}
                           disabled={resettingId === user.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleResetPassword(user);
-                          }}
-                          className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          title="Reset Password"
-                        >
-                          {resettingId === user.id ? "Reset..." : "Reset"}
-                        </button>
-                      </div>
+                          onClick={() => void handleResetPassword(user)}
+                        />
+                      </RowActionGroup>
                     </td>
                   </tr>
                 ))
@@ -1113,10 +1100,10 @@ export default function KelolaUserPage() {
         >
           <div className="flex min-h-full items-center justify-center p-4 md:p-6">
             <div
-              className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+              className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+              <div className="app-modal-header px-5 py-4 md:px-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -1133,14 +1120,14 @@ export default function KelolaUserPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedUser(null)}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                    className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
                   >
                     Tutup
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
+              <div className="app-modal-body grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                 {[
                   ["Nama", selectedUser.name || "-"],
                   [

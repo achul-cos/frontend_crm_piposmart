@@ -1,19 +1,40 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import Sprint14g1Board, {
-  type Sprint14g1Section,
-} from "@/app/components/analytics/Sprint14g1Board";
+import { frontendEnv } from "@/app/lib/env";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
+import type { Sprint14g1Section } from "@/app/components/analytics/Sprint14g1Board";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import {
   uploadImportFile,
   getImportBatch,
   commitImportBatch,
   downloadImportErrors,
-  authFetchJson,
   ImportBatchResponse,
 } from "@/app/lib/api";
+import {
+  getKpiJob,
+  useBulkSetTargetMutation,
+  useCheckKpiJobMutation,
+  useCreateKpiDefinitionMutation,
+  useDeactivateKpiDefinitionMutation,
+  useKpiDefinitionsQuery,
+  useKpiRankingQuery,
+  useSalesTargetsQuery,
+  useTriggerRecomputeMutation,
+  useOverrideTargetMutation,
+} from "@/app/lib/queries/target";
+
+const Sprint14g1Board = dynamic(
+  () => import("@/app/components/analytics/Sprint14g1Board"),
+  {
+    ssr: false,
+    loading: () => <AnalyticsTabSkeleton sections={2} />,
+  },
+);
 
 export type TargetFormMode =
   | "TARGET_BULK"
@@ -120,11 +141,11 @@ function TargetFormModal({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
       <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        className="app-modal-panel flex w-full max-w-3xl rounded-[32px] shadow-2xl transition-all xl:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+        <div className="app-modal-header px-5 py-4 md:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -153,7 +174,7 @@ function TargetFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
             >
               Tutup
             </button>
@@ -161,7 +182,7 @@ function TargetFormModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+        <div className="app-modal-body flex-1 space-y-4 p-5 md:p-6">
           {formError ? (
             <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-600">
               {formError}
@@ -271,7 +292,7 @@ function TargetFormModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-4 md:px-6 flex justify-end gap-3">
+        <div className="app-modal-footer flex flex-shrink-0 justify-end gap-3 px-5 py-4 md:px-6">
           <button
             type="button"
             onClick={onClose}
@@ -392,11 +413,11 @@ function SalesTargetImportModal({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
       <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        className="app-modal-panel flex w-full max-w-3xl rounded-[32px] shadow-2xl transition-all xl:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+        <div className="app-modal-header px-5 py-4 md:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -413,7 +434,7 @@ function SalesTargetImportModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
             >
               Tutup
             </button>
@@ -421,7 +442,7 @@ function SalesTargetImportModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+        <div className="app-modal-body flex-1 space-y-4 p-5 md:p-6">
             {error ? (
               <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-600">
                 {error}
@@ -585,7 +606,7 @@ function SalesTargetImportModal({
   );
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE_URL = frontendEnv.apiBaseUrl;
 
 const DEFAULT_PERIOD = {
   periodYear: new Date().getFullYear(),
@@ -607,135 +628,6 @@ const EMPTY_FORM: TargetFormState = {
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   return "Terjadi kesalahan yang tidak diketahui.";
-}
-
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  return authFetchJson<T>(path, options);
-}
-
-function unwrapList<T>(response: { data?: T[] | { items?: T[] } }) {
-  if (Array.isArray(response.data)) return response.data;
-  return response.data?.items || [];
-}
-
-async function getKpiRanking(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: KpiRankingItem[] | { items?: KpiRankingItem[] };
-  }>(`/kpi/ranking?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getKpiResults(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: KpiRankingItem[] | { items?: KpiRankingItem[] };
-  }>(`/kpi/results?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getSalesTargets(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: SalesTargetItem[] | { items?: SalesTargetItem[] };
-  }>(`/sales-targets?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getKpiDefinitions(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: KpiDefinitionItem[] | { items?: KpiDefinitionItem[] };
-  }>(`/kpi-definitions?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getKpiJob(jobId: number) {
-  const response = await apiFetch<{ data?: KpiJobItem }>(`/kpi/jobs/${jobId}`);
-  return response.data;
-}
-
-async function bulkSetTarget(payload: {
-  periodYear: number;
-  periodMonth: number;
-  metricCode: string;
-  targetValue: string;
-}) {
-  return apiFetch<{
-    data?: {
-      eligible_sales?: number;
-      created?: number;
-      skipped?: number;
-    };
-  }>("/sales-targets/bulk", {
-    method: "POST",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-      metric_code: payload.metricCode,
-      target_value: payload.targetValue,
-    }),
-  });
-}
-
-async function overrideTarget(salesId: number, payload: {
-  periodYear: number;
-  periodMonth: number;
-  metricCode: string;
-  targetValue: string;
-}) {
-  return apiFetch<{ data?: SalesTargetItem }>(`/sales-targets/${salesId}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-      metric_code: payload.metricCode,
-      target_value: payload.targetValue,
-    }),
-  });
-}
-
-async function createKpiDefinition(payload: {
-  periodYear: number;
-  periodMonth: number;
-  metricCode: string;
-  weight: string;
-  thresholdAchieved: string;
-  thresholdNear: string;
-}) {
-  return apiFetch<{ data?: KpiDefinitionItem }>("/kpi-definitions", {
-    method: "POST",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-      metric_code: payload.metricCode,
-      weight: payload.weight,
-      threshold_achieved: payload.thresholdAchieved,
-      threshold_near: payload.thresholdNear,
-    }),
-  });
-}
-
-async function deactivateKpiDefinition(id: number) {
-  return apiFetch<{ data?: KpiDefinitionItem }>(`/kpi-definitions/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      is_active: false,
-    }),
-  });
-}
-
-async function triggerRecompute(payload: {
-  periodYear: number;
-  periodMonth: number;
-}) {
-  return apiFetch<{ data?: KpiJobItem }>("/kpi/recompute", {
-    method: "POST",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-    }),
-  });
 }
 
 function getClassificationLabel(classification?: string) {
@@ -771,12 +663,32 @@ export default function TargetPage() {
   const [periodYear, setPeriodYear] = useState(DEFAULT_PERIOD.periodYear);
   const [periodMonth, setPeriodMonth] = useState(DEFAULT_PERIOD.periodMonth);
 
-  const [ranking, setRanking] = useState<KpiRankingItem[]>([]);
-  const [targets, setTargets] = useState<SalesTargetItem[]>([]);
-  const [definitions, setDefinitions] = useState<KpiDefinitionItem[]>([]);
-  const [lastJob, setLastJob] = useState<KpiJobItem | null>(null);
+  const rankingQuery = useKpiRankingQuery(periodYear, periodMonth);
+  const targetsQuery = useSalesTargetsQuery(periodYear, periodMonth);
+  const definitionsQuery = useKpiDefinitionsQuery(periodYear, periodMonth);
 
-  const [loading, setLoading] = useState(true);
+  const ranking = rankingQuery.data ?? [];
+  const targets = targetsQuery.data ?? [];
+  const definitions = definitionsQuery.data ?? [];
+  const [lastJob, setLastJob] = useState<KpiJobItem | null>(null);
+  const bulkSetTargetMutation = useBulkSetTargetMutation();
+  const overrideTargetMutation = useOverrideTargetMutation();
+  const createKpiDefinitionMutation = useCreateKpiDefinitionMutation();
+  const deactivateDefinitionMutation = useDeactivateKpiDefinitionMutation();
+  const triggerRecomputeMutation = useTriggerRecomputeMutation();
+  const checkJobMutation = useCheckKpiJobMutation();
+
+  const loading =
+    (rankingQuery.isLoading && !ranking.length) ||
+    (targetsQuery.isLoading && !targets.length) ||
+    (definitionsQuery.isLoading && !definitions.length);
+  const loadData = useCallback(async () => {
+    await Promise.all([
+      rankingQuery.refetch(),
+      targetsQuery.refetch(),
+      definitionsQuery.refetch(),
+    ]);
+  }, [rankingQuery, targetsQuery, definitionsQuery]);
   const [saving, setSaving] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -829,64 +741,6 @@ export default function TargetPage() {
       .filter((item) => item.is_active !== false)
       .reduce((total, item) => total + Number(item.weight || 0), 0);
   }, [definitions]);
-
-  const loadData = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true);
-    setPageError("");
-
-    try {
-      const [rankingResult, targetResult, definitionResult] =
-        await Promise.allSettled([
-          getKpiRanking(periodYear, periodMonth),
-          getSalesTargets(periodYear, periodMonth),
-          getKpiDefinitions(periodYear, periodMonth),
-        ]);
-
-      if (rankingResult.status === "fulfilled") {
-        setRanking(rankingResult.value);
-      } else {
-        const fallbackResults = await getKpiResults(periodYear, periodMonth);
-        setRanking(fallbackResults);
-      }
-
-      setTargets(
-        targetResult.status === "fulfilled" ? targetResult.value : [],
-      );
-
-      setDefinitions(
-        definitionResult.status === "fulfilled" ? definitionResult.value : [],
-      );
-    } catch (error) {
-      setPageError(getErrorMessage(error));
-      setRanking([]);
-      setTargets([]);
-      setDefinitions([]);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, [periodMonth, periodYear]);
-
-  useEffect(() => {
-    const initialTimer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    const interval = window.setInterval(() => {
-      void loadData(false);
-    }, 10000);
-
-    const handleFocus = () => {
-      void loadData(false);
-    };
-
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [loadData]);
 
   const openModal = (mode: TargetFormMode) => {
     setFormMode(mode);
@@ -956,7 +810,7 @@ export default function TargetPage() {
 
     try {
       if (formMode === "TARGET_BULK") {
-        const response = await bulkSetTarget({
+        const response = await bulkSetTargetMutation.mutateAsync({
           periodYear: Number(form.periodYear),
           periodMonth: Number(form.periodMonth),
           metricCode: form.metricCode.trim(),
@@ -971,18 +825,21 @@ export default function TargetPage() {
       }
 
       if (formMode === "TARGET_OVERRIDE") {
-        await overrideTarget(Number(form.salesId), {
-          periodYear: Number(form.periodYear),
-          periodMonth: Number(form.periodMonth),
-          metricCode: form.metricCode.trim(),
-          targetValue: form.targetValue.trim(),
+        await overrideTargetMutation.mutateAsync({
+          salesId: Number(form.salesId),
+          payload: {
+            periodYear: Number(form.periodYear),
+            periodMonth: Number(form.periodMonth),
+            metricCode: form.metricCode.trim(),
+            targetValue: form.targetValue.trim(),
+          },
         });
 
         setPageSuccess(`Target Sales ID #${form.salesId} berhasil di-override.`);
       }
 
       if (formMode === "KPI_DEFINITION") {
-        await createKpiDefinition({
+        await createKpiDefinitionMutation.mutateAsync({
           periodYear: Number(form.periodYear),
           periodMonth: Number(form.periodMonth),
           metricCode: form.metricCode.trim(),
@@ -995,7 +852,7 @@ export default function TargetPage() {
       }
 
       if (formMode === "RECOMPUTE") {
-        const response = await triggerRecompute({
+        const response = await triggerRecomputeMutation.mutateAsync({
           periodYear: Number(form.periodYear),
           periodMonth: Number(form.periodMonth),
         });
@@ -1011,7 +868,7 @@ export default function TargetPage() {
       setPeriodYear(Number(form.periodYear));
       setPeriodMonth(Number(form.periodMonth));
 
-      await loadData(false);
+      await loadData();
       closeModal();
     } catch (error) {
       setFormError(getErrorMessage(error));
@@ -1025,9 +882,9 @@ export default function TargetPage() {
     setPageSuccess("");
 
     try {
-      await deactivateKpiDefinition(item.id);
+      await deactivateDefinitionMutation.mutateAsync(item.id);
       setPageSuccess("KPI definition berhasil dinonaktifkan.");
-      await loadData(false);
+      await loadData();
     } catch (error) {
       setPageError(getErrorMessage(error));
     }
@@ -1040,7 +897,7 @@ export default function TargetPage() {
     setPageSuccess("");
 
     try {
-      const job = await getKpiJob(lastJob.id);
+      const job = await checkJobMutation.mutateAsync(lastJob.id);
       setLastJob(job || null);
       setPageSuccess(`Status job terbaru: ${job?.status || "-"}`);
     } catch (error) {
@@ -1187,7 +1044,35 @@ export default function TargetPage() {
           ) : null}
 
           {/* Metric Cards Summary */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <QuickInfoCardGrid>
+            <QuickInfoCard
+              label="Total Ranking Sales"
+              value={ranking.length}
+              description="Jumlah sales yang masuk ranking periode aktif."
+              tone="accent"
+              silhouette="target"
+            />
+            <QuickInfoCard
+              label="Achieved (>= 100%)"
+              value={achievedCount}
+              description="Target yang sudah tercapai atau terlampaui."
+              tone="emerald"
+            />
+            <QuickInfoCard
+              label="Near Achieved (>= 80%)"
+              value={nearCount}
+              description="Target yang hampir tercapai."
+              tone="amber"
+            />
+            <QuickInfoCard
+              label="Not Achieved (< 80%)"
+              value={notAchievedCount}
+              description="Target yang masih tertinggal jauh."
+              tone="rose"
+            />
+          </QuickInfoCardGrid>
+
+          <div className="hidden grid grid-cols-1 gap-4 md:grid-cols-4">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
               <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
                 Total Ranking Sales
@@ -1555,10 +1440,10 @@ export default function TargetPage() {
             >
               <div className="flex min-h-full items-center justify-center p-4 md:p-6">
                 <div
-                  className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+                  className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+                  <div className="app-modal-header px-5 py-4 md:px-6">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -1577,14 +1462,14 @@ export default function TargetPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedRanking(null)}
-                        className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                        className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
                       >
                         Tutup
                       </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
+                  <div className="app-modal-body grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                     {[
                       ["Rank Position", `#${selectedRanking.rank_position || "-"}`],
                       ["Sales Code", selectedRanking.sales_code || "-"],
@@ -1629,7 +1514,7 @@ export default function TargetPage() {
           setIsImportHistoryModalOpen(true);
         }}
         onSuccess={() => {
-          loadData(false);
+          void loadData();
         }}
       />
 

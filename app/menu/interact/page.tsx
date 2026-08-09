@@ -1,23 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import {
-  fetchCustomerInteractions,
-  getSalesList,
-  getProfile,
-  type InteractionItem,
-  type UserResponse,
-} from "@/app/lib/api";
-import AnalyticsTab from "./AnalyticsTab";
+import { getProfile } from "@/app/lib/api";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import { useInteractionListQuery, useInteractSalesListQuery } from "@/app/lib/queries/interact";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 
 export default function InteractPage() {
   usePageTitle("Interact | CRM Piposmart");
 
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
-  const [interactions, setInteractions] = useState<InteractionItem[]>([]);
-  const [salesList, setSalesList] = useState<UserResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [currentRole, setCurrentRole] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("piposmart_user_role") || ""
@@ -29,7 +29,6 @@ export default function InteractPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
   const limit = 20;
   const isSales = currentRole.toUpperCase() === "SALES";
 
@@ -48,47 +47,45 @@ export default function InteractPage() {
       });
   }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [interactData, salesData] = await Promise.all([
-        fetchCustomerInteractions({
-          page,
-          limit,
-          type: typeFilter || undefined,
-          sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
-          score: scoreFilter ? Number(scoreFilter) : undefined,
-          interaction_from: dateFrom || undefined,
-          interaction_to: dateTo || undefined,
-        }),
-        isSales
-          ? Promise.resolve<UserResponse[]>([])
-          : getSalesList().catch((err) => {
-              console.warn("Failed to fetch sales list, user might not have permission:", err);
-              return [];
-            }),
-      ]);
+  const interactionListParams = useMemo(
+    () => ({
+      page,
+      limit,
+      type: typeFilter || undefined,
+      sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
+      score: scoreFilter ? Number(scoreFilter) : undefined,
+      interaction_from: dateFrom || undefined,
+      interaction_to: dateTo || undefined,
+    }),
+    [page, typeFilter, salesFilter, scoreFilter, dateFrom, dateTo, isSales]
+  );
 
-      setInteractions(interactData.items || []);
-      setTotalItems(interactData.pagination?.total || 0);
-      setSalesList(salesData || []);
-    } catch (err) {
-      console.error("Failed to load interact data", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data: interactData, isLoading } = useInteractionListQuery(interactionListParams);
+  const { data: salesListData } = useInteractSalesListQuery(!isSales);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, typeFilter, salesFilter, scoreFilter, dateFrom, dateTo, isSales]);
+  const interactions = interactData?.items || [];
+  const salesList = salesListData || [];
+  const totalItems = interactData?.pagination?.total || 0;
 
   const totalPages = Math.ceil(totalItems / limit) || 1;
+  const typeFilterLabel =
+    typeFilter === "CALL"
+      ? "Call Saja"
+      : typeFilter === "CHAT"
+        ? "Chat Saja"
+        : typeFilter === "CALL_CHAT"
+          ? "Call + Chat"
+          : "Semua Tipe";
+  const scoreFilterLabel =
+    scoreFilter === "3"
+      ? "Skor 3"
+      : scoreFilter === "2"
+        ? "Skor 2"
+        : scoreFilter === "1"
+          ? "Skor 1"
+          : scoreFilter === "0"
+            ? "Skor 0"
+            : "Semua Skor";
 
   const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
 
@@ -128,7 +125,7 @@ export default function InteractPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden space-y-6 font-sans text-[#1C1C1E]">
+    <div className="w-full space-y-6 font-sans text-[#1C1C1E]">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
@@ -144,6 +141,38 @@ export default function InteractPage() {
           </p>
         </div>
       </div>
+
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Interaksi"
+          value={totalItems}
+          description="Jumlah riwayat interaksi sesuai filter aktif."
+          tone="accent"
+          silhouette="interact"
+        />
+        <QuickInfoCard
+          label="Ditampilkan"
+          value={interactions.length}
+          description="Baris interaksi pada halaman aktif saat ini."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Tipe Aktif"
+          value={typeFilterLabel}
+          description={`Filter skor: ${scoreFilterLabel}.`}
+          tone="rose"
+        />
+        <QuickInfoCard
+          label="Halaman"
+          value={
+            <>
+              {page} <span className="text-base font-bold opacity-70">/ {totalPages}</span>
+            </>
+          }
+          description="Posisi halaman aktif dari total riwayat."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       <div className="max-w-full overflow-x-auto">
         <div className="inline-flex min-w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
@@ -278,8 +307,13 @@ export default function InteractPage() {
                     </td>
                   </tr>
                 ) : (
-                  interactions.map((row) => (
-                    <tr key={row.id} className="transition-colors hover:bg-gray-50">
+                  interactions.map((row, rowIndex) => (
+                    <AnimatedListItem
+                      as="tr"
+                      key={row.id}
+                      index={rowIndex}
+                      className="transition-colors hover:bg-gray-50"
+                    >
                       <td className="whitespace-nowrap px-4 py-4">
                         <div className="font-bold text-gray-900">{formatDateTime(row.interaction_at)}</div>
                         <div className="mt-1 text-xs text-gray-500">
@@ -339,7 +373,7 @@ export default function InteractPage() {
                         <div className="font-bold text-gray-900">{formatDate(row.follow_up_at || "")}</div>
                         <div className="mt-1 max-w-[150px] truncate text-xs text-gray-500">{row.follow_up_note || "-"}</div>
                       </td>
-                    </tr>
+                    </AnimatedListItem>
                   ))
                 )}
               </tbody>

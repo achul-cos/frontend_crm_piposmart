@@ -1,17 +1,25 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import Sprint14g1Board, {
-  type Sprint14g1Section,
-} from "@/app/components/analytics/Sprint14g1Board";
+import type { Sprint14g1Section } from "@/app/components/analytics/Sprint14g1Board";
+import { getProfile } from "@/app/lib/api";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import {
-  fetchClosings,
-  getSalesList,
-  getProfile,
-  type ClosingItem,
-  type UserResponse,
-} from "@/app/lib/api";
+  useClosingListQuery,
+  useClosingSalesListQuery,
+} from "@/app/lib/queries/closing";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+
+const Sprint14g1Board = dynamic(
+  () => import("@/app/components/analytics/Sprint14g1Board"),
+  {
+    ssr: false,
+    loading: () => <AnalyticsTabSkeleton sections={2} />,
+  },
+);
 
 type ClosingColumnKey =
   | "code"
@@ -93,9 +101,6 @@ export default function ClosingPage() {
   usePageTitle("Closing | CRM Piposmart");
 
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
-  const [closings, setClosings] = useState<ClosingItem[]>([]);
-  const [salesList, setSalesList] = useState<UserResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [currentRole, setCurrentRole] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("piposmart_user_role") || ""
@@ -107,7 +112,13 @@ export default function ClosingPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const [debouncedFilters, setDebouncedFilters] = useState({
+    searchQuery: "",
+    statusFilter: "",
+    salesFilter: "",
+    dateFrom: "",
+    dateTo: "",
+  });
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<ClosingColumnKey[]>(() => [
     "date",
@@ -171,49 +182,45 @@ export default function ClosingPage() {
     localStorage.setItem(closingColumnStorageKey, JSON.stringify(visibleColumns));
   }, [visibleColumns]);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [closingData, salesData] = await Promise.all([
-        fetchClosings({
-          page,
-          limit,
-          q: searchQuery || undefined,
-          status: statusFilter || undefined,
-          sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
-          closed_from: dateFrom || undefined,
-          closed_to: dateTo || undefined,
-        }),
-        isSales
-          ? Promise.resolve<UserResponse[]>([])
-          : getSalesList().catch((err) => {
-              console.warn("Failed to fetch sales list, user might not have permission:", err);
-              return [];
-            }),
-      ]);
-
-      setClosings(closingData.items || []);
-      setTotalItems(closingData.pagination?.total || 0);
-      setSalesList(salesData || []);
-    } catch (err) {
-      console.error("Failed to load closing data", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadData();
+      setDebouncedFilters({ searchQuery, statusFilter, salesFilter, dateFrom, dateTo });
     }, 300);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, searchQuery, statusFilter, salesFilter, dateFrom, dateTo, isSales]);
+  }, [searchQuery, statusFilter, salesFilter, dateFrom, dateTo]);
+
+  const closingListParams = useMemo(
+    () => ({
+      page,
+      limit,
+      q: debouncedFilters.searchQuery || undefined,
+      status: debouncedFilters.statusFilter || undefined,
+      sales_id: !isSales && debouncedFilters.salesFilter ? Number(debouncedFilters.salesFilter) : undefined,
+      closed_from: debouncedFilters.dateFrom || undefined,
+      closed_to: debouncedFilters.dateTo || undefined,
+    }),
+    [page, debouncedFilters, isSales]
+  );
+
+  const { data: closingData, isLoading } = useClosingListQuery(closingListParams);
+  const { data: salesListData } = useClosingSalesListQuery(!isSales);
+
+  const closings = closingData?.items || [];
+  const salesList = salesListData || [];
+  const totalItems = closingData?.pagination?.total || 0;
 
   const totalPages = Math.ceil(totalItems / limit) || 1;
   const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
   const visibleColumnCount = visibleColumns.length;
+  const statusFilterLabel =
+    statusFilter === "PENDING_RECONCILIATION"
+      ? "Pending Rekonsiliasi"
+      : statusFilter === "CONFIRMED"
+        ? "Confirmed"
+        : statusFilter === "REJECTED"
+          ? "Rejected"
+          : "Semua Status";
 
   const isColumnVisible = (key: ClosingColumnKey) => visibleColumns.includes(key);
 
@@ -266,7 +273,7 @@ export default function ClosingPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden space-y-6 font-sans text-[#1C1C1E]">
+    <div className="w-full space-y-6 font-sans text-[#1C1C1E]">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
@@ -283,6 +290,38 @@ export default function ClosingPage() {
           </p>
         </div>
       </div>
+
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Closing"
+          value={totalItems}
+          description="Jumlah closing sesuai filter aktif."
+          tone="accent"
+          silhouette="closing"
+        />
+        <QuickInfoCard
+          label="Ditampilkan"
+          value={closings.length}
+          description="Baris closing pada halaman aktif saat ini."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Status Aktif"
+          value={statusFilterLabel}
+          description="Status filter yang sedang dipakai."
+          tone="amber"
+        />
+        <QuickInfoCard
+          label="Halaman"
+          value={
+            <>
+              {page} <span className="text-base font-bold opacity-70">/ {totalPages}</span>
+            </>
+          }
+          description="Posisi halaman aktif dari total closing."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       <div className="max-w-full overflow-x-auto">
         <div className="inline-flex min-w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
@@ -499,8 +538,13 @@ export default function ClosingPage() {
                     </td>
                   </tr>
                 ) : (
-                  closings.map((row) => (
-                    <tr key={row.id} className="transition-colors hover:bg-gray-50">
+                  closings.map((row, rowIndex) => (
+                    <AnimatedListItem
+                      as="tr"
+                      key={row.id}
+                      index={rowIndex}
+                      className="transition-colors hover:bg-gray-50"
+                    >
                       {isColumnVisible("code") ? (
                         <td className="whitespace-nowrap px-4 py-4">
                           <div className="font-bold text-[#C92C1E]">{row.code || "-"}</div>
@@ -570,7 +614,7 @@ export default function ClosingPage() {
                       {isColumnVisible("status") ? (
                         <td className="px-4 py-4 text-center">{getStatusBadge(row.status)}</td>
                       ) : null}
-                    </tr>
+                    </AnimatedListItem>
                   ))
                 )}
               </tbody>

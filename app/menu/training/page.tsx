@@ -1,27 +1,27 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import {
-  fetchTrainings,
-  getSalesList,
-  getProfile,
-  type TrainingItem,
-  type UserResponse,
-} from "@/app/lib/api";
-import AnalyticsTab from "./AnalyticsTab";
+import { getProfile } from "@/app/lib/api";
 import CalendarTab from "./CalendarTab";
+import { ViewActionButton } from "@/app/components/table/RowActionButton";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import { useTrainingListQuery, useTrainingSalesListQuery } from "@/app/lib/queries/training";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 
 export default function TrainingPage() {
   usePageTitle("Training | CRM Piposmart");
 
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"list" | "calendar" | "analytics">("list");
-  const [trainings, setTrainings] = useState<TrainingItem[]>([]);
-  const [salesList, setSalesList] = useState<UserResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [currentRole, setCurrentRole] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("piposmart_user_role") || ""
@@ -33,7 +33,6 @@ export default function TrainingPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
   const limit = 20;
   const isSales = currentRole.toUpperCase() === "SALES";
 
@@ -52,48 +51,35 @@ export default function TrainingPage() {
       });
   }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [trainingData, salesData] = await Promise.all([
-        fetchTrainings({
-          page,
-          limit,
-          status: statusFilter || undefined,
-          training_type: typeFilter || undefined,
-          sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
-          scheduled_from: dateFrom || undefined,
-          scheduled_to: dateTo || undefined,
-        }),
-        isSales
-          ? Promise.resolve<UserResponse[]>([])
-          : getSalesList().catch((err) => {
-              console.warn("Failed to fetch sales list, user might not have permission:", err);
-              return [];
-            }),
-      ]);
+  const trainingListParams = useMemo(
+    () => ({
+      page,
+      limit,
+      status: statusFilter || undefined,
+      training_type: typeFilter || undefined,
+      sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
+      scheduled_from: dateFrom || undefined,
+      scheduled_to: dateTo || undefined,
+    }),
+    [page, statusFilter, typeFilter, salesFilter, dateFrom, dateTo, isSales]
+  );
 
-      setTrainings(trainingData.items || []);
-      setTotalItems(trainingData.pagination?.total || 0);
-      setSalesList(salesData || []);
-    } catch (err) {
-      console.error("Failed to load training data", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data: trainingData, isLoading } = useTrainingListQuery(trainingListParams);
+  const { data: salesListData } = useTrainingSalesListQuery(!isSales);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, typeFilter, salesFilter, dateFrom, dateTo, isSales]);
+  const trainings = trainingData?.items || [];
+  const salesList = salesListData || [];
+  const totalItems = trainingData?.pagination?.total || 0;
 
   const totalPages = Math.ceil(totalItems / limit) || 1;
   const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
+  const activeTabLabel =
+    activeTab === "calendar"
+      ? "Kalender"
+      : activeTab === "analytics"
+        ? "Analitik"
+        : "Daftar Training";
+  const statusFilterLabel = statusFilter || "Semua Status";
 
   const formatDateTime = (str?: string) => {
     if (!str) return "-";
@@ -117,7 +103,7 @@ export default function TrainingPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden space-y-6 font-sans text-[#1C1C1E]">
+    <div className="w-full space-y-6 font-sans text-[#1C1C1E]">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
@@ -133,6 +119,38 @@ export default function TrainingPage() {
           </p>
         </div>
       </div>
+
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Training"
+          value={totalItems}
+          description="Jumlah training sesuai filter aktif."
+          tone="accent"
+          silhouette="training"
+        />
+        <QuickInfoCard
+          label="Ditampilkan"
+          value={trainings.length}
+          description="Baris training pada halaman aktif saat ini."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Tab Aktif"
+          value={activeTabLabel}
+          description={`Filter status: ${statusFilterLabel}.`}
+          tone="rose"
+        />
+        <QuickInfoCard
+          label="Halaman"
+          value={
+            <>
+              {page} <span className="text-base font-bold opacity-70">/ {totalPages}</span>
+            </>
+          }
+          description="Posisi halaman aktif dari total training."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       <div className="max-w-full overflow-x-auto">
         <div className="inline-flex min-w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
@@ -280,8 +298,13 @@ export default function TrainingPage() {
                     </td>
                   </tr>
                 ) : (
-                  trainings.map((row) => (
-                    <tr key={row.id} className="transition-colors hover:bg-gray-50">
+                  trainings.map((row, rowIndex) => (
+                    <AnimatedListItem
+                      as="tr"
+                      key={row.id}
+                      index={rowIndex}
+                      className="transition-colors hover:bg-gray-50"
+                    >
                       <td className="whitespace-nowrap px-4 py-4">
                         <div className="font-bold text-gray-900">{formatDateTime(row.scheduled_at)}</div>
                         {row.status === "COMPLETED" && (
@@ -364,18 +387,9 @@ export default function TrainingPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <Link
-                          href={`/menu/training/${row.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 px-3 py-1.5 text-xs font-bold text-blue-600 transition-colors hover:border-blue-200 hover:bg-blue-50"
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          Detail
-                        </Link>
+                        <ViewActionButton href={`/menu/training/${row.id}`} title="Detail" />
                       </td>
-                    </tr>
+                    </AnimatedListItem>
                   ))
                 )}
               </tbody>

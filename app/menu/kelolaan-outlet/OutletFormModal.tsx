@@ -9,6 +9,7 @@ import {
   type BackendOutlet,
 } from "@/app/lib/api";
 import OwnerSearchPicker from "@/app/components/OwnerSearchPicker";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import { useLocation } from "@/app/lib/useLocation";
 
 const modalInputClass =
@@ -122,38 +123,39 @@ export default function OutletFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 md:p-6">
-      <div className="w-full md:w-[640px] max-w-full flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all">
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-6 py-5">
-          <h3 className="text-xl font-black text-slate-950">
-            {mode === "edit" ? "Edit Data Outlet" : "Tambah Outlet Baru"}
-          </h3>
-          <p className="text-xs font-medium text-slate-500 mt-1">
-            {mode === "edit"
-              ? "Perbarui informasi detail lokasi usaha outlet."
-              : "Pendaftaran outlet baru. Kode outlet opsional dan akan terisi otomatis jika dikosongkan."}
-          </p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[75vh]">
-          {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-              Data Outlet
+    <ScreenPortal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 md:p-6">
+        <div className="app-modal-panel flex max-w-full w-full rounded-[32px] shadow-2xl transition-all md:w-[640px]">
+          <div className="app-modal-header px-6 py-5">
+            <h3 className="text-xl font-black text-slate-950">
+              {mode === "edit" ? "Edit Data Outlet" : "Tambah Outlet Baru"}
+            </h3>
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              {mode === "edit"
+                ? "Perbarui informasi detail lokasi usaha outlet."
+                : "Pendaftaran outlet baru. Kode outlet opsional dan akan terisi otomatis jika dikosongkan."}
             </p>
+          </div>
 
-            <div className="mt-4 space-y-4">
-              <label className="space-y-2 block">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                  Owner <span className="text-[#C92C1E]">*</span>
-                </span>
-                <OwnerSearchPicker value={owner} onChange={setOwner} disabled={mode === "edit"} />
-              </label>
+          <div className="app-modal-body flex-1 space-y-4 p-6">
+            {error && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                Data Outlet
+              </p>
+
+              <div className="mt-4 space-y-4">
+                <label className="block space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Owner <span className="text-[#C92C1E]">*</span>
+                  </span>
+                  <OwnerSearchPicker value={owner} onChange={setOwner} disabled={mode === "edit"} />
+                </label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="space-y-2">
@@ -297,29 +299,30 @@ export default function OutletFormModal({
                   disabled={isSaving}
                 />
               </label>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/80 px-6 py-4 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSaving}
-            className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black text-slate-600 transition hover:bg-slate-50"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={isSaving}
-            className="rounded-2xl bg-[#C92C1E] px-6 py-3 text-xs font-black text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-          >
-            {isSaving ? "Menyimpan..." : mode === "edit" ? "Simpan Perubahan" : "Simpan Outlet"}
-          </button>
+          <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isSaving}
+              className="rounded-2xl bg-[#C92C1E] px-6 py-3 text-xs font-black text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            >
+              {isSaving ? "Menyimpan..." : mode === "edit" ? "Simpan Perubahan" : "Simpan Outlet"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ScreenPortal>
   );
 }

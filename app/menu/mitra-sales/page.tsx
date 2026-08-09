@@ -1,23 +1,34 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { Eye, UserRoundCog } from "lucide-react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { formatPhoneDisplay } from "@/app/lib/phone";
 import {
-  createPartner,
-  deactivatePartner,
-  listPartners,
-  listPartnerTypes,
-  updatePartner,
-  type PartnerItem,
-  type PartnerTypeItem,
-} from "@/app/lib/api";
+  RowActionButton,
+  RowActionGroup,
+  ViewActionButton,
+  EditActionButton,
+  DeleteActionButton,
+  RestoreActionButton,
+} from "@/app/components/table/RowActionButton";
+import type { PartnerItem, PartnerTypeItem } from "@/app/lib/api";
+import {
+  useCreatePartner,
+  useDeactivatePartner,
+  usePartnerTypesQuery,
+  usePartnersQuery,
+  useUpdatePartner,
+} from "@/app/lib/queries/mitraSales";
 import MitraSalesFormModal, {
   type PartnerFormState,
 } from "./MitraSalesFormModal";
 import AnalyticsTab from "./AnalyticsTab";
 import { PartnerActivityBadge } from "@/app/components/PartnerActivityBadge";
 import { PartnerPICLabel } from "@/app/components/PartnerPICLabel";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
 
 type TableMode =
   | "PARTNER_TYPES"
@@ -101,12 +112,9 @@ function getStatusBadgeClass(status?: string) {
 export default function MitraSalesPage() {
   usePageTitle("Mitra Sales");
 
+  const { confirm, withLoading } = useFeedback();
   const [tableMode, setTableMode] = useState<TableMode>("PARTNER_TYPES");
-  const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
-  const [partners, setPartners] = useState<PartnerItem[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [loadingMaster, setLoadingMaster] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [pageError, setPageError] = useState("");
@@ -126,69 +134,35 @@ export default function MitraSalesPage() {
     useState<PartnerFormState>(EMPTY_PARTNER_FORM);
   const [partnerFormError, setPartnerFormError] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
+  const partnersParams = useMemo(
+    () => ({
+      search: appliedSearch,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
+    [appliedSearch, page],
+  );
 
-    const loadMaster = async () => {
-      setLoadingMaster(true);
-      setPageError("");
+  const {
+    data: partnerTypesData,
+    isLoading: loadingMaster,
+    error: partnerTypesError,
+  } = usePartnerTypesQuery();
+  const partnerTypes: PartnerTypeItem[] = partnerTypesData?.items || [];
 
-      try {
-        const result = await listPartnerTypes();
+  const {
+    data: partnersData,
+    isLoading: loading,
+    error: partnersError,
+  } = usePartnersQuery(partnersParams);
+  const partners: PartnerItem[] = partnersData?.items || [];
 
-        if (cancelled) return;
+  const loadError = partnerTypesError || partnersError;
+  const effectivePageError = pageError || (loadError ? getErrorMessage(loadError) : "");
 
-        setPartnerTypes(result.items || []);
-      } catch (error) {
-        if (!cancelled) {
-          setPageError(getErrorMessage(error));
-          setPartnerTypes([]);
-        }
-      } finally {
-        if (!cancelled) setLoadingMaster(false);
-      }
-    };
-
-    void loadMaster();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadData = async () => {
-      setLoading(true);
-      setPageError("");
-
-      try {
-        const result = await listPartners({
-          search: appliedSearch,
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
-        });
-
-        if (cancelled) return;
-
-        setPartners(result.items || []);
-      } catch (error) {
-        if (!cancelled) {
-          setPageError(getErrorMessage(error));
-          setPartners([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [appliedSearch, page]);
+  const createPartnerMutation = useCreatePartner();
+  const updatePartnerMutation = useUpdatePartner();
+  const deactivatePartnerMutation = useDeactivatePartner();
 
   const filteredPartners = useMemo(() => {
     return partners.filter((partner) =>
@@ -226,16 +200,6 @@ export default function MitraSalesPage() {
         .includes(keyword),
     );
   }, [partnerTypes, typeSearch]);
-
-  const refreshPartners = async () => {
-    const result = await listPartners({
-      search: appliedSearch,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
-    });
-
-    setPartners(result.items || []);
-  };
 
   const openCreatePartnerModal = () => {
     setEditingPartner(null);
@@ -303,18 +267,21 @@ export default function MitraSalesPage() {
 
     try {
       if (editingPartner) {
-        await updatePartner(editingPartner.id, {
-          name: partnerForm.name.trim(),
-          phone: partnerForm.phone.trim() || undefined,
-          email: partnerForm.email.trim() || undefined,
-          address: partnerForm.address.trim() || undefined,
-          bank_account: partnerForm.bankAccount.trim() || undefined,
-          status: partnerForm.status,
+        await updatePartnerMutation.mutateAsync({
+          id: editingPartner.id,
+          payload: {
+            name: partnerForm.name.trim(),
+            phone: partnerForm.phone.trim() || undefined,
+            email: partnerForm.email.trim() || undefined,
+            address: partnerForm.address.trim() || undefined,
+            bank_account: partnerForm.bankAccount.trim() || undefined,
+            status: partnerForm.status,
+          },
         });
 
         setPageSuccess("Mitra berhasil diperbarui.");
       } else {
-        await createPartner({
+        await createPartnerMutation.mutateAsync({
           partner_type_id: Number(partnerForm.partnerTypeId),
           code: partnerForm.code.trim().toUpperCase(),
           name: partnerForm.name.trim(),
@@ -330,7 +297,6 @@ export default function MitraSalesPage() {
       }
 
       closePartnerModal();
-      await refreshPartners();
     } catch (error) {
       setPartnerFormError(getErrorMessage(error));
     } finally {
@@ -339,16 +305,23 @@ export default function MitraSalesPage() {
   };
 
   const handleDeactivatePartner = async (partner: PartnerItem) => {
-    if (!window.confirm(`Nonaktifkan mitra ${partner.name}?`)) return;
+    const ok = await confirm({
+      title: "Nonaktifkan Mitra",
+      message: `Nonaktifkan mitra ${partner.name}? Mitra ini tidak akan bisa dipakai untuk referral baru sampai diaktifkan kembali.`,
+      confirmLabel: "Nonaktifkan",
+      danger: true,
+    });
+    if (!ok) return;
 
     setSaving(true);
     setPageError("");
     setPageSuccess("");
 
     try {
-      await deactivatePartner(partner.id);
+      await withLoading(() => deactivatePartnerMutation.mutateAsync(partner.id), {
+        label: "Menonaktifkan mitra...",
+      });
       setPageSuccess("Mitra berhasil dinonaktifkan.");
-      await refreshPartners();
     } catch (error) {
       setPageError(getErrorMessage(error));
     } finally {
@@ -357,16 +330,23 @@ export default function MitraSalesPage() {
   };
 
   const handleRestorePartner = async (partner: PartnerItem) => {
-    if (!window.confirm(`Pulihkan mitra ${partner.name}?`)) return;
+    const ok = await confirm({
+      title: "Pulihkan Mitra",
+      message: `Pulihkan mitra ${partner.name} menjadi aktif kembali?`,
+      confirmLabel: "Pulihkan",
+    });
+    if (!ok) return;
 
     setSaving(true);
     setPageError("");
     setPageSuccess("");
 
     try {
-      await updatePartner(partner.id, { status: "ACTIVE" });
+      await withLoading(
+        () => updatePartnerMutation.mutateAsync({ id: partner.id, payload: { status: "ACTIVE" } }),
+        { label: "Memulihkan mitra..." },
+      );
       setPageSuccess("Mitra berhasil dipulihkan.");
-      await refreshPartners();
     } catch (error) {
       setPageError(getErrorMessage(error));
     } finally {
@@ -443,62 +423,50 @@ export default function MitraSalesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-            Total Mitra
-          </p>
-          <h2 className="text-3xl font-black">{filteredPartners.length}</h2>
-        </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Total Mitra"
+          value={filteredPartners.length}
+          description="Data mitra yang masuk pada filter aktif."
+          tone="accent"
+          silhouette="people"
+        />
+        <QuickInfoCard
+          label="Mitra Aktif"
+          value={activePartners.length}
+          description="Mitra aktif yang bisa ditangani sales."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Mitra Nonaktif"
+          value={inactivePartners.length}
+          description="Mitra yang sedang nonaktif pada modul ini."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
 
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Mitra Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {activePartners.length}
-          </h2>
-        </div>
-
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Mitra Nonaktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {inactivePartners.length}
-          </h2>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Jenis Mitra
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {partnerTypes.length}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Referensi jenis mitra yang dapat dipakai untuk onboarding mitra baru.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Data Ditampilkan
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {tableMode === "PARTNER_TYPES"
+      <QuickInfoCardGrid columns={2}>
+        <QuickInfoCard
+          label="Jenis Mitra"
+          value={partnerTypes.length}
+          description="Referensi jenis mitra untuk onboarding."
+          tone="violet"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Data Ditampilkan"
+          value={
+            tableMode === "PARTNER_TYPES"
               ? filteredPartnerTypes.length
               : tableMode === "ANALYTICS"
                 ? partnerTypes.length + filteredPartners.length
-                : visiblePartners.length}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Sesuai tab dan filter yang sedang aktif.
-          </p>
-        </div>
-      </div>
+                : visiblePartners.length
+          }
+          description="Sesuai tab dan filter yang sedang aktif."
+          tone="sky"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+      </QuickInfoCardGrid>
 
       <div className="rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="grid grid-cols-2 gap-1 text-sm font-bold md:flex">
@@ -586,14 +554,12 @@ export default function MitraSalesPage() {
                         </p>
                       </td>
                       <td className="px-4 py-4 text-center align-top">
-                        <div className="flex items-center justify-center gap-2">
-                          <Link
+                        <RowActionGroup>
+                          <ViewActionButton
                             href={`/menu/mitra-sales/jenis-mitra/${item.id}`}
-                            className="rounded-lg bg-blue-50 px-3 py-2 text-[10px] font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                          >
-                            Detail
-                          </Link>
-                        </div>
+                            title="Detail"
+                          />
+                        </RowActionGroup>
                       </td>
                     </tr>
                   ))
@@ -693,7 +659,7 @@ export default function MitraSalesPage() {
                         <p className="mt-1 text-xs text-gray-400">{partner.partner_type?.code || "-"}</p>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <p className="font-medium text-gray-900">{partner.phone || "-"}</p>
+                        <p className="font-medium text-gray-900">{partner.phone ? formatPhoneDisplay(partner.phone) : "-"}</p>
                         <p className="mt-1 text-xs text-gray-400">{partner.email || "-"}</p>
                       </td>
                       <td className="px-4 py-4 align-top font-medium text-gray-900">
@@ -708,48 +674,37 @@ export default function MitraSalesPage() {
                         </p>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <div className="flex flex-wrap items-center justify-center gap-2">
-                          <Link
+                        <RowActionGroup>
+                          <RowActionButton
+                            icon={Eye}
+                            tone="view"
+                            title="Detail & PIC"
                             href={`/menu/mitra-sales/detail?id=${partner.id}`}
-                            className="rounded-lg bg-blue-50 px-3 py-2 text-center text-[10px] font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                          >
-                            Detail & PIC
-                          </Link>
+                          />
                           {tableMode === "ACTIVE_PARTNERS" ? (
                             <>
-                              <Link
+                              <RowActionButton
+                                icon={UserRoundCog}
+                                tone="view"
+                                title="Lead Afiliasi"
                                 href={`/menu/mitra-sales/detail?id=${partner.id}&tab=referral`}
-                                className="rounded-lg bg-red-50 px-3 py-2 text-center text-[10px] font-black text-[#C92C1E] transition-colors hover:bg-red-100"
-                              >
-                                + Lead Afiliasi
-                              </Link>
-                              <button
-                                type="button"
+                              />
+                              <EditActionButton
                                 onClick={() => openEditPartnerModal(partner)}
-                                className="rounded-lg bg-orange-50 px-3 py-2 text-[10px] font-black text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
+                              />
+                              <DeleteActionButton
+                                title="Nonaktif"
                                 onClick={() => void handleDeactivatePartner(partner)}
                                 disabled={saving}
-                                className="rounded-lg bg-gray-50 px-3 py-2 text-[10px] font-black text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                Nonaktif
-                              </button>
+                              />
                             </>
                           ) : (
-                            <button
-                              type="button"
+                            <RestoreActionButton
                               onClick={() => void handleRestorePartner(partner)}
                               disabled={saving}
-                              className="rounded-lg bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Pulihkan
-                            </button>
+                            />
                           )}
-                        </div>
+                        </RowActionGroup>
                       </td>
                     </tr>
                   ))

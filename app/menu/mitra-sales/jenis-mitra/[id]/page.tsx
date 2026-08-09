@@ -1,19 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useMemo } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import {
-  getCatalogPackages,
-  getCatalogPlans,
-  getPartnerType,
-  getPartnerTypeCommissionRule,
-  listPartnerTypeCommissionRules,
-  type CatalogPackage,
-  type CatalogPlan,
-  type PartnerCommissionRuleItem,
-  type PartnerTypeItem,
-} from "@/app/lib/api";
+import { usePartnerTypeDetailBundleQuery } from "@/app/lib/queries/mitraSales";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "-";
@@ -92,73 +83,26 @@ export default function MitraSalesJenisMitraDetailPage({
 
   const resolvedParams = use(params);
   const partnerTypeId = Number(resolvedParams.id);
+  const isValidId = Boolean(partnerTypeId) && !Number.isNaN(partnerTypeId);
 
-  const [partnerType, setPartnerType] = useState<PartnerTypeItem | null>(null);
-  const [rules, setRules] = useState<PartnerCommissionRuleItem[]>([]);
-  const [packages, setPackages] = useState<CatalogPackage[]>([]);
-  const [plans, setPlans] = useState<CatalogPlan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState("");
+  const {
+    data: bundle,
+    isLoading: bundleLoading,
+    error: bundleError,
+  } = usePartnerTypeDetailBundleQuery(partnerTypeId, isValidId);
 
-  useEffect(() => {
-    if (!partnerTypeId || Number.isNaN(partnerTypeId)) {
-      setPageError("ID jenis mitra tidak valid.");
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadData = async () => {
-      setLoading(true);
-      setPageError("");
-
-      try {
-        const [detail, ruleList, packageList, planList] = await Promise.all([
-          getPartnerType(partnerTypeId),
-          listPartnerTypeCommissionRules(partnerTypeId),
-          getCatalogPackages().catch(() => []),
-          getCatalogPlans().catch(() => []),
-        ]);
-
-        const detailedRules = await Promise.all(
-          (ruleList.items || []).map(async (rule) => {
-            try {
-              return await getPartnerTypeCommissionRule(
-                partnerTypeId,
-                rule.id,
-              );
-            } catch {
-              return rule;
-            }
-          }),
-        );
-
-        if (cancelled) return;
-
-        setPartnerType(detail);
-        setRules(detailedRules);
-        setPackages(packageList);
-        setPlans(planList);
-      } catch (error) {
-        if (!cancelled) {
-          setPageError(
-            error instanceof Error
-              ? error.message
-              : "Gagal memuat detail jenis mitra.",
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [partnerTypeId]);
+  const partnerType = bundle?.partnerType ?? null;
+  const rules = useMemo(() => bundle?.rules ?? [], [bundle]);
+  const packages = bundle?.packages ?? [];
+  const plans = bundle?.plans ?? [];
+  const loading = isValidId && bundleLoading;
+  const pageError = !isValidId
+    ? "ID jenis mitra tidak valid."
+    : bundleError
+      ? bundleError instanceof Error
+        ? bundleError.message
+        : "Gagal memuat detail jenis mitra."
+      : "";
 
   const activeRules = useMemo(() => {
     return rules.filter((rule) => rule.active);
@@ -330,9 +274,10 @@ export default function MitraSalesJenisMitraDetailPage({
                   Belum ada rule komisi.
                 </div>
               ) : (
-                rules.map((rule) => (
-                  <div
+                rules.map((rule, ruleIndex) => (
+                  <AnimatedListItem
                     key={rule.id}
+                    index={ruleIndex}
                     className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
                   >
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -393,7 +338,7 @@ export default function MitraSalesJenisMitraDetailPage({
                         ))}
                       </div>
                     ) : null}
-                  </div>
+                  </AnimatedListItem>
                 ))
               )}
             </div>

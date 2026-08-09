@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   useCallback,
@@ -10,12 +11,25 @@ import {
   type ReactNode,
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import AnalyticsTab from "./AnalyticsTab";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 import {
   authFetchJson,
   getEligiblePromotions,
   type CatalogPromotion,
 } from "@/app/lib/api";
+import {
+  useSubscriptionPageQuery,
+  useSubscriptionReferenceDataQuery,
+  useSubscriptionSummaryQuery,
+  type SubscriptionTabKey,
+} from "@/app/lib/queries/subscribe";
 
 type ApiMeta = {
   page?: number;
@@ -422,56 +436,52 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
-      <div
-        className={`w-full ${maxWidth || "md:w-[60vw] md:max-w-[60vw]"} min-h-[460px] max-h-[85vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                {label}
-              </p>
+    <ScreenPortal>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
+        <div className="flex min-h-full items-center justify-center">
+          <div
+            className={`app-modal-panel w-full ${maxWidth || "max-w-3xl xl:max-w-4xl"} min-h-[460px] rounded-[32px] shadow-2xl transition-all`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-modal-header px-5 py-4 md:px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                  {label}
+                </p>
 
-              <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
-                {title}
-              </h2>
+                <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
+                  {title}
+                </h2>
 
-              <p className="mt-1 text-xs font-medium text-slate-500">
-                {subtitle}
-              </p>
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  {subtitle}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
+              >
+                Tutup
+              </button>
             </div>
+          </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
-            >
-              Tutup
-            </button>
+          <div className="app-modal-body flex-1 min-h-0 space-y-4 p-5 md:p-6">
+            {children}
+          </div>
           </div>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
-          {children}
-        </div>
       </div>
-    </div>
+    </ScreenPortal>
   );
 }
 
 export default function SubscriptionPage() {
   usePageTitle("Subscribe");
 
-  const [orders, setOrders] = useState<SubscriptionOrderItem[]>([]);
-  const [subscriptions, setSubscriptions] = useState<SubscriptionItem[]>([]);
-  const [reconciliations, setReconciliations] = useState<ReconciliationItem[]>(
-    [],
-  );
-  const [issues, setIssues] = useState<ReconciliationIssueItem[]>([]);
-  const [wallets, setWallets] = useState<WalletItem[]>([]);
-  const [owners, setOwners] = useState<Owner[]>([]);
   const [activeTab, setActiveTab] = useState<
     "orders" | "subscriptions" | "reconciliations" | "issues" | "analytics"
   >("orders");
@@ -482,9 +492,42 @@ export default function SubscriptionPage() {
   const [orderTypeFilter, setOrderTypeFilter] = useState("Semua");
   const [purchasedFrom, setPurchasedFrom] = useState("");
   const [purchasedTo, setPurchasedTo] = useState("");
-  const [reloadKey, setReloadKey] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 10;
+
+  const subscriptionListFilters = useMemo(
+    () => ({ debouncedSearch, statusFilter, orderTypeFilter, purchasedFrom, purchasedTo }),
+    [debouncedSearch, statusFilter, orderTypeFilter, purchasedFrom, purchasedTo],
+  );
+  const activeDataTab = activeTab === "analytics" ? "orders" : (activeTab as SubscriptionTabKey);
+  const pageQuery = useSubscriptionPageQuery({
+    activeTab: activeDataTab,
+    filters: subscriptionListFilters,
+    page,
+    limit,
+  });
+  const referenceQuery = useSubscriptionReferenceDataQuery();
+  const summaryQuery = useSubscriptionSummaryQuery();
+  const orders = pageQuery.data?.orders ?? [];
+  const subscriptions = pageQuery.data?.subscriptions ?? [];
+  const reconciliations = pageQuery.data?.reconciliations ?? [];
+  const issues = pageQuery.data?.issues ?? [];
+  const wallets = referenceQuery.data?.wallets ?? [];
+  const owners = referenceQuery.data?.owners ?? [];
+  const catalogPlans = referenceQuery.data?.catalogPlans ?? [];
+  const loading = pageQuery.isLoading || referenceQuery.isLoading;
+  const errorMessage =
+    pageQuery.data?.errorMessage ||
+    (pageQuery.error instanceof Error ? pageQuery.error.message : "") ||
+    (referenceQuery.error instanceof Error ? referenceQuery.error.message : "");
+  const reloadSubscriptionData = () => {
+    void pageQuery.refetch();
+    void referenceQuery.refetch();
+    void summaryQuery.refetch();
+  };
+  // Separate from `loading` (the list query) — tracks in-flight submit state for the
+  // upgrade/create/reconcile mutation handlers below.
+  const [isSubmitting, setLoading] = useState(false);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isReconcileOpen, setIsReconcileOpen] = useState(false);
@@ -497,7 +540,6 @@ export default function SubscriptionPage() {
   const [upgradeMode, setUpgradeMode] = useState(false);
   const [selectedUpgradeSub, setSelectedUpgradeSub] = useState<SubscriptionItem | null>(null);
   const [upgradeForm, setUpgradeForm] = useState<UpgradeOrderForm>(emptyUpgradeOrderForm);
-  const [catalogPlans, setCatalogPlans] = useState<Plan[]>([]);
 
   // Sprint 15a â€” daftar promotion yang eligible untuk plan yang dipilih di form create order.
   const [eligiblePromotions, setEligiblePromotions] = useState<
@@ -569,184 +611,6 @@ export default function SubscriptionPage() {
     return authFetchJson<ApiResponse<T>>(path, options);
   };
 
-  const buildQuery = (params: Record<string, string>) => {
-    const query = new URLSearchParams();
-
-    Object.entries(params).forEach(([key, value]) => {
-      if (value && value !== "Semua") query.set(key, value);
-    });
-
-    const text = query.toString();
-    return text ? `?${text}` : "";
-  };
-
-  const loadSubscriptionData = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage("");
-
-    try {
-      const orderQuery = buildQuery({
-        q: debouncedSearch,
-        status: statusFilter,
-        order_type: orderTypeFilter === "Semua" ? "" : orderTypeFilter,
-        purchased_from: purchasedFrom,
-        purchased_to: purchasedTo,
-        sort: "-purchased_at",
-        page: "1",
-        limit: "100",
-      });
-
-      const subscriptionQuery = buildQuery({
-        q: debouncedSearch,
-        sort: "-active_from",
-        page: "1",
-        limit: "100",
-      });
-
-      const reconciliationQuery = buildQuery({
-        q: debouncedSearch,
-        sort: "-created_at",
-        page: "1",
-        limit: "100",
-      });
-
-      const issueQuery = buildQuery({
-        q: debouncedSearch,
-        status: "OPEN",
-        sort: "-detected_at",
-        page: "1",
-        limit: "100",
-      });
-
-      const walletQuery = buildQuery({
-        q: debouncedSearch,
-        status: "ACTIVE",
-        sort: "-balance",
-        page: "1",
-        limit: "100",
-      });
-
-      const ownersQuery = buildQuery({
-        q: debouncedSearch,
-        status: "ACTIVE",
-        sort: "-created_at",
-        page: "1",
-        limit: "100",
-      });
-
-      const [
-        orderResult,
-        subscriptionResult,
-        reconciliationResult,
-        issueResult,
-        walletResult,
-        ownerResult,
-        catalogPlanResult,
-      ] = await Promise.allSettled([
-        authFetch<
-          | SubscriptionOrderItem[]
-          | { items?: SubscriptionOrderItem[]; rows?: SubscriptionOrderItem[] }
-        >(`/subscription-orders${orderQuery}`),
-        authFetch<
-          | SubscriptionItem[]
-          | { items?: SubscriptionItem[]; rows?: SubscriptionItem[] }
-        >(`/subscriptions${subscriptionQuery}`),
-        authFetch<
-          | ReconciliationItem[]
-          | { items?: ReconciliationItem[]; rows?: ReconciliationItem[] }
-        >(`/reconciliations${reconciliationQuery}`),
-        authFetch<
-          | ReconciliationIssueItem[]
-          | { items?: ReconciliationIssueItem[]; rows?: ReconciliationIssueItem[] }
-        >(`/reconciliation-issues${issueQuery}`),
-        authFetch<WalletItem[] | { items?: WalletItem[]; rows?: WalletItem[] }>(
-          `/wallets${walletQuery}`,
-        ),
-        authFetch<Owner[] | { items?: Owner[]; rows?: Owner[] }>(
-          `/owners${ownersQuery}`,
-        ),
-        authFetch<Plan[] | { items?: Plan[]; rows?: Plan[] }>(
-          `/catalog/plans/all`,
-        ),
-      ]);
-
-      if (catalogPlanResult.status === "fulfilled") {
-        setCatalogPlans(normalizeList<Plan>(catalogPlanResult.value.data));
-      } else {
-        setCatalogPlans([]);
-      }
-
-      if (orderResult.status === "fulfilled") {
-        setOrders(normalizeList<SubscriptionOrderItem>(orderResult.value.data));
-      } else {
-        setOrders([]);
-      }
-
-      if (subscriptionResult.status === "fulfilled") {
-        setSubscriptions(
-          normalizeList<SubscriptionItem>(subscriptionResult.value.data),
-        );
-      } else {
-        setSubscriptions([]);
-      }
-
-      if (reconciliationResult.status === "fulfilled") {
-        setReconciliations(
-          normalizeList<ReconciliationItem>(reconciliationResult.value.data),
-        );
-      } else {
-        setReconciliations([]);
-      }
-
-      if (issueResult.status === "fulfilled") {
-        setIssues(
-          normalizeList<ReconciliationIssueItem>(issueResult.value.data),
-        );
-      } else {
-        setIssues([]);
-      }
-
-      if (walletResult.status === "fulfilled") {
-        setWallets(normalizeList<WalletItem>(walletResult.value.data));
-      } else {
-        setWallets([]);
-      }
-
-      if (ownerResult.status === "fulfilled") {
-        setOwners(normalizeList<Owner>(ownerResult.value.data));
-      } else {
-        setOwners([]);
-      }
-
-      const firstError = [
-        orderResult,
-        subscriptionResult,
-        reconciliationResult,
-        issueResult,
-        walletResult,
-        ownerResult,
-      ].find((result) => result.status === "rejected") as
-        | PromiseRejectedResult
-        | undefined;
-
-      if (firstError) {
-        setErrorMessage(
-          firstError.reason instanceof Error
-            ? firstError.reason.message
-            : "Sebagian data subscription gagal dimuat.",
-        );
-      }
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Gagal mengambil data subscription.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, statusFilter, orderTypeFilter, purchasedFrom, purchasedTo]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
@@ -756,36 +620,26 @@ export default function SubscriptionPage() {
   }, [search]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadSubscriptionData();
-    }, 0);
+    setPage(1);
+  }, [activeTab, debouncedSearch, statusFilter, orderTypeFilter, purchasedFrom, purchasedTo]);
 
-    return () => window.clearTimeout(timer);
-  }, [loadSubscriptionData, reloadKey]);
+  useEffect(() => {
+    setStatusFilter("Semua");
+    if (activeTab !== "orders") {
+      setOrderTypeFilter("Semua");
+    }
+  }, [activeTab]);
 
-  const summary = useMemo(() => {
-    const totalOrderAmount = orders.reduce(
-      (total, item) => total + Number(item.final_amount || 0),
-      0,
-    );
-
-    const activeSubscriptions = subscriptions.filter(
-      (item) => String(item.status || "").toUpperCase() === "ACTIVE",
-    );
-
-    const confirmedReconciliations = reconciliations.filter(
-      (item) => String(item.status || "").toUpperCase() === "CONFIRMED",
-    );
-
-    return {
-      totalOrderAmount,
-      activeSubscriptions: activeSubscriptions.length,
-      confirmedReconciliations: confirmedReconciliations.length,
-      openIssues: issues.filter(
-        (item) => String(item.status || "").toUpperCase() === "OPEN",
-      ).length,
-    };
-  }, [orders, subscriptions, reconciliations, issues]);
+  const summary = useMemo(
+    () =>
+      summaryQuery.data ?? {
+        totalOrderAmount: 0,
+        activeSubscriptions: 0,
+        confirmedReconciliations: 0,
+        openIssues: 0,
+      },
+    [summaryQuery.data],
+  );
 
   const planOptions = useMemo(() => {
     const unique = new Map<number, Plan>();
@@ -885,7 +739,7 @@ export default function SubscriptionPage() {
       setUpgradeMode(false);
       setSelectedUpgradeSub(null);
       setUpgradeForm(emptyUpgradeOrderForm);
-      setReloadKey((prev) => prev + 1);
+      reloadSubscriptionData();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Gagal melakukan upgrade.");
     } finally {
@@ -942,7 +796,7 @@ export default function SubscriptionPage() {
       setIsCreateOpen(false);
       setCreateForm(emptyCreateOrderForm);
       setEligiblePromotions([]);
-      setReloadKey((prev) => prev + 1);
+      reloadSubscriptionData();
     } catch (error) {
       alert(
         error instanceof Error
@@ -1013,7 +867,7 @@ export default function SubscriptionPage() {
 
       setIsReconcileOpen(false);
       setReconcileForm(emptyReconcileForm);
-      setReloadKey((prev) => prev + 1);
+      reloadSubscriptionData();
     } catch (error) {
       alert(
         error instanceof Error
@@ -1090,12 +944,39 @@ export default function SubscriptionPage() {
     setSelectedSubscriptionDetail(null);
   };
 
-  const statusOptions = [
-    "PENDING_RECONCILIATION",
-    "PAID",
-    "RECONCILED",
-    "REJECTED",
-  ];
+  const statusOptions = useMemo(() => {
+    switch (activeTab) {
+      case "orders":
+        return ["PENDING_RECONCILIATION", "PAID", "RECONCILED", "REJECTED"];
+      case "subscriptions":
+        return ["ACTIVE", "EXPIRED", "CANCELED"];
+      case "reconciliations":
+        return ["CONFIRMED", "PARTIAL_CONFIRM", "REJECTED"];
+      case "issues":
+        return ["OPEN", "RESOLVED"];
+      default:
+        return [];
+    }
+  }, [activeTab]);
+
+  const pagination = pageQuery.data?.pagination ?? {
+    page: 1,
+    limit,
+    total: 0,
+    totalPages: 1,
+  };
+  const totalItems = pagination.total;
+  const totalPages = Math.max(1, pagination.totalPages || Math.ceil(totalItems / limit) || 1);
+  const pageStart = totalItems === 0 ? 0 : (page - 1) * limit + 1;
+  const pageEnd = totalItems === 0 ? 0 : Math.min(page * limit, totalItems);
+  const activeItemCount =
+    activeTab === "orders"
+      ? orders.length
+      : activeTab === "subscriptions"
+        ? subscriptions.length
+        : activeTab === "reconciliations"
+          ? reconciliations.length
+          : issues.length;
 
   if (upgradeMode && selectedUpgradeSub) {
     return (
@@ -1221,10 +1102,10 @@ export default function SubscriptionPage() {
               <div className="flex justify-end pt-4 border-t border-gray-100">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={isSubmitting}
                   className="rounded-xl border border-red-100 bg-[#C92C1E] px-6 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:bg-slate-100 disabled:text-slate-400"
                 >
-                  {loading ? "Memproses..." : "Proses Upgrade"}
+                  {isSubmitting ? "Memproses..." : "Proses Upgrade"}
                 </button>
               </div>
             </form>
@@ -1282,57 +1163,33 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-              Total Order
-            </p>
-            <h2 className="text-3xl font-black">
-              {formatRupiah(summary.totalOrderAmount)}
-            </h2>
-            <p className="mt-1 text-xs font-medium text-red-100/80">
-              Pembelian paket dari wallet
-            </p>
-          </div>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Subscription Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {summary.activeSubscriptions}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Owner aktif berlangganan
-          </p>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Reconciliation Confirmed
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {summary.confirmedReconciliations}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Order sudah dipertemukan dengan closing
-          </p>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Open Issue
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {summary.openIssues}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Hanging order / manual review
-          </p>
-        </div>
-      </div>
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Order"
+          value={formatRupiah(summary.totalOrderAmount)}
+          description="Pembelian paket yang dibayar melalui wallet."
+          tone="accent"
+          silhouette="check-square"
+        />
+        <QuickInfoCard
+          label="Subscription Aktif"
+          value={summary.activeSubscriptions}
+          description="Owner yang sedang aktif berlangganan."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Reconciliation Confirmed"
+          value={summary.confirmedReconciliations}
+          description="Order yang sudah dipertemukan dengan closing."
+          tone="sky"
+        />
+        <QuickInfoCard
+          label="Open Issue"
+          value={summary.openIssues}
+          description="Antrian issue yang masih butuh review manual."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
@@ -1377,7 +1234,15 @@ export default function SubscriptionPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Cari order / owner"
+                placeholder={
+                  activeTab === "orders"
+                    ? "Cari order / owner"
+                    : activeTab === "subscriptions"
+                      ? "Cari subscription / owner"
+                      : activeTab === "reconciliations"
+                        ? "Cari reconciliation / owner"
+                        : "Cari issue / owner"
+                }
                 className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
               />
 
@@ -1406,19 +1271,23 @@ export default function SubscriptionPage() {
                 </select>
               )}
 
-              <input
-                type="date"
-                value={purchasedFrom}
-                onChange={(event) => setPurchasedFrom(event.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              />
+              {(activeTab === "orders" || activeTab === "subscriptions") && (
+                <>
+                  <input
+                    type="date"
+                    value={purchasedFrom}
+                    onChange={(event) => setPurchasedFrom(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
 
-              <input
-                type="date"
-                value={purchasedTo}
-                onChange={(event) => setPurchasedTo(event.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              />
+                  <input
+                    type="date"
+                    value={purchasedTo}
+                    onChange={(event) => setPurchasedTo(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -1811,6 +1680,39 @@ export default function SubscriptionPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+              <div className="text-xs font-medium text-gray-500">
+                Menampilkan{" "}
+                <span className="font-bold text-gray-900">{pageStart}</span>{" "}
+                hingga{" "}
+                <span className="font-bold text-gray-900">{pageEnd}</span>{" "}
+                dari{" "}
+                <span className="font-bold text-gray-900">{totalItems}</span>{" "}
+                data
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page === 1}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={page === totalPages}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Selanjutnya
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -2469,10 +2371,10 @@ export default function SubscriptionPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
             >
-              {loading ? "Menyimpan..." : "Simpan Order"}
+              {isSubmitting ? "Menyimpan..." : "Simpan Order"}
             </button>
           </div>
         </form>
@@ -2619,10 +2521,10 @@ export default function SubscriptionPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
             >
-              {loading ? "Menyimpan..." : "Simpan Reconciliation"}
+              {isSubmitting ? "Menyimpan..." : "Simpan Reconciliation"}
             </button>
           </div>
         </form>

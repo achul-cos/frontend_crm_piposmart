@@ -2,6 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { KeyRound } from "lucide-react";
+import {
+  RowActionButton,
+  RowActionGroup,
+  EditActionButton,
+  ToggleActiveActionButton,
+} from "@/app/components/table/RowActionButton";
 import SalesFormModal, {
   type SalesFormState,
   type SalesItem,
@@ -9,6 +16,8 @@ import SalesFormModal, {
 } from "./SalesFormModal";
 import AnalyticsTab from './AnalyticsTab';
 import { authFetchJson } from '@/app/lib/api';
+import { formatPhoneDisplay } from '@/app/lib/phone';
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 
 const EMPTY_FORM: SalesFormState = {
   name: "",
@@ -394,28 +403,27 @@ export default function SalesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-            Total Sales
-          </p>
-          <h2 className="text-3xl font-black">{totalSales}</h2>
-        </div>
-
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Sales Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{activeSales}</h2>
-        </div>
-
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Sales Nonaktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{inactiveSales}</h2>
-        </div>
-      </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Total Sales"
+          value={totalSales}
+          description="Seluruh akun sales yang terdaftar."
+          tone="accent"
+          silhouette="briefcase"
+        />
+        <QuickInfoCard
+          label="Sales Aktif"
+          value={activeSales}
+          description="Akun sales yang sedang aktif bekerja."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Sales Nonaktif"
+          value={inactiveSales}
+          description="Akun sales yang sedang nonaktif."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex flex-col gap-4 rounded-2xl border border-red-100 bg-[linear-gradient(135deg,#fff_0%,#fff7f5_100%)] p-5 shadow-sm md:flex-row md:items-center md:justify-between">
         <div>
@@ -526,7 +534,7 @@ export default function SalesPage() {
                       {item.email || "-"}
                     </td>
 
-                    <td className="px-4 py-4">{item.phone || "-"}</td>
+                    <td className="px-4 py-4">{item.phone ? formatPhoneDisplay(item.phone) : "-"}</td>
 
                     <td className="px-4 py-4">
                       <span
@@ -547,52 +555,28 @@ export default function SalesPage() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openEditModal(item);
-                          }}
-                          className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
+                    <td
+                      className="px-4 py-4 text-center"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <RowActionGroup>
+                        <EditActionButton
                           title="Edit Sales"
-                        >
-                          Edit
-                        </button>
+                          onClick={() => openEditModal(item)}
+                        />
 
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleToggleStatus(item);
-                          }}
-                          className={`rounded-lg px-3 py-2 text-xs font-black transition-colors ${
-                            item.status === "ACTIVE"
-                              ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                          }`}
-                          title={
-                            item.status === "ACTIVE"
-                              ? "Nonaktifkan Sales"
-                              : "Aktifkan Sales"
-                          }
-                        >
-                          {item.status === "ACTIVE" ? "Nonaktifkan" : "Aktifkan"}
-                        </button>
+                        <ToggleActiveActionButton
+                          active={item.status === "ACTIVE"}
+                          onClick={() => void handleToggleStatus(item)}
+                        />
 
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleResetPassword(item);
-                          }}
-                          className="rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-[#C92C1E] transition-colors hover:bg-red-100"
+                        <RowActionButton
+                          icon={KeyRound}
+                          tone="edit"
                           title="Reset Password"
-                        >
-                          Reset
-                        </button>
-                      </div>
+                          onClick={() => void handleResetPassword(item)}
+                        />
+                      </RowActionGroup>
                     </td>
                   </tr>
                 ))
@@ -624,10 +608,10 @@ export default function SalesPage() {
         >
           <div className="flex min-h-full items-center justify-center p-4 md:p-6">
             <div
-              className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+              className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+              <div className="app-modal-header px-5 py-4 md:px-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -644,18 +628,18 @@ export default function SalesPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedSales(null)}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                    className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
                   >
                     Tutup
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
+              <div className="app-modal-body grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                 {[
                   ["Nama", selectedSales.name || "-"],
                   ["Email", selectedSales.email || "-"],
-                  ["Nomor HP", selectedSales.phone || "-"],
+                  ["Nomor HP", selectedSales.phone ? formatPhoneDisplay(selectedSales.phone) : "-"],
                   ["Role", "SALES"],
                   [
                     "Status",

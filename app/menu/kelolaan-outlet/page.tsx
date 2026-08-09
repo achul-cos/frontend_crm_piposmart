@@ -1,26 +1,33 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  listGlobalOutlets,
-  listOutletSubscriptionStatuses,
   restoreOutletForOwner,
   forceDeleteOutletForOwner,
   bulkUpdateOutletsForOwner,
   bulkTrashOutletsForOwner,
   bulkForceDeleteOutletsForOwner,
+  downloadGlobalOutletExportFile,
+  type BackendOutlet,
   type OutletOverviewItem,
   type OutletSubscriptionStatusItem,
-  type BackendOutlet,
 } from "@/app/lib/api";
+import { useGlobalOutletsQuery, useOutletSubscriptionStatusesQuery } from "@/app/lib/queries/outlets";
 import { useBulkSelect } from "@/app/lib/hooks/useBulkSelect";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import OutletFormModal from "./OutletFormModal";
-import OutletAnalytics from "./OutletAnalytics";
 import BulkEditOutletModal, { type BulkEditFields } from "./BulkEditOutletModal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+
+const OutletAnalytics = dynamic(() => import("./OutletAnalytics"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 
 function AutocompleteFilter({
   label,
@@ -209,14 +216,13 @@ export default function KelolaanOutletPage() {
   const [filterCity, setFilterCity] = useState("");
   const [filterPlan, setFilterPlan] = useState("");
   const [month, setMonth] = useState(currentMonthValue());
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
   const [page, setPage] = useState(1);
   const limit = 10;
 
-  const [overviewItems, setOverviewItems] = useState<OutletOverviewItem[]>([]);
-  const [subscriptionItems, setSubscriptionItems] = useState<OutletSubscriptionStatusItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [showForm, setShowForm] = useState<{ mode: "create" | "edit"; outlet?: BackendOutlet } | null>(
     null,
@@ -234,6 +240,53 @@ export default function KelolaanOutletPage() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [isBulkActing, setIsBulkActing] = useState(false);
   const [bulkResultMessage, setBulkResultMessage] = useState<string | null>(null);
+
+  const overviewScope = tableState === "sampah" ? "trash" : "active";
+  const overviewParams = useMemo(
+    () => ({
+      q: search || undefined,
+      page,
+      limit,
+      start_date: createdFrom || undefined,
+      end_date: createdTo || undefined,
+    }),
+    [search, page, createdFrom, createdTo],
+  );
+  const subscriptionParams = useMemo(
+    () => ({
+      q: search || undefined,
+      subscription_status: subscriptionStatus || undefined,
+      month,
+      page,
+      limit,
+    }),
+    [search, subscriptionStatus, month, page],
+  );
+
+  const overviewQuery = useGlobalOutletsQuery(
+    overviewParams,
+    overviewScope,
+    tableState === "umum" || tableState === "sampah",
+  );
+  const subscriptionQuery = useOutletSubscriptionStatusesQuery(
+    subscriptionParams,
+    tableState === "langganan",
+  );
+
+  const overviewItems = overviewQuery.data?.items ?? [];
+  const subscriptionItems = subscriptionQuery.data?.items ?? [];
+  const total =
+    tableState === "langganan"
+      ? subscriptionQuery.data?.pagination.total ?? 0
+      : tableState === "analytics"
+        ? 0
+        : overviewQuery.data?.pagination.total ?? 0;
+  const isLoading = tableState === "langganan" ? subscriptionQuery.isLoading : overviewQuery.isLoading;
+
+  useEffect(() => {
+    const activeError = tableState === "langganan" ? subscriptionQuery.error : overviewQuery.error;
+    setError(activeError instanceof Error ? activeError.message : activeError ? "Gagal memuat data outlet." : null);
+  }, [tableState, overviewQuery.error, subscriptionQuery.error]);
 
   const uniqueOverviewCodes = useMemo(
     () => Array.from(new Set(overviewItems.map((i) => i.code).filter(Boolean))),
@@ -306,9 +359,14 @@ export default function KelolaanOutletPage() {
         if (timeStatusFilter === "EXISTING" && status !== "Existing") return false;
         if (timeStatusFilter === "FUTURE" && status !== "Future") return false;
       }
+      if (createdFrom || createdTo) {
+        const createdDate = item.created_at?.slice(0, 10) || "";
+        if (createdFrom && createdDate < createdFrom) return false;
+        if (createdTo && createdDate > createdTo) return false;
+      }
       return true;
     });
-  }, [overviewItems, filterCode, filterName, filterOwner, filterCity, timeStatusFilter, month]);
+  }, [overviewItems, filterCode, filterName, filterOwner, filterCity, timeStatusFilter, month, createdFrom, createdTo]);
 
   const filteredSubscriptionItems = useMemo(() => {
     return subscriptionItems.filter((item) => {
@@ -329,9 +387,14 @@ export default function KelolaanOutletPage() {
         const planStr = `${item.package_plan?.package_name || ""} ${item.package_plan?.plan_name || ""}`.toLowerCase();
         if (!planStr.includes(filterPlan.toLowerCase())) return false;
       }
+      if (createdFrom || createdTo) {
+        const createdDate = item.created_at?.slice(0, 10) || "";
+        if (createdFrom && createdDate < createdFrom) return false;
+        if (createdTo && createdDate > createdTo) return false;
+      }
       return true;
     });
-  }, [subscriptionItems, filterCode, filterName, filterOwner, filterPlan]);
+  }, [subscriptionItems, filterCode, filterName, filterOwner, filterPlan, createdFrom, createdTo]);
 
   const bulkSelect = useBulkSelect(filteredOverviewItems);
 
@@ -355,7 +418,7 @@ export default function KelolaanOutletPage() {
     bulkSelect.clear();
     setBulkResultMessage(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableState, page, search, subscriptionStatus, month, timeStatusFilter, filterCode, filterName, filterOwner, filterCity, filterPlan]);
+  }, [tableState, page, search, subscriptionStatus, month, timeStatusFilter, filterCode, filterName, filterOwner, filterCity, filterPlan, createdFrom, createdTo]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const visibleCount =
@@ -381,47 +444,6 @@ export default function KelolaanOutletPage() {
           ? "Riwayat outlet yang sudah dihapus sementara."
           : "Dashboard diagram analitik khusus modul outlet.";
 
-  const loadData = useMemo(
-    () => async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        if (tableState === "analytics") {
-          setOverviewItems([]);
-          setSubscriptionItems([]);
-          setTotal(0);
-        } else if (tableState === "langganan") {
-          const res = await listOutletSubscriptionStatuses({
-            q: search || undefined,
-            subscription_status: subscriptionStatus || undefined,
-            month,
-            page,
-            limit,
-          });
-          setSubscriptionItems(res.items);
-          setTotal(res.pagination.total);
-        } else {
-          const scope = tableState === "sampah" ? "trash" : "active";
-          const res = await listGlobalOutlets(
-            { q: search || undefined, page, limit },
-            scope,
-          );
-          setOverviewItems(res.items);
-          setTotal(res.pagination.total);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Gagal memuat data outlet.");
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [tableState, search, subscriptionStatus, month, page],
-  );
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
   const changeTableState = (next: TableState) => {
     setTableState(next);
     setFilterCode("");
@@ -432,7 +454,48 @@ export default function KelolaanOutletPage() {
     setPage(1);
   };
 
-  const refetch = () => void loadData();
+  const refetch = () => {
+    void overviewQuery.refetch();
+    void subscriptionQuery.refetch();
+  };
+
+  const handleDownloadOutletExport = async () => {
+    try {
+      setIsExporting(true);
+      setError(null);
+      const { blob, disposition } = await downloadGlobalOutletExportFile({
+        q: search || undefined,
+        code: filterCode || undefined,
+        name: filterName || undefined,
+        owner_keyword: filterOwner || undefined,
+        city: filterCity || undefined,
+        start_date: createdFrom || undefined,
+        end_date: createdTo || undefined,
+        created_from: createdFrom || undefined,
+        created_to: createdTo || undefined,
+        date_from: createdFrom || undefined,
+        date_to: createdTo || undefined,
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      let filename = "Data_Owner_Outlet.xlsx";
+      if (disposition) {
+        const match = disposition.match(/filename=\"?([^\"]+)\"?/);
+        if (match) filename = match[1];
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengunduh file export outlet.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleRestore = async () => {
     if (!restoreTarget) return;
@@ -538,60 +601,38 @@ export default function KelolaanOutletPage() {
       </div>
 
       {/* 2. Stat Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
-          <div className="flex flex-col">
-            <p className="text-xs font-bold uppercase tracking-wider text-red-100">Total Outlet</p>
-            <div className="mt-1">
-              <h2 className="text-3xl font-black text-white">{total}</h2>
-            </div>
-          </div>
-          <div className="absolute -right-4 -top-4 opacity-10 pointer-events-none">
-            <svg className="h-32 w-32 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Ditampilkan</p>
-              <div className="h-3 w-3 rounded-full bg-emerald-400"></div>
-            </div>
-            <div className="mt-1">
-              <h2 className="text-3xl font-black text-gray-900">{visibleCount}</h2>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">Baris pada halaman aktif saat ini.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Tab Aktif</p>
-              <div className="h-3 w-3 rounded-full bg-[#C92C1E]"></div>
-            </div>
-            <div className="mt-1">
-              <h2 className="text-xl font-black text-gray-900">{activeTabLabel}</h2>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">{activeTabDescription}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Halaman</p>
-              <div className="h-3 w-3 rounded-full bg-sky-400"></div>
-            </div>
-            <div className="mt-1">
-              <h2 className="text-3xl font-black text-gray-900">{page} <span className="text-base font-bold text-gray-400">/ {totalPages}</span></h2>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">Halaman saat ini dari total halaman.</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Outlet"
+          value={total}
+          description="Seluruh outlet lintas owner yang tercatat."
+          tone="accent"
+          silhouette="building"
+        />
+        <QuickInfoCard
+          label="Ditampilkan"
+          value={visibleCount}
+          description="Baris yang tampil pada halaman aktif saat ini."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Tab Aktif"
+          value={activeTabLabel}
+          description={activeTabDescription}
+          tone="rose"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Halaman"
+          value={
+            <>
+              {page} <span className="text-base font-bold opacity-70">/ {totalPages}</span>
+            </>
+          }
+          description="Posisi halaman aktif dari total halaman data."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       {/* 3. Tabs and Main Content Area */}
       <div className="space-y-4">
@@ -643,6 +684,19 @@ export default function KelolaanOutletPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     Tambah Outlet
+                  </button>
+                )}
+                {tableState === "umum" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadOutletExport()}
+                    disabled={isExporting}
+                    className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v10m0 0l-4-4m4 4l4-4M4 20h16" />
+                    </svg>
+                    {isExporting ? "Mengunduh..." : "Export Owner-Outlet"}
                   </button>
                 )}
                 {isAdmin && bulkSelect.selectedCount > 0 && tableState === "umum" && (
@@ -733,6 +787,30 @@ export default function KelolaanOutletPage() {
                           value={month}
                           onChange={(e) => {
                             setMonth(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 w-full">
+                        <span className="text-xs font-semibold text-black">Dibuat Dari</span>
+                        <input
+                          type="date"
+                          value={createdFrom}
+                          onChange={(e) => {
+                            setCreatedFrom(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 w-full">
+                        <span className="text-xs font-semibold text-black">Dibuat Sampai</span>
+                        <input
+                          type="date"
+                          value={createdTo}
+                          onChange={(e) => {
+                            setCreatedTo(e.target.value);
                             setPage(1);
                           }}
                           className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
@@ -1275,15 +1353,18 @@ function ConfirmDialog({
 }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-      <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
-        <h3 className={`text-lg font-black ${danger ? "text-red-600" : "text-gray-900"}`}>{title}</h3>
+      <div className="app-modal-panel w-full max-w-sm rounded-2xl shadow-xl">
+        <div className="app-modal-header p-6">
+          <h3 className={`text-lg font-black ${danger ? "text-red-600" : "text-gray-900"}`}>{title}</h3>
+        </div>
+        <div className="app-modal-body space-y-4 p-6">
         <p className="text-xs text-gray-600">{message}</p>
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
             disabled={isBusy}
-            className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-600"
+            className="app-modal-close rounded-xl px-4 py-2 text-xs font-black"
           >
             Batal
           </button>
@@ -1296,6 +1377,7 @@ function ConfirmDialog({
           >
             {isBusy ? "Memproses..." : confirmLabel}
           </button>
+        </div>
         </div>
       </div>
     </div>

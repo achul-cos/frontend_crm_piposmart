@@ -4,12 +4,34 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import AutoTableColumnVisibilityEnhancer from "@/app/components/table/AutoTableColumnVisibilityEnhancer";
+import { FeedbackProvider } from "@/app/components/feedback/FeedbackContext";
+import AppFooter from "@/app/components/layout/AppFooter";
+import { AppProviders } from "@/app/providers";
 import {
   clearStoredAuth,
   getRoleLabel,
   readStoredUserSession,
   type StoredUserSession,
 } from "@/app/lib/api";
+import {
+  applyThemeToDocument,
+  dispatchThemeChange,
+  getThemeRootClassName,
+  isDarkTheme,
+  persistThemeMode,
+  readStoredThemeMode,
+  type ThemeMode,
+} from "@/app/lib/theme";
+import {
+  applyFontSizeToDocument,
+  FONT_SIZE_EVENT_NAME,
+  readStoredFontSizeMode,
+} from "@/app/lib/font-size";
+import {
+  applyFontFamilyToDocument,
+  FONT_FAMILY_EVENT_NAME,
+  readStoredFontFamilyMode,
+} from "@/app/lib/font-family";
 import "./globals.css";
 
 const ProfileTagIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -90,7 +112,7 @@ export default function RootLayout({
   const toggleGroup = (title: string) => {
     setOpenGroups((prev) => ({ ...prev, [title]: !prev[title] }));
   };
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
 
   const isAuthPage = pathname.startsWith("/auth");
   const loggedInUser = session.name || "User";
@@ -101,19 +123,15 @@ export default function RootLayout({
     if (typeof window === "undefined") return;
 
     const applyTheme = () => {
-      const savedTheme = localStorage.getItem("piposmart_theme");
-      const shouldUseDark = savedTheme === "dark";
-
-      setIsDarkMode(shouldUseDark);
-
-      document.documentElement.classList.remove("light", "dark");
-      document.documentElement.classList.add(shouldUseDark ? "dark" : "light");
-      document.documentElement.style.colorScheme = shouldUseDark
-        ? "dark"
-        : "light";
-
-      document.body?.classList.remove("light", "dark");
-      document.body?.classList.add(shouldUseDark ? "dark" : "light");
+      const nextTheme = readStoredThemeMode();
+      setThemeMode(nextTheme);
+      applyThemeToDocument(nextTheme);
+    };
+    const applyFontSize = () => {
+      applyFontSizeToDocument(readStoredFontSizeMode());
+    };
+    const applyFontFamily = () => {
+      applyFontFamilyToDocument(readStoredFontFamilyMode());
     };
     const syncSession = () => {
       setSession(readStoredUserSession());
@@ -121,18 +139,42 @@ export default function RootLayout({
     };
 
     applyTheme();
+    applyFontSize();
+    applyFontFamily();
     syncSession();
 
     window.addEventListener("storage", applyTheme);
     window.addEventListener("piposmart-theme-change", applyTheme);
+    window.addEventListener("storage", applyFontSize);
+    window.addEventListener(FONT_SIZE_EVENT_NAME, applyFontSize);
+    window.addEventListener("storage", applyFontFamily);
+    window.addEventListener(FONT_FAMILY_EVENT_NAME, applyFontFamily);
     window.addEventListener("storage", syncSession);
 
     return () => {
       window.removeEventListener("storage", applyTheme);
       window.removeEventListener("piposmart-theme-change", applyTheme);
+      window.removeEventListener("storage", applyFontSize);
+      window.removeEventListener(FONT_SIZE_EVENT_NAME, applyFontSize);
+      window.removeEventListener("storage", applyFontFamily);
+      window.removeEventListener(FONT_FAMILY_EVENT_NAME, applyFontFamily);
       window.removeEventListener("storage", syncSession);
     };
   }, []);
+
+  const isDarkMode = isDarkTheme(themeMode);
+  const rootThemeClassName = getThemeRootClassName(themeMode);
+
+  const handleThemeChange = (nextTheme: ThemeMode) => {
+    setThemeMode(nextTheme);
+    persistThemeMode(nextTheme);
+    applyThemeToDocument(nextTheme);
+    dispatchThemeChange(nextTheme);
+  };
+
+  useEffect(() => {
+    applyThemeToDocument(themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -428,7 +470,7 @@ export default function RootLayout({
     return (
       <html
         lang="id"
-        className={isDarkMode ? "dark" : "light"}
+        className={rootThemeClassName}
         suppressHydrationWarning
       >
         <body
@@ -438,7 +480,11 @@ export default function RootLayout({
             }`}
         >
           <AutoTableColumnVisibilityEnhancer />
-          {children}
+          <AppProviders>
+            <FeedbackProvider>
+              {children}
+            </FeedbackProvider>
+          </AppProviders>
         </body>
       </html>
     );
@@ -448,7 +494,7 @@ export default function RootLayout({
     return (
       <html
         lang="id"
-        className={isDarkMode ? "dark" : "light"}
+        className={rootThemeClassName}
         suppressHydrationWarning
       >
         <body
@@ -458,7 +504,7 @@ export default function RootLayout({
             }`}
         >
           <div className="flex min-h-screen items-center justify-center">
-            <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm font-bold text-gray-500 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm font-bold text-gray-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               Memeriksa sesi login...
             </div>
           </div>
@@ -470,7 +516,7 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={isDarkMode ? "dark" : "light"}
+      className={rootThemeClassName}
       suppressHydrationWarning
     >
       <body
@@ -480,6 +526,8 @@ export default function RootLayout({
           }`}
       >
         <AutoTableColumnVisibilityEnhancer />
+        <AppProviders>
+        <FeedbackProvider>
         <div className="flex min-h-screen">
           <aside
             className={`fixed z-30 flex h-full flex-col justify-between border-r p-4 transition-all duration-300 ${isDarkMode
@@ -497,15 +545,15 @@ export default function RootLayout({
                     <img
                       src="/assets/logo teks.png"
                       alt="Piposmart Logo"
-                      className="h-15 max-h-10 w-auto object-contain"
+                      className="app-logo-wordmark h-15 max-h-10 w-auto object-contain"
                     />
                   </div>
                 )}
 
                 <button
                   onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className={`flex items-center justify-center rounded-xl border p-2 text-[#C92C1E] transition-all duration-200 hover:border-red-200 hover:bg-red-50 ${isDarkMode
-                    ? "border-slate-800 bg-slate-900"
+                  className={`flex items-center justify-center rounded-xl border p-2 text-[#C92C1E] transition-all duration-200 ${isDarkMode
+                    ? "border-slate-700 bg-slate-900 hover:border-red-900 hover:bg-red-950/40"
                     : "border-gray-200/60 bg-gray-50"
                     } ${!isSidebarOpen ? "w-full text-center" : ""}`}
                   title={isSidebarOpen ? "Tutup Menu" : "Buka Menu"}
@@ -564,7 +612,7 @@ export default function RootLayout({
                                   className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${isActive
                                     ? "bg-[#C92C1E] text-white shadow-sm"
                                     : isDarkMode
-                                      ? "text-slate-300 hover:bg-red-950/30 hover:text-red-300"
+                                      ? "text-slate-300 hover:bg-slate-800 hover:text-white"
                                       : "text-gray-600 hover:bg-red-50 hover:text-[#C92C1E]"
                                     }`}
                                 >
@@ -596,7 +644,7 @@ export default function RootLayout({
                         className={`flex items-center justify-center rounded-xl px-0 py-3 transition-all duration-200 ${isActive
                           ? "bg-[#C92C1E] text-white shadow-sm"
                           : isDarkMode
-                            ? "text-slate-300 hover:bg-red-950/30 hover:text-red-300"
+                            ? "text-slate-300 hover:bg-slate-800 hover:text-white"
                             : "text-gray-600 hover:bg-red-50 hover:text-[#C92C1E]"
                           }`}
                       >
@@ -616,7 +664,7 @@ export default function RootLayout({
             >
               <div
                 className={`rounded-2xl border p-3 transition-all duration-200 ${isDarkMode
-                  ? "border-slate-800 bg-slate-900/80"
+                  ? "border-slate-700 bg-slate-900/90"
                   : "border-red-100 bg-red-50/60"
                   } ${!isSidebarOpen ? "p-2" : ""}`}
                 title={`${loggedInUser} • ${loggedInRole} • Klik profile untuk setting`}
@@ -653,7 +701,7 @@ export default function RootLayout({
                       type="button"
                       onClick={handleLogout}
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition ${isDarkMode
-                        ? "border-red-900/50 bg-red-950/40 text-red-300 hover:bg-red-950"
+                        ? "border-red-900/50 bg-red-950/40 text-red-300 hover:border-red-800 hover:bg-red-950"
                         : "border-red-100 bg-white text-red-600 hover:bg-red-50"
                         }`}
                       title="Keluar"
@@ -668,7 +716,7 @@ export default function RootLayout({
                     type="button"
                     onClick={handleLogout}
                     className={`mt-2 flex h-9 w-full items-center justify-center rounded-xl border transition ${isDarkMode
-                      ? "border-red-900/50 bg-red-950/40 text-red-300"
+                      ? "border-red-900/50 bg-red-950/40 text-red-300 hover:border-red-800 hover:bg-red-950"
                       : "border-red-100 bg-white text-red-600"
                       }`}
                     title="Keluar"
@@ -689,12 +737,21 @@ export default function RootLayout({
           </aside>
 
           <main
-            className={`min-h-screen flex-1 p-8 transition-all duration-300 ${isDarkMode ? "bg-[#0F172A]" : "bg-[#FAF9F6]"
+            className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${isDarkMode ? "bg-[#0F172A]" : "bg-[#FAF9F6]"
               } ${isSidebarOpen ? "ml-64" : "ml-20"}`}
           >
-            <div className="w-full max-w-full">{children}</div>
+            <div className="min-h-screen w-full max-w-full p-8">
+              {children}
+            </div>
+            <AppFooter
+              isDarkMode={isDarkMode}
+              themeMode={themeMode}
+              onThemeChange={handleThemeChange}
+            />
           </main>
         </div>
+        </FeedbackProvider>
+        </AppProviders>
       </body>
     </html>
   );

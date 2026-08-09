@@ -4,8 +4,33 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { getProfile } from "@/app/lib/api";
-
-type ThemeMode = "light" | "dark";
+import {
+  applyThemeToDocument,
+  dispatchThemeChange,
+  persistThemeMode,
+  readStoredThemeMode,
+  type ThemeMode,
+} from "@/app/lib/theme";
+import {
+  applyFontSizeToDocument,
+  dispatchFontSizeChange,
+  persistFontSizeMode,
+  readStoredFontSizeMode,
+  type FontSizeMode,
+} from "@/app/lib/font-size";
+import {
+  applyFontFamilyToDocument,
+  dispatchFontFamilyChange,
+  getFontFamilyStack,
+  persistFontFamilyMode,
+  readStoredFontFamilyMode,
+  type FontFamilyMode,
+} from "@/app/lib/font-family";
+import {
+  useAnimationPreference,
+  type MotionPreference,
+} from "@/app/components/motion/AnimationPreferenceContext";
+import { Zap, Gauge, ZapOff } from "lucide-react";
 
 const SettingIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
   <svg
@@ -108,25 +133,67 @@ const MoonIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
   </svg>
 );
 
-const syncThemeToDocument = (nextTheme: ThemeMode) => {
-  localStorage.setItem("piposmart_theme", nextTheme);
+const HeartSparkleIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2.2}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 20.25l-1.267-1.154C5.423 14.264 2.25 11.38 2.25 7.875A4.125 4.125 0 016.375 3.75c1.61 0 3.155.744 4.125 2.019A5.343 5.343 0 0112 8.032a5.343 5.343 0 011.5-2.263A5.122 5.122 0 0117.625 3.75 4.125 4.125 0 0121.75 7.875c0 3.505-3.173 6.389-8.483 11.221L12 20.25z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M18.75 2.75v2.5m-1.25-1.25H20m-10.25 8.5v2m-1-1h2"
+    />
+  </svg>
+);
 
-  document.documentElement.classList.remove("light", "dark");
-  document.documentElement.classList.add(nextTheme);
-  document.documentElement.style.colorScheme = nextTheme;
+const TextSizeIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2.2}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M4.5 6.75h15M8.25 6.75v10.5M15.75 6.75v10.5M6.75 17.25h10.5"
+    />
+  </svg>
+);
 
-  document.body.classList.remove("light", "dark");
-  document.body.classList.add(nextTheme);
+const fontSizeOptions: {
+  value: FontSizeMode;
+  label: string;
+  desc: string;
+  previewClass: string;
+}[] = [
+  { value: "small", label: "Kecil", desc: "Lebih ringkas", previewClass: "text-sm" },
+  { value: "medium", label: "Sedang", desc: "Standar aplikasi", previewClass: "text-base" },
+  { value: "large", label: "Besar", desc: "Sedikit diperbesar", previewClass: "text-lg" },
+  { value: "xlarge", label: "Sangat Besar", desc: "Mudah dibaca", previewClass: "text-xl" },
+  { value: "xxlarge", label: "Extra Besar", desc: "Paling besar", previewClass: "text-2xl" },
+];
 
-  window.dispatchEvent(
-    new CustomEvent("piposmart-theme-change", {
-      detail: {
-        theme: nextTheme,
-        isDark: nextTheme === "dark",
-      },
-    }),
-  );
-};
+const fontFamilyOptions: {
+  value: FontFamilyMode;
+  label: string;
+  desc: string;
+  preview: string;
+}[] = [
+  { value: "sans", label: "Sans Serif (Default)", desc: "Rapi dan modern", preview: "Abc 123" },
+  { value: "serif", label: "Serif", desc: "Klasik dan formal", preview: "Abc 123" },
+  { value: "mono", label: "Monospace", desc: "Tegas dan teknis", preview: "Abc 123" },
+  { value: "handwriting", label: "Handwriting", desc: "Santai tapi tetap kalem", preview: "Abc 123" },
+];
 
 export default function SettingPage() {
   usePageTitle("Setting");
@@ -135,10 +202,29 @@ export default function SettingPage() {
   const [userRole, setUserRole] = useState("Sales");
   const [username, setUsername] = useState("-");
   const [theme, setTheme] = useState<ThemeMode>("light");
+  const [fontSizeMode, setFontSizeMode] = useState<FontSizeMode>("medium");
+  const [fontFamilyMode, setFontFamilyMode] = useState<FontFamilyMode>("sans");
+  const { preference: motionPref, setPreference: setMotionPref } = useAnimationPreference();
 
   const applyTheme = (nextTheme: ThemeMode) => {
     setTheme(nextTheme);
-    syncThemeToDocument(nextTheme);
+    persistThemeMode(nextTheme);
+    applyThemeToDocument(nextTheme);
+    dispatchThemeChange(nextTheme);
+  };
+
+  const applyFontSize = (nextFontSize: FontSizeMode) => {
+    setFontSizeMode(nextFontSize);
+    persistFontSizeMode(nextFontSize);
+    applyFontSizeToDocument(nextFontSize);
+    dispatchFontSizeChange(nextFontSize);
+  };
+
+  const applyFontFamily = (nextFontFamily: FontFamilyMode) => {
+    setFontFamilyMode(nextFontFamily);
+    persistFontFamilyMode(nextFontFamily);
+    applyFontFamilyToDocument(nextFontFamily);
+    dispatchFontFamilyChange(nextFontFamily);
   };
 
   const loadProfile = useCallback(async () => {
@@ -173,11 +259,16 @@ export default function SettingPage() {
     const timer = window.setTimeout(() => {
       void loadProfile();
 
-      const savedTheme = localStorage.getItem("piposmart_theme");
-      const nextTheme: ThemeMode = savedTheme === "dark" ? "dark" : "light";
+      const nextTheme = readStoredThemeMode();
+      const nextFontSize = readStoredFontSizeMode();
+      const nextFontFamily = readStoredFontFamilyMode();
 
       setTheme(nextTheme);
-      syncThemeToDocument(nextTheme);
+      setFontSizeMode(nextFontSize);
+      setFontFamilyMode(nextFontFamily);
+      applyThemeToDocument(nextTheme);
+      applyFontSizeToDocument(nextFontSize);
+      applyFontFamilyToDocument(nextFontFamily);
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -274,7 +365,7 @@ export default function SettingPage() {
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => applyTheme("light")}
@@ -299,6 +390,28 @@ export default function SettingPage() {
 
             <button
               type="button"
+              onClick={() => applyTheme("pink")}
+              className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                theme === "pink"
+                  ? "border-pink-200 bg-pink-50 text-pink-600 shadow-sm"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-pink-100 hover:bg-pink-50/60"
+              }`}
+            >
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                  theme === "pink" ? "bg-white text-pink-500" : "bg-pink-50 text-pink-400"
+                }`}
+              >
+                <HeartSparkleIcon className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-xs font-black">Pink Mode</p>
+                <p className="text-[10px] font-medium text-gray-400">Terang dengan aksen pink</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
               onClick={() => applyTheme("dark")}
               className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${
                 theme === "dark"
@@ -318,6 +431,136 @@ export default function SettingPage() {
                 <p className="text-[10px] font-medium text-gray-400">Tampilan gelap</p>
               </div>
             </button>
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-gray-100 pt-5">
+          <div className="mb-3">
+            <h3 className="text-xs font-black text-gray-900">
+              Preferensi Ukuran Tulisan
+            </h3>
+            <p className="text-[10px] font-medium text-gray-400">
+              Atur kenyamanan baca di seluruh menu aplikasi.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {fontSizeOptions.map(({ value, label, desc, previewClass }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyFontSize(value)}
+                className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                  fontSizeMode === value
+                    ? "border-red-200 bg-red-50 text-[#C92C1E] shadow-sm"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-red-100 hover:bg-gray-50"
+                }`}
+              >
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                    fontSizeMode === value ? "bg-white text-[#C92C1E]" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  <TextSizeIcon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-black">{label}</p>
+                    <span className={`${previewClass} font-black leading-none`}>Aa</span>
+                  </div>
+                  <p className="text-[10px] font-medium text-gray-400">{desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-gray-100 pt-5">
+          <div className="mb-3">
+            <h3 className="text-xs font-black text-gray-900">
+              Preferensi Gaya Font
+            </h3>
+            <p className="text-[10px] font-medium text-gray-400">
+              Pilih gaya tulisan utama yang nyaman untuk digunakan sehari-hari.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {fontFamilyOptions.map(({ value, label, desc, preview }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyFontFamily(value)}
+                className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                  fontFamilyMode === value
+                    ? "border-red-200 bg-red-50 text-[#C92C1E] shadow-sm"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-red-100 hover:bg-gray-50"
+                }`}
+              >
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                    fontFamilyMode === value ? "bg-white text-[#C92C1E]" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  <TextSizeIcon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-black">{label}</p>
+                    <span
+                      className="text-sm font-black leading-none"
+                      style={{ fontFamily: getFontFamilyStack(value) }}
+                    >
+                      {preview}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-medium text-gray-400">{desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Animation preference */}
+        <div className="mt-6 border-t border-gray-100 pt-5">
+          <div className="mb-3">
+            <h3 className="text-xs font-black text-gray-900">Preferensi Animasi</h3>
+            <p className="text-[10px] font-medium text-gray-400">
+              Atur seberapa banyak animasi/transisi yang muncul di seluruh halaman.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            {(
+              [
+                { value: "full", label: "Penuh", desc: "Animasi penuh", Icon: Zap },
+                { value: "reduced", label: "Kurangi", desc: "Lebih singkat", Icon: Gauge },
+                { value: "off", label: "Nonaktif", desc: "Tanpa animasi", Icon: ZapOff },
+              ] as { value: MotionPreference; label: string; desc: string; Icon: typeof Zap }[]
+            ).map(({ value, label, desc, Icon }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMotionPref(value)}
+                className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                  motionPref === value
+                    ? "border-red-200 bg-red-50 text-[#C92C1E] shadow-sm"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-red-100 hover:bg-gray-50"
+                }`}
+              >
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                    motionPref === value ? "bg-white text-[#C92C1E]" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-black">{label}</p>
+                  <p className="text-[10px] font-medium text-gray-400">{desc}</p>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       </div>

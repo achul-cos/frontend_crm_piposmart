@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
@@ -20,6 +21,7 @@ import {
   PowerOff,
   ArrowLeft,
 } from "lucide-react";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import {
   packageApi,
   planApi,
@@ -40,7 +42,13 @@ import {
   type CreatePromotionPayload,
   type CatalogScope,
 } from "@/app/lib/api";
-import AnalyticsTab from "./AnalyticsTab";
+import { usePackagesQuery, usePlansQuery, usePromotionsQuery } from "@/app/lib/queries/catalog";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 
 type Entity = "package" | "plan" | "promotion";
 
@@ -204,12 +212,15 @@ function Modal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
-      <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center">
+        <div
+          className={`app-modal-panel w-full rounded-[32px] shadow-2xl transition-all ${
+            wide ? "max-w-5xl" : "max-w-3xl xl:max-w-4xl"
+          }`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="app-modal-header px-5 py-4 md:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               {icon && (
@@ -238,15 +249,16 @@ function Modal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
             >
               Tutup
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+        <div className="app-modal-body flex-1 min-h-0 space-y-4 p-5 md:p-6">
           {children}
+        </div>
         </div>
       </div>
     </div>
@@ -301,11 +313,11 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-[60] bg-slate-950/70" onClick={onCancel}>
       <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
-        <div
-          className="w-full max-w-sm overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4">
+          <div
+            className="app-modal-panel w-full max-w-sm rounded-[32px] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-modal-header px-5 py-4">
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
               Konfirmasi
             </p>
@@ -317,8 +329,8 @@ function ConfirmDialog({
             </p>
           </div>
 
-          <div className="p-5">
-            <div className="flex gap-3">
+          <div className="app-modal-body p-5">
+            <div className="flex flex-col gap-3">
               <button
                 onClick={onCancel}
                 className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
@@ -412,12 +424,44 @@ export default function PaketLanggananPage() {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
-  const [packages, setPackages] = useState<CatalogPackageItem[]>([]);
-  const [plans, setPlans] = useState<CatalogPlanItem[]>([]);
-  const [promotions, setPromotions] = useState<CatalogPromotionItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const catalogBaseParams = useMemo(
+    () => ({
+      q: search || undefined,
+      active: activeFilter === "" ? undefined : activeFilter === "true",
+      page,
+      limit: rowsPerPage,
+      scope,
+    }),
+    [search, activeFilter, page, rowsPerPage, scope],
+  );
+  const packageQueryParams = catalogBaseParams;
+  const planQueryParams = useMemo(
+    () => ({ ...catalogBaseParams, package_id: packageFilter || undefined }),
+    [catalogBaseParams, packageFilter],
+  );
+  const promotionQueryParams = useMemo(
+    () => ({ ...catalogBaseParams, charge_type: chargeTypeFilter || undefined }),
+    [catalogBaseParams, chargeTypeFilter],
+  );
+
+  const packagesQuery = usePackagesQuery(packageQueryParams, entity === "package");
+  const plansQuery = usePlansQuery(planQueryParams, entity === "plan");
+  const promotionsQuery = usePromotionsQuery(promotionQueryParams, entity === "promotion");
+
+  const activeQuery =
+    entity === "package" ? packagesQuery : entity === "plan" ? plansQuery : promotionsQuery;
+
+  const packages = packagesQuery.data?.items ?? [];
+  const plans = plansQuery.data?.items ?? [];
+  const promotions = promotionsQuery.data?.items ?? [];
+  const total = activeQuery.data?.pagination.total ?? 0;
+  const isLoading = activeQuery.isLoading;
+  const loadError = activeQuery.error instanceof Error ? activeQuery.error.message : null;
+  const load = React.useCallback(() => {
+    void packagesQuery.refetch();
+    void plansQuery.refetch();
+    void promotionsQuery.refetch();
+  }, [packagesQuery.refetch, plansQuery.refetch, promotionsQuery.refetch]);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [packageOptions, setPackageOptions] = useState<CatalogPackageItem[]>([]);
@@ -474,64 +518,6 @@ export default function PaketLanggananPage() {
       .catch(() => setPackageOptions([]));
   }, []);
 
-  const load = React.useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-
-    try {
-      const baseParams: Record<string, unknown> = {
-        q: search || undefined,
-        active: activeFilter === "" ? undefined : activeFilter === "true",
-        page,
-        limit: rowsPerPage,
-        scope,
-      };
-
-      if (entity === "package") {
-        const res = await packageApi.list(baseParams);
-        setPackages(res.items);
-        setTotal(res.pagination.total);
-      } else if (entity === "plan") {
-        const res = await planApi.list({
-          ...baseParams,
-          package_id: packageFilter || undefined,
-        });
-        setPlans(res.items);
-        setTotal(res.pagination.total);
-      } else {
-        const res = await promotionApi.list({
-          ...baseParams,
-          charge_type: chargeTypeFilter || undefined,
-        });
-        setPromotions(res.items);
-        setTotal(res.pagination.total);
-      }
-    } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : "Gagal memuat data katalog.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    entity,
-    scope,
-    search,
-    activeFilter,
-    packageFilter,
-    chargeTypeFilter,
-    page,
-    rowsPerPage,
-  ]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void load();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [load]);
-
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
 
   const currentIds = useMemo(() => {
@@ -548,6 +534,12 @@ export default function PaketLanggananPage() {
 
   const activeCount = currentItemsForCount.filter((item) => item.active).length;
   const inactiveCount = currentItemsForCount.length - activeCount;
+  const scopeLabel =
+    scope === "DELETED"
+      ? "Arsip"
+      : scope === "ALL"
+        ? "Semua Data"
+        : "Aktif";
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
@@ -651,50 +643,33 @@ export default function PaketLanggananPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-              Total {entityLabel}
-            </p>
-            <h2 className="text-3xl font-black">{total}</h2>
-          </div>
-          <Package className="absolute -bottom-4 -right-4 h-28 w-28 text-white opacity-10" />
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-              {entityLabel} Aktif
-            </p>
-            <h2 className="text-3xl font-black text-gray-900">{activeCount}</h2>
-          </div>
-
-          <div className="absolute right-0 top-0 p-5">
-            <span className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
-            </span>
-          </div>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-              {entityLabel} Nonaktif
-            </p>
-            <h2 className="text-3xl font-black text-gray-900">
-              {inactiveCount}
-            </h2>
-          </div>
-
-          <div className="absolute right-0 top-0 p-5">
-            <span className="relative flex h-3 w-3">
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
-            </span>
-          </div>
-        </div>
-      </div>
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label={`Total ${entityLabel}`}
+          value={total}
+          description={`Total ${entityLabel.toLowerCase()} sesuai pencarian dan scope aktif.`}
+          tone="accent"
+          silhouette="tag"
+        />
+        <QuickInfoCard
+          label={`${entityLabel} Aktif`}
+          value={activeCount}
+          description={`Data aktif pada halaman ${entityLabel.toLowerCase()} saat ini.`}
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label={`${entityLabel} Nonaktif`}
+          value={inactiveCount}
+          description={`Data nonaktif pada halaman ${entityLabel.toLowerCase()} saat ini.`}
+          tone="rose"
+        />
+        <QuickInfoCard
+          label="Scope Aktif"
+          value={scopeLabel}
+          description="Mode data yang sedang ditampilkan pada katalog."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">

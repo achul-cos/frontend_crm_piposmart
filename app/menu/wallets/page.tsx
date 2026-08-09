@@ -1,8 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
-  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -10,18 +10,25 @@ import {
   type ReactNode,
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import AnalyticsTab from "./AnalyticsTab";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import { RowActionGroup, ViewActionButton } from "@/app/components/table/RowActionButton";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 import {
   createTransfer,
-  listOwnerTransfers,
-  listTransfers,
-  getTransferSuggestions,
   confirmTransferMatch,
   rejectTransferMatch,
   authFetchJson,
   type TransferItem,
   type TransferMatchSuggestion,
 } from "@/app/lib/api";
+import { useTopUpDataQuery, useTransferDataQuery } from "@/app/lib/queries/wallets";
 
 type ApiMeta = {
   page?: number;
@@ -166,6 +173,19 @@ type WalletDetailResponse =
     transactions?: LedgerItem[];
   };
 
+const EMPTY_PAYMENTS: PaymentItem[] = [];
+const EMPTY_WALLETS: WalletItem[] = [];
+const EMPTY_LEDGERS: LedgerItem[] = [];
+const EMPTY_OWNERS: WalletOwner[] = [];
+const EMPTY_TRANSFERS: {
+  items: TransferItem[];
+  suggestions: TransferMatchSuggestion[];
+  errorMessage?: string;
+} = {
+  items: [],
+  suggestions: [],
+};
+
 const inputClass =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400";
 
@@ -278,24 +298,6 @@ const getOwnerCode = (owner?: WalletOwner) => {
   return owner.code || owner.kode_owner || "-";
 };
 
-const normalizeList = <T,>(payload: unknown): T[] => {
-  if (Array.isArray(payload)) return payload as T[];
-
-  if (payload && typeof payload === "object") {
-    const data = payload as {
-      items?: unknown;
-      rows?: unknown;
-      data?: unknown;
-    };
-
-    if (Array.isArray(data.items)) return data.items as T[];
-    if (Array.isArray(data.rows)) return data.rows as T[];
-    return data.data as T[];
-  }
-
-  return [];
-};
-
 function ModalShell({
   open,
   title,
@@ -316,52 +318,52 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
-      <div
-        className={`w-full ${maxWidth} min-h-[460px] max-h-[85vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-6 py-5 md:px-8 md:py-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                {label}
-              </p>
+    <ScreenPortal>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
+        <div className="flex min-h-full items-center justify-center">
+          <div
+            className={`app-modal-panel w-full ${maxWidth} min-h-[460px] rounded-[32px] shadow-2xl transition-all`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-modal-header px-6 py-5 md:px-8 md:py-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                  {label}
+                </p>
 
-              <h2 className="mt-2 text-xl font-black text-slate-950 md:text-2xl">
-                {title}
-              </h2>
+                <h2 className="mt-2 text-xl font-black text-slate-950 md:text-2xl">
+                  {title}
+                </h2>
 
-              <p className="mt-1.5 text-xs font-medium text-slate-500 md:text-sm">
-                {subtitle}
-              </p>
+                <p className="mt-1.5 text-xs font-medium text-slate-500 md:text-sm">
+                  {subtitle}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              >
+                Tutup
+              </button>
             </div>
+          </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-500 transition hover:bg-slate-50"
-            >
-              Tutup
-            </button>
+          <div className="app-modal-body flex-1 min-h-0 space-y-6 p-6 md:p-8">
+            {children}
+          </div>
           </div>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
-          {children}
-        </div>
       </div>
-    </div>
+    </ScreenPortal>
   );
 }
 
 export default function WalletsPage() {
   usePageTitle("Topup");
 
-  const [wallets, setWallets] = useState<WalletItem[]>([]);
-  const [owners, setOwners] = useState<WalletOwner[]>([]);
-  const [payments, setPayments] = useState<PaymentItem[]>([]);
-  const [ledgers, setLedgers] = useState<LedgerItem[]>([]);
   const [activeTab, setActiveTab] = useState<
     "payments" | "wallets" | "ledger" | "analytics" | "transfer"
   >("payments");
@@ -370,8 +372,22 @@ export default function WalletsPage() {
   const [paidFrom, setPaidFrom] = useState("");
   const [paidTo, setPaidTo] = useState("");
   const [channelFilter, setChannelFilter] = useState("Semua");
-  const [reloadKey, setReloadKey] = useState(0);
-  const [loading, setLoading] = useState(false);
+
+  const topUpFilters = useMemo(
+    () => ({ debouncedSearch, channelFilter, paidFrom, paidTo }),
+    [debouncedSearch, channelFilter, paidFrom, paidTo],
+  );
+  const topUpQuery = useTopUpDataQuery(topUpFilters);
+  const payments = topUpQuery.data?.payments ?? EMPTY_PAYMENTS;
+  const wallets = topUpQuery.data?.wallets ?? EMPTY_WALLETS;
+  const ledgers = topUpQuery.data?.ledgers ?? EMPTY_LEDGERS;
+  const owners = topUpQuery.data?.owners ?? EMPTY_OWNERS;
+  const loading = topUpQuery.isLoading;
+  const errorMessage = topUpQuery.data?.errorMessage ?? "";
+  const reloadTopUpData = () => void topUpQuery.refetch();
+  // Separate from `loading` (the top-up list query) — tracks in-flight submit state
+  // for the wallet action / topup action / transfer mutation handlers below.
+  const [, setLoading] = useState(false);
 
   const [walletActionType, setWalletActionType] =
     useState<WalletActionType>("topup");
@@ -383,10 +399,6 @@ export default function WalletsPage() {
     useState<PaymentDetailResponse | null>(null);
   const [selectedWalletDetail, setSelectedWalletDetail] =
     useState<WalletItem | null>(null);
-  const [selectedOwnerLedger, setSelectedOwnerLedger] = useState<LedgerItem[]>(
-    [],
-  );
-
   // Sprint 15a — modal Accept/Reject/Koreksi Tanggal Transfer untuk Top Up.
   const [topupActionModal, setTopupActionModal] = useState<{
     payment: PaymentItem;
@@ -402,14 +414,16 @@ export default function WalletsPage() {
 
   // Sprint 15a — tab Transfer: bukti transfer bank owner dicocokkan ke Top Up PENDING.
   const [transferOwnerId, setTransferOwnerId] = useState("");
-  const [transferItems, setTransferItems] = useState<TransferItem[]>([]);
-  const [transferSuggestions, setTransferSuggestions] = useState<
-    TransferMatchSuggestion[]
-  >([]);
-  const [transferLoading, setTransferLoading] = useState(false);
-  const [transferError, setTransferError] = useState("");
+  const [transferSearch, setTransferSearch] = useState("");
+  const [debouncedTransferSearch, setDebouncedTransferSearch] = useState("");
+  const [transferStatusFilter, setTransferStatusFilter] = useState("Semua Status");
+  const [transferSourceFilter, setTransferSourceFilter] = useState("Semua Sumber");
+  const [transferDateFrom, setTransferDateFrom] = useState("");
+  const [transferDateTo, setTransferDateTo] = useState("");
+  const [transferPage, setTransferPage] = useState(1);
   const [isCreateTransferOpen, setIsCreateTransferOpen] = useState(false);
   const [createTransferForm, setCreateTransferForm] = useState({
+    ownerId: "",
     amount: "",
     transferDate: "",
     proofUrl: "",
@@ -421,7 +435,6 @@ export default function WalletsPage() {
     number | null
   >(null);
   const [detailTitle, setDetailTitle] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
 
   const [isMounted, setIsMounted] = useState(false);
   const [userRole, setUserRole] = useState("");
@@ -441,121 +454,6 @@ export default function WalletsPage() {
     return authFetchJson<ApiResponse<T>>(path, options);
   };
 
-  const buildQuery = (params: Record<string, string>) => {
-    const query = new URLSearchParams();
-
-    Object.entries(params).forEach(([key, value]) => {
-      if (value && value !== "Semua") query.set(key, value);
-    });
-
-    const text = query.toString();
-    return text ? `?${text}` : "";
-  };
-
-  const loadTopUpData = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage("");
-
-    try {
-      const paymentQuery = buildQuery({
-        q: debouncedSearch,
-        payment_type: "TOPUP",
-        channel: channelFilter,
-        paid_from: paidFrom,
-        paid_to: paidTo,
-        sort: "-paid_at",
-        page: "1",
-        limit: "100",
-      });
-
-      const walletQuery = buildQuery({
-        q: debouncedSearch,
-        status: "ACTIVE",
-        sort: "-balance",
-        page: "1",
-        limit: "100",
-      });
-
-      const ledgerQuery = buildQuery({
-        q: debouncedSearch,
-        sort: "-occurred_at",
-        page: "1",
-        limit: "100",
-      });
-
-      const ownersQuery = buildQuery({
-        q: debouncedSearch,
-        status: "ACTIVE",
-        sort: "-created_at",
-        page: "1",
-        limit: "100",
-      });
-
-      const [paymentResult, walletResult, ledgerResult, ownerResult] =
-        await Promise.allSettled([
-          authFetch<
-            PaymentItem[] | { items?: PaymentItem[]; rows?: PaymentItem[] }
-          >(`/wallet-payments${paymentQuery}`),
-          authFetch<
-            WalletItem[] | { items?: WalletItem[]; rows?: WalletItem[] }
-          >(`/wallets${walletQuery}`),
-          authFetch<
-            LedgerItem[] | { items?: LedgerItem[]; rows?: LedgerItem[] }
-          >(`/wallet-transactions${ledgerQuery}`),
-          authFetch<
-            WalletOwner[] | { items?: WalletOwner[]; rows?: WalletOwner[] }
-          >(`/owners${ownersQuery}`),
-        ]);
-
-      if (paymentResult.status === "fulfilled") {
-        setPayments(normalizeList<PaymentItem>(paymentResult.value.data));
-      } else {
-        setPayments([]);
-      }
-
-      if (walletResult.status === "fulfilled") {
-        setWallets(normalizeList<WalletItem>(walletResult.value.data));
-      } else {
-        setWallets([]);
-      }
-
-      if (ledgerResult.status === "fulfilled") {
-        setLedgers(normalizeList<LedgerItem>(ledgerResult.value.data));
-      } else {
-        setLedgers([]);
-      }
-
-      if (ownerResult.status === "fulfilled") {
-        setOwners(normalizeList<WalletOwner>(ownerResult.value.data));
-      } else {
-        setOwners([]);
-      }
-
-      const firstError = [
-        paymentResult,
-        walletResult,
-        ledgerResult,
-        ownerResult,
-      ].find((result) => result.status === "rejected") as
-        | PromiseRejectedResult
-        | undefined;
-
-      if (firstError) {
-        setErrorMessage(
-          firstError.reason instanceof Error
-            ? firstError.reason.message
-            : "Sebagian data top up gagal dimuat.",
-        );
-      }
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Gagal mengambil data top up.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, channelFilter, paidFrom, paidTo]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
@@ -564,75 +462,142 @@ export default function WalletsPage() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
+  const transferQuery = useTransferDataQuery(transferOwnerId, activeTab === "transfer");
+  const transferData = transferQuery.data ?? EMPTY_TRANSFERS;
+  const transferItems = transferData.items;
+  const transferSuggestions = transferData.suggestions;
+  const transferLoading = transferQuery.isLoading;
+  // setTransferError below is also used by the confirm/reject-match action handlers to surface
+  // their own errors, distinct from a failed list fetch — combine both into one displayed string.
+  const [transferActionError, setTransferError] = useState("");
+  const transferError = transferActionError || (transferData.errorMessage ?? "");
+  const loadTransferData = () => void transferQuery.refetch();
+  const transferPageSize = 10;
+  const transferStatusOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          transferItems
+            .map((item) => item.match_status)
+            .filter(Boolean),
+        ),
+      ),
+    [transferItems],
+  );
+  const transferSourceOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          transferItems
+            .map((item) => item.source)
+            .filter(Boolean),
+        ),
+      ),
+    [transferItems],
+  );
+  const filteredTransferItems = useMemo(() => {
+    const keyword = debouncedTransferSearch.toLowerCase();
+
+    return transferItems.filter((transfer) => {
+      const transferDate = transfer.transfer_date ? new Date(transfer.transfer_date) : null;
+      const fromDate = transferDateFrom ? new Date(`${transferDateFrom}T00:00:00`) : null;
+      const toDate = transferDateTo ? new Date(`${transferDateTo}T23:59:59.999`) : null;
+
+      if (transferOwnerId && String(transfer.owner?.id || "") !== transferOwnerId) {
+        return false;
+      }
+
+      if (transferStatusFilter !== "Semua Status" && transfer.match_status !== transferStatusFilter) {
+        return false;
+      }
+
+      if (transferSourceFilter !== "Semua Sumber" && transfer.source !== transferSourceFilter) {
+        return false;
+      }
+
+      if (fromDate && (!transferDate || transferDate < fromDate)) {
+        return false;
+      }
+
+      if (toDate && (!transferDate || transferDate > toDate)) {
+        return false;
+      }
+
+      if (!keyword) {
+        return true;
+      }
+
+      const haystack = [
+        transfer.owner?.name,
+        transfer.owner?.code,
+        transfer.match_status,
+        transfer.source,
+        transfer.note,
+        transfer.external_reference,
+        transfer.amount,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(keyword);
+    });
+  }, [
+    debouncedTransferSearch,
+    transferDateFrom,
+    transferDateTo,
+    transferItems,
+    transferOwnerId,
+    transferSourceFilter,
+    transferStatusFilter,
+  ]);
+  const transferTotalItems = filteredTransferItems.length;
+  const transferTotalPages = Math.max(
+    1,
+    Math.ceil(transferTotalItems / transferPageSize),
+  );
+  const paginatedTransferItems = useMemo(() => {
+    const start = (transferPage - 1) * transferPageSize;
+    return filteredTransferItems.slice(start, start + transferPageSize);
+  }, [filteredTransferItems, transferPage]);
+  const transferPageStart =
+    transferTotalItems === 0 ? 0 : (transferPage - 1) * transferPageSize + 1;
+  const transferPageEnd =
+    transferTotalItems === 0
+      ? 0
+      : Math.min(transferPage * transferPageSize, transferTotalItems);
+
+  useEffect(() => {
+    setTransferPage(1);
+  }, [
+    activeTab,
+    debouncedTransferSearch,
+    transferDateFrom,
+    transferDateTo,
+    transferOwnerId,
+    transferSourceFilter,
+    transferStatusFilter,
+  ]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadTopUpData();
-    }, 0);
+      setDebouncedTransferSearch(transferSearch.trim());
+    }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [loadTopUpData, reloadKey]);
+  }, [transferSearch]);
 
-  const loadTransferData = useCallback(async (ownerId: string) => {
-    setTransferLoading(true);
-    setTransferError("");
-
-    try {
-      const [listResult, suggestionResult] = await Promise.allSettled(
-        ownerId
-          ? [
-              listOwnerTransfers(Number(ownerId), { all: true }),
-              getTransferSuggestions(Number(ownerId)),
-            ]
-          : [listTransfers({ all: true }), Promise.resolve([] as TransferMatchSuggestion[])],
-      );
-
-      if (listResult.status === "fulfilled") {
-        setTransferItems(listResult.value.items || []);
-      } else {
-        setTransferItems([]);
-      }
-
-      if (suggestionResult.status === "fulfilled") {
-        setTransferSuggestions(suggestionResult.value || []);
-      } else {
-        setTransferSuggestions([]);
-      }
-
-      const firstError = [listResult, suggestionResult].find(
-        (result) => result.status === "rejected",
-      ) as PromiseRejectedResult | undefined;
-
-      if (firstError) {
-        setTransferError(
-          firstError.reason instanceof Error
-            ? firstError.reason.message
-            : "Sebagian data transfer gagal dimuat.",
-        );
-      }
-    } catch (error) {
-      setTransferError(
-        error instanceof Error ? error.message : "Gagal mengambil data transfer.",
-      );
-    } finally {
-      setTransferLoading(false);
+  useEffect(() => {
+    if (transferPage > transferTotalPages) {
+      setTransferPage(transferTotalPages);
     }
-  }, []);
-
-  useEffect(() => {
-    if (activeTab !== "transfer") return;
-
-    const timer = window.setTimeout(() => {
-      void loadTransferData(transferOwnerId);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [activeTab, loadTransferData, transferOwnerId]);
+  }, [transferPage, transferTotalPages]);
 
   const handleCreateTransferSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!transferOwnerId) {
-      setCreateTransferError("Pilih owner terlebih dahulu.");
+    if (!createTransferForm.ownerId) {
+      setCreateTransferError("Owner wajib dipilih.");
       return;
     }
 
@@ -645,7 +610,7 @@ export default function WalletsPage() {
     setCreateTransferError("");
 
     try {
-      await createTransfer(Number(transferOwnerId), {
+      await createTransfer(Number(createTransferForm.ownerId), {
         amount: createTransferForm.amount,
         transfer_date: new Date(createTransferForm.transferDate).toISOString(),
         proof_url: createTransferForm.proofUrl || undefined,
@@ -654,12 +619,13 @@ export default function WalletsPage() {
 
       setIsCreateTransferOpen(false);
       setCreateTransferForm({
+        ownerId: transferOwnerId,
         amount: "",
         transferDate: "",
         proofUrl: "",
         note: "",
       });
-      await loadTransferData(transferOwnerId);
+      await loadTransferData();
     } catch (error) {
       setCreateTransferError(
         error instanceof Error ? error.message : "Gagal membuat transfer.",
@@ -678,7 +644,7 @@ export default function WalletsPage() {
         wallet_payment_id: suggestion.wallet_payment_id,
         unique_code: suggestion.unique_code,
       });
-      await loadTransferData(transferOwnerId);
+      await loadTransferData();
     } catch (error) {
       setTransferError(
         error instanceof Error ? error.message : "Gagal mengonfirmasi kecocokan transfer.",
@@ -694,7 +660,7 @@ export default function WalletsPage() {
 
     try {
       await rejectTransferMatch(suggestion.transfer.id);
-      await loadTransferData(transferOwnerId);
+      await loadTransferData();
     } catch (error) {
       setTransferError(
         error instanceof Error ? error.message : "Gagal menolak kecocokan transfer.",
@@ -891,7 +857,7 @@ export default function WalletsPage() {
 
       setIsWalletActionOpen(false);
       setWalletActionForm(getEmptyWalletActionForm());
-      setReloadKey((prev) => prev + 1);
+      reloadTopUpData();
     } catch (error) {
       alert(
         error instanceof Error
@@ -916,7 +882,6 @@ export default function WalletsPage() {
 
       setSelectedPaymentDetail(detail);
       setSelectedWalletDetail(null);
-      setSelectedOwnerLedger([]);
       setDetailTitle(`Detail Payment ${payment.code || payment.id}`);
     } catch (error) {
       alert(
@@ -989,7 +954,7 @@ export default function WalletsPage() {
       }
 
       closeTopupAction();
-      setReloadKey((prev) => prev + 1);
+      reloadTopUpData();
     } catch (error) {
       setTopupActionError(
         error instanceof Error ? error.message : "Gagal memproses top up.",
@@ -1010,12 +975,7 @@ export default function WalletsPage() {
     setLoading(true);
 
     try {
-      const [walletResponse, ledgerResponse] = await Promise.all([
-        authFetch<WalletDetailResponse>(`/owners/${ownerId}/wallet`),
-        authFetch<LedgerItem[] | { items?: LedgerItem[]; rows?: LedgerItem[] }>(
-          `/owners/${ownerId}/wallet/transactions?sort=-occurred_at&page=1&limit=100`,
-        ),
-      ]);
+      const walletResponse = await authFetch<WalletDetailResponse>(`/owners/${ownerId}/wallet`);
 
       const walletData = walletResponse.data as WalletDetailResponse | undefined;
       const detailWallet =
@@ -1024,7 +984,6 @@ export default function WalletsPage() {
           : (walletData as WalletItem);
 
       setSelectedWalletDetail(detailWallet || wallet);
-      setSelectedOwnerLedger(normalizeList<LedgerItem>(ledgerResponse.data));
       setSelectedPaymentDetail(null);
       setDetailTitle(
         `Detail Wallet ${wallet.account_code || wallet.code || wallet.id}`,
@@ -1041,7 +1000,6 @@ export default function WalletsPage() {
   const closeDetailModal = () => {
     setSelectedPaymentDetail(null);
     setSelectedWalletDetail(null);
-    setSelectedOwnerLedger([]);
   };
 
   return (
@@ -1115,47 +1073,27 @@ export default function WalletsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-              Revenue Top Up
-            </p>
-            <h2 className="text-3xl font-black">
-              {formatRupiah(summary.totalTopUp)}
-            </h2>
-            <p className="mt-1 text-xs font-medium text-red-100/80">
-              Berdasarkan paid_at
-            </p>
-          </div>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Payment PAID
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {summary.paidCount}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Dari {summary.totalPayments} payment
-          </p>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Total Saldo Wallet
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {formatRupiah(summary.totalWalletBalance)}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Saldo aktif owner
-          </p>
-        </div>
-
-
-      </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Revenue Top Up"
+          value={formatRupiah(summary.totalTopUp)}
+          description="Akumulasi top up berdasarkan paid_at."
+          tone="accent"
+          silhouette="wallet"
+        />
+        <QuickInfoCard
+          label="Payment Paid"
+          value={summary.paidCount}
+          description={`Dari ${summary.totalPayments} payment yang tercatat.`}
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Total Saldo Wallet"
+          value={formatRupiah(summary.totalWalletBalance)}
+          description="Saldo aktif wallet milik seluruh owner."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
@@ -1184,66 +1122,70 @@ export default function WalletsPage() {
         <AnalyticsTab />
       ) : (
         <section className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-            <div>
-              <h2 className="text-sm font-black text-gray-900">
-                Filter Data Wallets
-              </h2>
-              <p className="mt-1 text-xs font-medium text-gray-400">
-                Pencarian, channel, dan tanggal otomatis diterapkan tanpa tombol
-                terapkan.
-              </p>
-            </div>
+          {activeTab !== "transfer" && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+                <div>
+                  <h2 className="text-sm font-black text-gray-900">
+                    Filter Data Wallets
+                  </h2>
+                  <p className="mt-1 text-xs font-medium text-gray-400">
+                    Pencarian, channel, dan tanggal otomatis diterapkan tanpa tombol
+                    terapkan.
+                  </p>
+                </div>
 
-            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Cari payment / owner..."
-                className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              />
+                <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Cari payment / owner..."
+                    className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
 
-              <select
-                value={channelFilter}
-                onChange={(event) => setChannelFilter(event.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              >
-                <option value="Semua">Semua Channel</option>
-                {channelOptions.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+                  <select
+                    value={channelFilter}
+                    onChange={(event) => setChannelFilter(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  >
+                    <option value="Semua">Semua Channel</option>
+                    {channelOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
 
-              <input
-                type="date"
-                value={paidFrom}
-                onChange={(event) => setPaidFrom(event.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              />
+                  <input
+                    type="date"
+                    value={paidFrom}
+                    onChange={(event) => setPaidFrom(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
 
-              <input
-                type="date"
-                value={paidTo}
-                onChange={(event) => setPaidTo(event.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              />
-            </div>
-          </div>
-
-          <div className="px-4 pt-4">
-            {errorMessage && (
-              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
-                {errorMessage}
+                  <input
+                    type="date"
+                    value={paidTo}
+                    onChange={(event) => setPaidTo(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
               </div>
-            )}
 
-            <p className="text-[11px] font-bold text-gray-400">
-              Klik tombol detail atau baris data untuk membuka detail. Tombol mutasi
-              tetap khusus Admin.
-            </p>
-          </div>
+              <div className="px-4 pt-4">
+                {errorMessage && (
+                  <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+                    {errorMessage}
+                  </div>
+                )}
+
+                <p className="text-[11px] font-bold text-gray-400">
+                  Klik tombol detail atau baris data untuk membuka detail. Tombol mutasi
+                  tetap khusus Admin.
+                </p>
+              </div>
+            </>
+          )}
 
           {activeTab === "payments" && (
             <div className="mt-4 overflow-x-auto">
@@ -1488,62 +1430,29 @@ export default function WalletsPage() {
 
 
           {activeTab === "transfer" && (
-            <div className="mt-4 space-y-6">
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
-                    Owner
-                  </label>
-                  <select
-                    value={transferOwnerId}
-                    onChange={(event) => setTransferOwnerId(event.target.value)}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
-                  >
-                    <option value="">Pilih owner...</option>
-                    {owners.map((owner) => (
-                      <option key={owner.id} value={owner.id}>
-                        {getOwnerName(owner)} ({getOwnerCode(owner)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {isMounted && isAdmin && (
-                  <button
-                    type="button"
-                    disabled={!transferOwnerId}
-                    onClick={() => {
-                      setCreateTransferError("");
-                      setIsCreateTransferOpen(true);
-                    }}
-                    className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    + Catat Transfer
-                  </button>
-                )}
-              </div>
-
+            <div className="space-y-6 p-4">
               {transferError && (
                 <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
                   {transferError}
                 </p>
               )}
 
-              {!transferOwnerId ? (
-                <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm font-bold text-gray-500">
-                  Pilih owner untuk melihat riwayat transfer dan saran kecocokan.
-                </p>
-              ) : transferLoading ? (
+              {transferLoading ? (
                 <p className="px-4 py-6 text-center text-sm font-bold text-gray-500">
                   Memuat data transfer...
                 </p>
               ) : (
                 <>
+                  {false && (
                   <div>
                     <h3 className="mb-3 text-sm font-black text-gray-900">
                       Saran Kecocokan
                     </h3>
-                    {transferSuggestions.length === 0 ? (
+                    {!transferOwnerId ? (
+                      <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
+                        Pilih owner spesifik untuk melihat saran kecocokan transfer dengan top up `PENDING`.
+                      </p>
+                    ) : transferSuggestions.length === 0 ? (
                       <p className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs font-bold text-gray-500">
                         Tidak ada saran kecocokan untuk owner ini.
                       </p>
@@ -1603,62 +1512,233 @@ export default function WalletsPage() {
                       </div>
                     )}
                   </div>
+                  )}
 
-                  <div className="overflow-x-auto">
-                    <h3 className="mb-3 text-sm font-black text-gray-900">
-                      Riwayat Transfer
-                    </h3>
-                    <table className="w-full min-w-[820px] text-left text-sm text-gray-600">
-                      <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                        <tr>
-                          <th className="px-4 py-4 font-black">Tanggal Transfer</th>
-                          <th className="px-4 py-4 text-right font-black">Nominal</th>
-                          <th className="px-4 py-4 font-black">Status</th>
-                          <th className="px-4 py-4 font-black">Sumber</th>
-                          <th className="px-4 py-4 font-black">Catatan</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 bg-white">
-                        {transferItems.length === 0 ? (
+                  <div>
+                    <div className="border-b border-gray-100 px-5 py-5 sm:px-6">
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="space-y-1">
+                          <h3 className="text-lg font-black text-gray-900">
+                            Riwayat Transfer Owner
+                          </h3>
+                          <p className="text-sm font-medium text-gray-500">
+                            Cari, filter, dan pantau seluruh transfer owner beserta status pencocokannya.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          {isMounted && isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCreateTransferError("");
+                                setCreateTransferForm((current) => ({
+                                  ...current,
+                                  ownerId: transferOwnerId,
+                                }));
+                                setIsCreateTransferOpen(true);
+                              }}
+                              className="inline-flex items-center rounded-2xl bg-[#C92C1E] px-4 py-3 text-sm font-black text-white transition-colors hover:bg-[#A82216]"
+                            >
+                              + Catat Transfer
+                            </button>
+                          )}
+
+                          <ColumnVisibilityControl
+                            tableId="wallet-transfer-table"
+                            storageKey="column-visibility:wallet-transfer-table"
+                            buttonLabel="Kolom"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                        <div className="relative md:col-span-2 xl:col-span-2">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                          </div>
+                          <input
+                            value={transferSearch}
+                            onChange={(event) => setTransferSearch(event.target.value)}
+                            placeholder="Cari owner, kode, nominal, sumber, catatan..."
+                            className="block w-full rounded-2xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm font-medium text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                          />
+                        </div>
+
+                        <select
+                          value={transferOwnerId}
+                          onChange={(event) => setTransferOwnerId(event.target.value)}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                        >
+                          <option value="">Semua owner</option>
+                          {owners.map((owner) => (
+                            <option key={owner.id} value={owner.id}>
+                              {getOwnerName(owner)} ({getOwnerCode(owner)})
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={transferStatusFilter}
+                          onChange={(event) => setTransferStatusFilter(event.target.value)}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                        >
+                          <option>Semua Status</option>
+                          {transferStatusOptions.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={transferSourceFilter}
+                          onChange={(event) => setTransferSourceFilter(event.target.value)}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                        >
+                          <option>Semua Sumber</option>
+                          {transferSourceOptions.map((source) => (
+                            <option key={source} value={source}>
+                              {source}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          type="date"
+                          value={transferDateFrom}
+                          onChange={(event) => setTransferDateFrom(event.target.value)}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                        />
+
+                        <input
+                          type="date"
+                          value={transferDateTo}
+                          onChange={(event) => setTransferDateTo(event.target.value)}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-2 focus:ring-red-100"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table
+                        id="wallet-transfer-table"
+                        data-column-visibility-manual="true"
+                        className="w-full min-w-[1100px] text-left text-sm text-gray-600"
+                      >
+                        <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                           <tr>
-                            <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
-                              Belum ada transfer tercatat.
-                            </td>
+                            <th className="px-4 py-4 font-black">Owner</th>
+                            <th className="px-4 py-4 font-black">Tanggal Transfer</th>
+                            <th className="px-4 py-4 text-right font-black">Nominal</th>
+                            <th className="px-4 py-4 font-black">Status</th>
+                            <th className="px-4 py-4 font-black">Sumber</th>
+                            <th className="px-4 py-4 font-black">Catatan</th>
+                            <th className="px-4 py-4 text-center font-black">Aksi</th>
                           </tr>
-                        ) : (
-                          transferItems.map((transfer) => (
-                            <tr key={transfer.id} className="transition-colors hover:bg-gray-50">
-                              <td className="px-4 py-4 align-top font-medium text-gray-600">
-                                {formatTanggal(transfer.transfer_date)}
-                              </td>
-                              <td className="px-4 py-4 text-right align-top font-black text-gray-900">
-                                {formatRupiah(transfer.amount)}
-                              </td>
-                              <td className="px-4 py-4 align-top">
-                                <span
-                                  className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${transfer.match_status === "MATCHED"
-                                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                      : transfer.match_status === "SUGGESTED"
-                                        ? "border-amber-200 bg-amber-50 text-amber-700"
-                                        : transfer.match_status === "REJECTED_MATCH"
-                                          ? "border-red-200 bg-red-50 text-red-700"
-                                          : "border-gray-200 bg-gray-100 text-gray-500"
-                                    }`}
-                                >
-                                  {transfer.match_status}
-                                </span>
-                              </td>
-                              <td className="px-4 py-4 align-top font-medium text-gray-600">
-                                {transfer.source}
-                              </td>
-                              <td className="px-4 py-4 align-top font-medium text-gray-600">
-                                {transfer.note || "-"}
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {transferTotalItems === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                                Tidak ada transfer yang cocok dengan filter saat ini.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            paginatedTransferItems.map((transfer) => (
+                              <tr key={transfer.id} className="transition-colors hover:bg-gray-50">
+                                <td className="px-4 py-4 align-top">
+                                  <div className="font-black text-gray-900">
+                                    {transfer.owner?.name || "-"}
+                                  </div>
+                                  <div className="mt-1 text-[11px] font-bold text-gray-400">
+                                    {transfer.owner?.code || "-"}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 align-top font-medium text-gray-600">
+                                  <div className="font-bold text-gray-900">
+                                    {formatTanggal(transfer.transfer_date)}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 text-right align-top font-black text-[#C92C1E]">
+                                  {formatRupiah(transfer.amount)}
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <span
+                                    className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${transfer.match_status === "MATCHED"
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : transfer.match_status === "SUGGESTED"
+                                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                                          : transfer.match_status === "REJECTED_MATCH"
+                                            ? "border-red-200 bg-red-50 text-red-700"
+                                            : "border-gray-200 bg-gray-100 text-gray-500"
+                                      }`}
+                                  >
+                                    {transfer.match_status}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 align-top font-medium text-gray-600">
+                                  {transfer.source}
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <div className="max-w-[420px] whitespace-normal break-words font-medium leading-7 text-gray-600">
+                                    {transfer.note || "-"}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 text-center align-top">
+                                  <div className="flex justify-center">
+                                    <RowActionGroup>
+                                      <ViewActionButton
+                                        href={`/menu/wallets/transfers/${transfer.id}`}
+                                        title="Lihat Detail Transfer"
+                                      />
+                                    </RowActionGroup>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="text-xs font-medium text-gray-500">
+                        Menampilkan{" "}
+                        <span className="font-bold text-gray-900">{transferPageStart}</span>{" "}
+                        hingga{" "}
+                        <span className="font-bold text-gray-900">{transferPageEnd}</span>{" "}
+                        dari{" "}
+                        <span className="font-bold text-gray-900">{transferTotalItems}</span>{" "}
+                        transfer
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setTransferPage((prev) => Math.max(1, prev - 1))}
+                          disabled={transferPage === 1}
+                          className="rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Sebelumnya
+                        </button>
+                        <span className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-600">
+                          {transferPage}/{transferTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTransferPage((prev) => Math.min(transferTotalPages, prev + 1))
+                          }
+                          disabled={transferPage === transferTotalPages}
+                          className="rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Selanjutnya
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
@@ -1679,6 +1759,30 @@ export default function WalletsPage() {
               {createTransferError}
             </p>
           )}
+
+          <div>
+            <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+              Owner
+            </label>
+            <select
+              value={createTransferForm.ownerId}
+              onChange={(event) =>
+                setCreateTransferForm((current) => ({
+                  ...current,
+                  ownerId: event.target.value,
+                }))
+              }
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
+              required
+            >
+              <option value="">Pilih owner</option>
+              {owners.map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {getOwnerName(owner)} ({getOwnerCode(owner)})
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">

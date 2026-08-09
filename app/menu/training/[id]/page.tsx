@@ -1,9 +1,9 @@
 "use client";
 
-import React, { use, useEffect, useState } from "react";
+import React, { use } from "react";
 import Link from "next/link";
-import { getTrainingById, type TrainingItem } from "@/app/lib/api";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { useTrainingDetailQuery } from "@/app/lib/queries/training";
 
 export default function TrainingDetailPage({
   params,
@@ -15,29 +15,18 @@ export default function TrainingDetailPage({
   const trainingId = Number(id);
   const isInvalidTrainingId = !trainingId || Number.isNaN(trainingId);
 
-  const [training, setTraining] = useState<TrainingItem | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: training,
+    isLoading: isQueryLoading,
+    error: queryError,
+  } = useTrainingDetailQuery(trainingId, !isInvalidTrainingId);
 
-  useEffect(() => {
-    if (isInvalidTrainingId) {
-      const timer = window.setTimeout(() => {
-        setError("ID training tidak valid.");
-        setIsLoading(false);
-      }, 0);
-
-      return () => window.clearTimeout(timer);
-    }
-
-    const timer = window.setTimeout(() => {
-      getTrainingById(trainingId)
-        .then(setTraining)
-        .catch((e: Error) => setError(e.message || "Gagal memuat data training."))
-        .finally(() => setIsLoading(false));
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [isInvalidTrainingId, trainingId]);
+  const isLoading = isInvalidTrainingId ? false : isQueryLoading;
+  const error = isInvalidTrainingId
+    ? "ID training tidak valid."
+    : queryError
+    ? (queryError as Error).message || "Gagal memuat data training."
+    : null;
 
   const formatDateTime = (str?: string | null) => {
     if (!str) return "-";

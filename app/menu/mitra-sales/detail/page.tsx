@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { formatPhoneDisplay } from "@/app/lib/phone";
 import {
   assignPartnerPic,
   createPartnerInteraction,
@@ -35,6 +36,7 @@ import {
   type PartnerReferralItem,
   type UserResponse,
 } from "@/app/lib/api";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
@@ -180,6 +182,7 @@ export default function MitraSalesDetailPage() {
 
 function MitraSalesDetailPageInner() {
   usePageTitle("Detail Mitra Sales");
+  const { confirm, withLoading } = useFeedback();
   const searchParams = useSearchParams();
   const partnerId = Number(searchParams.get("id"));
   const focusInteraction = searchParams.get("tab") === "interaction";
@@ -321,12 +324,21 @@ function MitraSalesDetailPageInner() {
   };
 
   const handleReleasePic = async () => {
-    if (!window.confirm("Lepas PIC aktif dari mitra ini?")) return;
+    const ok = await confirm({
+      title: "Lepas PIC Aktif",
+      message: "Lepas PIC aktif dari mitra ini? Mitra akan tidak memiliki penanggung jawab sampai PIC baru ditugaskan.",
+      confirmLabel: "Lepas PIC",
+      danger: true,
+    });
+    if (!ok) return;
+
     setSaving(true);
     setActionError("");
     setActionSuccess("");
     try {
-      await releasePartnerPic(partnerId);
+      await withLoading(() => releasePartnerPic(partnerId), {
+        label: "Melepas PIC aktif...",
+      });
       setActionSuccess("PIC aktif berhasil dilepas.");
       await reload();
     } catch (error) {
@@ -386,12 +398,22 @@ function MitraSalesDetailPageInner() {
   };
 
   const handleRestore = async () => {
-    if (!partner || !window.confirm(`Pulihkan ${partner.name} menjadi ACTIVE?`)) return;
+    if (!partner) return;
+
+    const ok = await confirm({
+      title: "Pulihkan Mitra",
+      message: `Pulihkan ${partner.name} menjadi aktif kembali?`,
+      confirmLabel: "Pulihkan",
+    });
+    if (!ok) return;
+
     setSaving(true);
     setActionError("");
     setActionSuccess("");
     try {
-      await updatePartner(partner.id, { status: "ACTIVE" });
+      await withLoading(() => updatePartner(partner.id, { status: "ACTIVE" }), {
+        label: "Memulihkan mitra...",
+      });
       setActionSuccess("Mitra berhasil dipulihkan.");
       await reload();
     } catch (error) {
@@ -497,7 +519,7 @@ function MitraSalesDetailPageInner() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kode Mitra</p><p className="mt-2 text-sm font-black text-slate-900">{partner.code}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status</p><p className="mt-2 text-sm font-black text-slate-900">{partner.status}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Telepon</p><p className="mt-2 text-sm font-black text-slate-900">{partner.phone || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Telepon</p><p className="mt-2 text-sm font-black text-slate-900">{partner.phone ? formatPhoneDisplay(partner.phone) : "-"}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Email</p><p className="mt-2 text-sm font-black text-slate-900">{partner.email || "-"}</p></div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Alamat</p><p className="mt-2 text-sm font-black leading-6 text-slate-900">{partner.address || "Alamat belum diisi"}</p></div>
@@ -591,7 +613,7 @@ function MitraSalesDetailPageInner() {
                         <span className="text-[10px] font-bold text-slate-400">{formatDateTime(item.referral_date)}</span>
                       </div>
                       <h4 className="mt-2 text-base font-black text-slate-900">{leadObj ? leadLabel(leadObj) : `Lead #${item.lead_id}`}</h4>
-                      {leadObj?.owner?.phone ? <p className="mt-1 text-xs font-medium text-slate-500">HP: {leadObj.owner.phone}</p> : null}
+                      {leadObj?.owner?.phone ? <p className="mt-1 text-xs font-medium text-slate-500">HP: {formatPhoneDisplay(leadObj.owner.phone)}</p> : null}
                       {item.notes ? <p className="mt-2 rounded-xl bg-slate-50 p-3 text-xs font-bold text-slate-700">{item.notes}</p> : null}
                     </div>
                     {leadObj ? (

@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 import {
   type OwnerListParams,
-  getLeadsWithTotal,
   type BackendLead,
   getSalesList,
   getSupervisorList,
@@ -37,12 +37,21 @@ import {
   type ImportRowError,
 } from "@/app/lib/api";
 import * as XLSX from "xlsx";
-import CallPage, { CallFormResult } from "./call/page";
-import ActionButtons, { EditProfileModal } from "./action/page";
-import AnalyticsTab from "./AnalyticsTab";
+import CallPage, { CallFormResult } from "./call/components";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ActionButtons from "./action/components";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import LeadFormModal from "./LeadFormModal";
+import { useLeadsQuery } from "@/app/lib/queries/leads";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
+
+const EditProfileModal = ActionButtons.EditProfileModal;
 
 interface NasabahItem {
   totalFu: number;
@@ -475,7 +484,6 @@ export default function DataKelolaanPage() {
 
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
   const [backendTotal, setBackendTotal] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState(false);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
@@ -672,9 +680,7 @@ export default function DataKelolaanPage() {
     };
   }, []);
 
-  const loadOwnersFromBackend = useCallback(() => {
-    setIsLoading(true);
-
+  const leadsQueryParams = useMemo(() => {
     const q = [search, searchKodeOwner, searchNamaOwner, searchNamaBrand]
       .filter(Boolean)
       .join(" ");
@@ -705,10 +711,9 @@ export default function DataKelolaanPage() {
 
     if (sort && sort !== "no" && sort !== "-no") {
       // Map frontend sort keys to backend sort keys
-      let backendSort = sort;
       const isDesc = sort.startsWith("-");
       const key = sort.replace("-", "");
-      
+
       let mappedKey = "";
       if (key === "kodeOwner") mappedKey = "code";
       else if (key === "namaOwner") mappedKey = "owner_name";
@@ -716,26 +721,14 @@ export default function DataKelolaanPage() {
       else if (key === "status") mappedKey = "status";
       else if (key === "stage") mappedKey = "stage";
       else if (key === "tanggalFu") mappedKey = "next_follow_up_at";
-      
+
       if (mappedKey) {
         params.sort = isDesc ? `-${mappedKey}` : mappedKey;
       }
     }
 
-    getLeadsWithTotal(params)
-      .then(({ items, total }) => {
-        const mappedData = items.map(mapBackendLeadToNasabahItem);
-        setDataNasabah(mappedData);
-        setBackendTotal(total);
-      })
-      .catch((err) => {
-        console.error("Gagal memuat lead dari backend:", err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    return params;
   }, [
-    mapBackendLeadToNasabahItem,
     currentPage,
     rowsPerPage,
     search,
@@ -746,8 +739,21 @@ export default function DataKelolaanPage() {
     skorFilter,
     startDateFilter,
     endDateFilter,
-    sort
+    sort,
   ]);
+
+  const leadsQuery = useLeadsQuery(leadsQueryParams);
+  const isLoading = leadsQuery.isLoading;
+
+  useEffect(() => {
+    if (!leadsQuery.data) return;
+    setDataNasabah(leadsQuery.data.items.map(mapBackendLeadToNasabahItem));
+    setBackendTotal(leadsQuery.data.total);
+  }, [leadsQuery.data, mapBackendLeadToNasabahItem]);
+
+  const loadOwnersFromBackend = useCallback(() => {
+    void leadsQuery.refetch();
+  }, [leadsQuery.refetch]);
 
   useEffect(() => {
     getProfile()
@@ -1855,59 +1861,33 @@ export default function DataKelolaanPage() {
       </div>
 
       {/* 2. Stat Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
-          <div className="flex flex-col">
-            <p className="text-xs font-bold uppercase tracking-wider text-red-100">Total Lead</p>
-            <div className="mt-1">
-              <h2 className="text-3xl font-black text-white">{summaryData.totalCustomer}</h2>
-              <p className="mt-1 text-[10px] text-red-200 font-medium">Jumlah seluruh lead terdaftar.</p>
-            </div>
-          </div>
-          <div className="absolute -right-4 -top-4 opacity-10 pointer-events-none">
-            <svg className="h-32 w-32 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.001 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Lead Potensi</p>
-              <div className="h-3 w-3 rounded-full bg-amber-400"></div>
-            </div>
-            <div className="mt-1">
-              <h2 className="text-3xl font-black text-gray-900">{summaryData.totalCustomerPotensi}</h2>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">Skor 2, remark 2, atau sedang/akan training.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Lead Kemungkinan</p>
-              <div className="h-3 w-3 rounded-full bg-blue-400"></div>
-            </div>
-            <div className="mt-1">
-              <h2 className="text-3xl font-black text-gray-900">{summaryData.totalCustomerKemungkinan}</h2>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">PIC valid dan skor/remark terakhir 1.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Berlangganan</p>
-              <div className="h-3 w-3 rounded-full bg-emerald-400"></div>
-            </div>
-            <div className="mt-1">
-              <h2 className="text-3xl font-black text-gray-900">{summaryData.totalCustomerBerlangganan}</h2>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">{formatPercentValue(summaryData.perbandinganBerlangganan)} dari total lead.</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Lead"
+          value={summaryData.totalCustomer}
+          description="Jumlah seluruh lead terdaftar di sistem."
+          tone="accent"
+          silhouette="lead"
+        />
+        <QuickInfoCard
+          label="Lead Potensi"
+          value={summaryData.totalCustomerPotensi}
+          description="Skor 2, remark 2, atau sedang menuju training."
+          tone="amber"
+        />
+        <QuickInfoCard
+          label="Lead Kemungkinan"
+          value={summaryData.totalCustomerKemungkinan}
+          description="PIC valid dengan skor atau remark terakhir 1."
+          tone="sky"
+        />
+        <QuickInfoCard
+          label="Berlangganan"
+          value={summaryData.totalCustomerBerlangganan}
+          description={`${formatPercentValue(summaryData.perbandinganBerlangganan)} dari total lead.`}
+          tone="emerald"
+        />
+      </QuickInfoCardGrid>
 
       {/* 3. Tabs */}
       <div className="space-y-4">
@@ -2597,8 +2577,8 @@ export default function DataKelolaanPage() {
       {/* MODAL EDIT PIC DATA TERPILIH */}
       {bulkPicModalOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 p-3 sm:p-6">
-        <div className="mx-auto my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-visible rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b p-5">
+        <div className="app-modal-panel mx-auto my-6 flex w-full max-w-lg rounded-3xl shadow-2xl">
+            <div className="app-modal-header flex items-center justify-between p-5">
               <div>
                 <h2 className="text-lg font-black text-gray-900">
                   {isAdminState ? "Assign Supervisor Terpilih" : isSupervisorState ? "Assign Sales Terpilih" : "Lepas Lead Terpilih"}
@@ -2613,7 +2593,7 @@ export default function DataKelolaanPage() {
               <button
                 type="button"
                 onClick={closeBulkPicModal}
-                className="h-9 w-9 rounded-full bg-gray-100 font-black text-gray-600 hover:bg-gray-200"
+                className="app-modal-close h-9 w-9 rounded-full font-black"
               >
                 ✕
               </button>
@@ -2826,8 +2806,8 @@ export default function DataKelolaanPage() {
             onClick={() => !isImportLoading && setIsImportModalOpen(false)} 
           />
           
-          <div className="relative z-10 w-full max-w-4xl transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-4">
+          <div className="app-modal-panel relative z-10 w-full max-w-4xl rounded-2xl shadow-2xl transition-all">
+            <div className="app-modal-header flex items-center justify-between px-6 py-4">
               <div>
                 <h3 className="text-lg font-black text-gray-900">
                   Import Excel
@@ -2838,7 +2818,7 @@ export default function DataKelolaanPage() {
               </div>
               <button
                 onClick={() => !isImportLoading && setIsImportModalOpen(false)}
-                className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                className="app-modal-close rounded-xl p-2 transition-colors"
                 disabled={isImportLoading}
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2847,7 +2827,7 @@ export default function DataKelolaanPage() {
               </button>
             </div>
             
-            <div className="p-6">
+            <div className="app-modal-body p-6">
               {importError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
                   {importError}

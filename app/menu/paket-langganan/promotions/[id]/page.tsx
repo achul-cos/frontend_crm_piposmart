@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useState, type ReactNode } from "react";
+import DetailSummaryCard from "@/app/components/ui/DetailSummaryCard";
 import {
   getPromotionEligiblePlans,
   listPromotionBenefits,
@@ -79,38 +80,6 @@ function getStatusBadgeClass(active?: boolean): string {
   return active
     ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
     : "border border-gray-200 bg-gray-50 text-gray-600";
-}
-
-function SummaryCard({
-  title,
-  value,
-  description,
-  primary = false,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  primary?: boolean;
-}) {
-  if (primary) {
-    return (
-      <div className="relative min-h-[144px] overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-        <div className="relative z-10">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">{title}</p>
-          <h2 className="text-3xl font-black">{value}</h2>
-          <p className="mt-2 max-w-[90%] text-[11px] text-red-100/90">{description}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-[144px] rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
-      <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">{title}</p>
-      <h2 className="text-3xl font-black text-gray-900">{value}</h2>
-      <p className="mt-2 text-[11px] text-gray-400">{description}</p>
-    </div>
-  );
 }
 
 function InfoSection({
@@ -332,20 +301,23 @@ export default function PromotionDetailPage({ params }: { params: Promise<{ id: 
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <SummaryCard
+            <DetailSummaryCard
               title="Kode Promosi"
               value={promotion.code}
               description="Identitas promo yang dipakai pada katalog dan transaksi closing."
               primary
+              silhouette="tag"
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Biaya Promo"
               value={promotion.charge_type === "FREE" ? "Gratis" : formatRupiah(promotion.additional_charge)}
+              tone="emerald"
               description={`${formatLabel(promotion.charge_type)} • prioritas ${promotion.priority}`}
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Cakupan Promo"
               value={`${benefits.length} benefit`}
+              tone="sky"
               description={`${plans.length} plan eligible • bonus durasi ${totalFreeDurationDays} hari`}
             />
           </div>
