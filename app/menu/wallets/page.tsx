@@ -15,6 +15,7 @@ import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityCont
 import { RowActionGroup, ViewActionButton } from "@/app/components/table/RowActionButton";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
   ssr: false,
@@ -1169,6 +1170,21 @@ export default function WalletsPage() {
                     onChange={(event) => setPaidTo(event.target.value)}
                     className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
                   />
+
+                  {activeTab === "payments" ? (
+                    <ReportExportButton
+                      reportKey="topups"
+                      filters={{
+                        q: debouncedSearch || undefined,
+                        date_from: paidFrom || undefined,
+                        date_to: paidTo || undefined,
+                      }}
+                      label="Export Top Up"
+                      loadingLabel="Menyiapkan Export..."
+                      successMessage="File top up sedang diunduh."
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  ) : null}
                 </div>
               </div>
 

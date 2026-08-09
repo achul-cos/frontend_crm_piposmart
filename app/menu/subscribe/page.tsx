@@ -14,6 +14,7 @@ import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
   ssr: false,
@@ -1288,6 +1289,22 @@ export default function SubscriptionPage() {
                   />
                 </>
               )}
+
+              {activeTab === "subscriptions" ? (
+                <ReportExportButton
+                  reportKey="subscriptions"
+                  filters={{
+                    q: debouncedSearch || undefined,
+                    status: statusFilter !== "Semua" ? statusFilter : undefined,
+                    date_from: purchasedFrom || undefined,
+                    date_to: purchasedTo || undefined,
+                  }}
+                  label="Export Subscription"
+                  loadingLabel="Menyiapkan Export..."
+                  successMessage="File subscription sedang diunduh."
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              ) : null}
             </div>
           </div>
 

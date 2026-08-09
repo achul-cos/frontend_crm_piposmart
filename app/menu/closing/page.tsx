@@ -7,6 +7,7 @@ import type { Sprint14g1Section } from "@/app/components/analytics/Sprint14g1Boa
 import { getProfile } from "@/app/lib/api";
 import { AnimatedListItem } from "@/app/components/motion/primitives";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
 import {
   useClosingListQuery,
   useClosingSalesListQuery,
@@ -435,6 +436,21 @@ export default function ClosingPage() {
                   Menampilkan riwayat closing milik Anda
                 </div>
               )}
+
+              <ReportExportButton
+                reportKey="closings"
+                filters={{
+                  q: debouncedFilters.searchQuery || undefined,
+                  status: debouncedFilters.statusFilter || undefined,
+                  sales_id: !isSales && debouncedFilters.salesFilter ? debouncedFilters.salesFilter : undefined,
+                  date_from: debouncedFilters.dateFrom || undefined,
+                  date_to: debouncedFilters.dateTo || undefined,
+                }}
+                label="Export Closing"
+                loadingLabel="Menyiapkan Export..."
+                successMessage="File closing sedang diunduh."
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              />
 
               <div className="relative">
                 <button

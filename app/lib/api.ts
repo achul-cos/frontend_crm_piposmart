@@ -2925,6 +2925,118 @@ export async function downloadGlobalOutletExportFile(
   return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
 }
 
+export type ReportExportKey =
+  | "activities"
+  | "topups"
+  | "closings"
+  | "subscriptions"
+  | "partners"
+  | "targets_kpi";
+
+export type ReportExportFormat = "CSV" | "XLSX" | "PDF";
+
+export interface ReportExportFilters {
+  date_from?: string;
+  date_to?: string;
+  created_from?: string;
+  created_to?: string;
+  status?: string;
+  q?: string;
+  province?: string;
+  city?: string;
+  sales_id?: string | number;
+  supervisor_id?: string | number;
+}
+
+export interface ReportExportItem {
+  id: number;
+  code: string;
+  report_key: ReportExportKey | string;
+  format: ReportExportFormat | string;
+  status: string;
+  filters?: Record<string, string>;
+  file_name?: string;
+  mime_type?: string;
+  row_count: number;
+  last_error?: string;
+  download_url?: string;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string | null;
+}
+
+export async function createReportExport(
+  reportKey: ReportExportKey,
+  format: ReportExportFormat = "XLSX",
+  filters: ReportExportFilters = {},
+): Promise<ReportExportItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/reports/exports`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      report_key: reportKey,
+      format,
+      filters,
+    }),
+  });
+
+  const data = await handleResponse<ApiEnvelope<ReportExportItem>>(res);
+  return data.data;
+}
+
+export async function getReportExport(exportId: number): Promise<ReportExportItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/reports/exports/${exportId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<ReportExportItem>>(res);
+  return data.data;
+}
+
+export async function waitForReportExport(
+  exportId: number,
+  options: { intervalMs?: number; maxAttempts?: number } = {},
+): Promise<ReportExportItem> {
+  const intervalMs = options.intervalMs ?? 1500;
+  const maxAttempts = options.maxAttempts ?? 40;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const item = await getReportExport(exportId);
+
+    if (item.status === "COMPLETED") {
+      return item;
+    }
+
+    if (item.status === "FAILED") {
+      throw new Error(item.last_error || "Export report gagal diproses.");
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error("File export belum selesai diproses. Silakan coba lagi beberapa saat.");
+}
+
+export async function downloadReportExportFile(
+  exportId: number,
+): Promise<{ blob: Blob; disposition: string | null }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/reports/exports/${exportId}/download`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || "Gagal mengunduh file export report");
+  }
+
+  return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
+}
+
 export interface PackagePlanBrief {
   package_id?: number;
   package_code?: string;

@@ -6,6 +6,7 @@ import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { getProfile } from "@/app/lib/api";
 import { AnimatedListItem } from "@/app/components/motion/primitives";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
 import { useInteractionListQuery, useInteractSalesListQuery } from "@/app/lib/queries/interact";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 
@@ -278,6 +279,18 @@ export default function InteractPage() {
                 <option value="1">1 (Kemungkinan)</option>
                 <option value="0">0 (Tidak Potensial)</option>
               </select>
+              <ReportExportButton
+                reportKey="activities"
+                filters={{
+                  date_from: dateFrom || undefined,
+                  date_to: dateTo || undefined,
+                  sales_id: !isSales && salesFilter ? salesFilter : undefined,
+                }}
+                label="Export Interaksi"
+                loadingLabel="Menyiapkan Export..."
+                successMessage="File interaksi sedang diunduh."
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              />
             </div>
           </div>
 

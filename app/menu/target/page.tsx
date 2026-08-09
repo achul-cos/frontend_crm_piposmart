@@ -8,6 +8,7 @@ import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 import type { Sprint14g1Section } from "@/app/components/analytics/Sprint14g1Board";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
 import {
   uploadImportFile,
   getImportBatch,
@@ -613,6 +614,17 @@ const DEFAULT_PERIOD = {
   periodMonth: new Date().getMonth() + 1,
 };
 
+function buildMonthRange(periodYear: number, periodMonth: number) {
+  const start = new Date(periodYear, periodMonth - 1, 1);
+  const end = new Date(periodYear, periodMonth, 0);
+  const toYmd = (value: Date) => value.toISOString().slice(0, 10);
+
+  return {
+    dateFrom: toYmd(start),
+    dateTo: toYmd(end),
+  };
+}
+
 const EMPTY_FORM: TargetFormState = {
   mode: "TARGET_BULK",
   periodYear: DEFAULT_PERIOD.periodYear,
@@ -704,6 +716,10 @@ export default function TargetPage() {
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
 
   const [selectedRanking, setSelectedRanking] = useState<KpiRankingItem | null>(null);
+  const exportPeriod = useMemo(
+    () => buildMonthRange(periodYear, periodMonth),
+    [periodMonth, periodYear],
+  );
 
   const achievedCount = ranking.filter(
     (item) => item.classification === "ACHIEVED",
@@ -1196,12 +1212,25 @@ export default function TargetPage() {
                 </p>
               </div>
 
-              <input
-                value={search || ""}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Cari nama sales, kode, score, atau klasifikasi"
-                className="min-w-[280px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={search || ""}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Cari nama sales, kode, score, atau klasifikasi"
+                  className="min-w-[280px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
+                />
+                <ReportExportButton
+                  reportKey="targets_kpi"
+                  filters={{
+                    date_from: exportPeriod.dateFrom,
+                    date_to: exportPeriod.dateTo,
+                  }}
+                  label="Export KPI"
+                  loadingLabel="Menyiapkan Export..."
+                  successMessage="File KPI sedang diunduh."
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
             </div>
 
             <div className="overflow-x-auto">
