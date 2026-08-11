@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 
 // API Imports
 import {
@@ -166,6 +167,8 @@ const DISCORD_CHANNELS = [
 
 export default function BantuanPage() {
   usePageTitle("Bantuan");
+
+  const { showError, confirm, withLoading } = useFeedback();
 
   const [activeTab, setActiveTab] = useState<MainTab>("business-flow");
 
@@ -362,23 +365,34 @@ export default function BantuanPage() {
       targetThread.authorName.toLowerCase() === currentUserName.toLowerCase();
 
     if (!canDelete) {
-      alert("Hanya pembuat thread atau Admin yang berhak menghapus thread ini.");
+      showError({
+        title: "Tidak punya akses",
+        message: "Hanya pembuat thread atau Admin yang berhak menghapus thread ini.",
+      });
       return;
     }
 
-    if (window.confirm(`Apakah Anda yakin ingin menghapus thread "${targetThread.title}"?`)) {
-      setThreads((current) => current.filter((t) => String(t.id) !== String(threadId)));
-      if (selectedThread && String(selectedThread.id) === String(threadId)) {
-        setSelectedThread(null);
-      }
+    const ok = await confirm({
+      title: "Hapus Thread",
+      message: `Apakah Anda yakin ingin menghapus thread "${targetThread.title}"? Balasan di dalamnya juga akan ikut terhapus.`,
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
 
-      try {
-        if (typeof threadId === "number" || !isNaN(Number(threadId))) {
-          await apiDeleteThread(Number(threadId));
-        }
-      } catch {
-        // Handled
+    setThreads((current) => current.filter((t) => String(t.id) !== String(threadId)));
+    if (selectedThread && String(selectedThread.id) === String(threadId)) {
+      setSelectedThread(null);
+    }
+
+    try {
+      if (typeof threadId === "number" || !isNaN(Number(threadId))) {
+        await withLoading(() => apiDeleteThread(Number(threadId)), {
+          label: "Menghapus thread...",
+        });
       }
+    } catch {
+      // Handled
     }
   };
 
@@ -386,26 +400,34 @@ export default function BantuanPage() {
   const handleDeleteReply = async (replyId: string | number) => {
     if (!selectedThread) return;
 
-    if (window.confirm("Apakah Anda yakin ingin menghapus balasan ini?")) {
-      const updatedReplies = selectedThread.replies.filter((r) => String(r.id) !== String(replyId));
+    const ok = await confirm({
+      title: "Hapus Balasan",
+      message: "Apakah Anda yakin ingin menghapus balasan ini?",
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
 
-      setThreads((current) =>
-        current.map((t) =>
-          String(t.id) === String(selectedThread.id) ? { ...t, replies: updatedReplies } : t,
-        ),
-      );
+    const updatedReplies = selectedThread.replies.filter((r) => String(r.id) !== String(replyId));
 
-      setSelectedThread((prev) =>
-        prev ? { ...prev, replies: updatedReplies } : null,
-      );
+    setThreads((current) =>
+      current.map((t) =>
+        String(t.id) === String(selectedThread.id) ? { ...t, replies: updatedReplies } : t,
+      ),
+    );
 
-      try {
-        if (typeof replyId === "number" || !isNaN(Number(replyId))) {
-          await apiDeleteReply(Number(replyId));
-        }
-      } catch {
-        // Handled
+    setSelectedThread((prev) =>
+      prev ? { ...prev, replies: updatedReplies } : null,
+    );
+
+    try {
+      if (typeof replyId === "number" || !isNaN(Number(replyId))) {
+        await withLoading(() => apiDeleteReply(Number(replyId)), {
+          label: "Menghapus balasan...",
+        });
       }
+    } catch {
+      // Handled
     }
   };
 
@@ -1191,19 +1213,19 @@ export default function BantuanPage() {
           {/* Modal Buat Thread Baru */}
           {showNewThreadModal ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-              <div className="w-full max-w-lg rounded-3xl border border-gray-200 bg-white p-6 shadow-xl">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div className="app-modal-panel w-full max-w-lg rounded-3xl shadow-xl">
+                <div className="app-modal-header flex items-center justify-between px-6 py-4">
                   <h3 className="text-base font-black text-gray-900">Buat Thread Diskusi Baru</h3>
                   <button
                     type="button"
                     onClick={() => setShowNewThreadModal(false)}
-                    className="text-xs font-bold text-gray-400 hover:text-gray-700"
+                    className="app-modal-close rounded-xl p-2 text-xs font-bold"
                   >
                     <XMarkIcon className="h-4 w-4" />
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateThread} className="mt-4 space-y-4">
+                <form onSubmit={handleCreateThread} className="app-modal-body mt-4 space-y-4 px-6 pb-6">
                   <div>
                     <label className="mb-1 block text-xs font-black uppercase text-gray-500">
                       Channel Diskusi

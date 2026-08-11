@@ -1,6 +1,7 @@
 "use client";
 
 import type { Dispatch, FormEvent, SetStateAction } from "react";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 
 export type SalesStatus = "ACTIVE" | "INACTIVE";
 
@@ -55,43 +56,45 @@ export default function SalesFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
-      <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                Sales
-              </p>
+    <ScreenPortal>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
+        <div className="flex min-h-full items-center justify-center">
+          <div
+            className="app-modal-panel w-full max-w-3xl rounded-[32px] shadow-2xl transition-all xl:max-w-4xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-modal-header px-5 py-4 md:px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                  Sales
+                </p>
 
-              <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
-                {editingSales ? "Edit Sales" : "Buat Sales"}
-              </h2>
+                <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
+                  {editingSales ? "Edit Sales" : "Buat Sales"}
+                </h2>
 
-              <p className="mt-1 text-xs font-medium text-slate-500">
-                Input data sales. Password akan dibuat otomatis oleh backend.
-              </p>
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  Input data sales. Password akan dibuat otomatis oleh backend.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
+              >
+                Tutup
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
-            >
-              Tutup
-            </button>
           </div>
-        </div>
 
-        <form
-          onSubmit={handleSubmit}
-          autoComplete="off"
-          className="flex-1 flex flex-col min-h-0 overflow-hidden"
-        >
-          <div className="flex-1 overflow-y-auto space-y-5 p-5 md:p-6">
+          <form
+            onSubmit={handleSubmit}
+            autoComplete="off"
+            className="flex-1 flex flex-col min-h-0 overflow-hidden"
+          >
+            <div className="app-modal-body flex-1 min-h-0 space-y-5 p-5 md:p-6">
             {formError ? (
               <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
                 {formError}
@@ -129,7 +132,7 @@ export default function SalesFormModal({
                 Data Sales
               </p>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-4">
                 <label className="space-y-2">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                     Nama Sales
@@ -169,7 +172,7 @@ export default function SalesFormModal({
                   />
                 </label>
 
-                <label className="space-y-2 md:col-span-2">
+                <label className="space-y-2">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                     Nomor HP
                   </span>
@@ -196,29 +199,31 @@ export default function SalesFormModal({
             </div>
           </div>
 
-          <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-4 md:px-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
-            >
-              Batal
-            </button>
+            <div className="app-modal-footer flex flex-shrink-0 justify-end gap-2 px-5 py-4 md:px-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
+              >
+                Batal
+              </button>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-            >
-              {saving
-                ? "Menyimpan..."
-                : editingSales
-                  ? "Simpan Perubahan"
-                  : "Buat Sales"}
-            </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {saving
+                  ? "Menyimpan..."
+                  : editingSales
+                    ? "Simpan Perubahan"
+                    : "Buat Sales"}
+              </button>
+            </div>
+          </form>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </ScreenPortal>
   );
 }

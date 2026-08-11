@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useState, type ReactNode } from "react";
+import DetailSummaryCard from "@/app/components/ui/DetailSummaryCard";
 import {
   getWalletPaymentDetail,
   type WalletPaymentDetailData,
@@ -107,41 +108,6 @@ function getDirectionBadgeClass(direction?: string | null): string {
   return String(direction || "").toUpperCase() === "CREDIT"
     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
     : "bg-rose-50 text-rose-700 border border-rose-200";
-}
-
-function SummaryCard({
-  title,
-  value,
-  description,
-  primary = false,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  primary?: boolean;
-}) {
-  if (primary) {
-    return (
-      <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden min-h-[144px]">
-        <div className="relative z-10">
-          <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-          <h2 className="text-3xl font-black">{value}</h2>
-          <p className="mt-2 text-[11px] text-red-100/90 max-w-[90%]">{description}</p>
-        </div>
-        <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-9 4h16a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm min-h-[144px]">
-      <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-      <h2 className="text-3xl font-black text-gray-900">{value}</h2>
-      <p className="mt-2 text-[11px] text-gray-400">{description}</p>
-    </div>
-  );
 }
 
 function InfoSection({
@@ -314,20 +280,23 @@ export default function TopupDetailPage({ params }: { params: Promise<{ id: stri
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <SummaryCard
+            <DetailSummaryCard
               title="Awal Pembelian"
               value={formatRupiah(payment.amount)}
               description="Nominal transaksi awal top up."
               primary
+              silhouette="wallet"
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Status Top Up"
               value={getPaymentStatusLabel(payment.status)}
+              tone="sky"
               description={`${formatDateTime(payment.paid_at || payment.created_at)} • ${payment.payment_channel || payment.channel || "-"}`}
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Owner / Outlet"
               value={ownerName(payment.owner || wallet?.owner)}
+              tone="violet"
               description={`Kode Owner ${ownerCode(payment.owner || wallet?.owner)}`}
             />
           </div>

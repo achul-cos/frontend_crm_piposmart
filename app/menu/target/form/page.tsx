@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PowerOff } from "lucide-react";
 import { usePageTitle } from '@/app/lib/hooks/usePageTitle';
+import { RowActionButton } from "@/app/components/table/RowActionButton";
 import { authFetchJson } from '@/app/lib/api';
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 
 export type TargetFormMode = "TARGET_BULK" | "KPI_DEFINITION" | "RECOMPUTE";
 
@@ -79,7 +82,8 @@ function TargetFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="app-modal-panel w-full max-w-md rounded-2xl shadow-xl">
+        <div className="app-modal-header p-6">
         <h3 className="text-lg font-black text-slate-900">
           {mode === "TARGET_BULK"
             ? "Bulk Target Sales"
@@ -87,6 +91,8 @@ function TargetFormModal({
             ? "KPI Definition"
             : "Recompute KPI"}
         </h3>
+        </div>
+        <div className="app-modal-body p-6">
         {formError ? (
           <div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">
             {formError}
@@ -176,7 +182,7 @@ function TargetFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            className="app-modal-close rounded-xl px-4 py-2 text-xs font-bold"
           >
             Batal
           </button>
@@ -188,6 +194,7 @@ function TargetFormModal({
           >
             {saving ? "Memproses..." : "Simpan"}
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -688,7 +695,35 @@ export default function TargetPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Ranking"
+          value={ranking.length}
+          description="Jumlah entri ranking pada periode aktif."
+          tone="accent"
+          silhouette="target"
+        />
+        <QuickInfoCard
+          label="Achieved"
+          value={achievedCount}
+          description="Target yang sudah menyentuh 100%."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Near Achieved"
+          value={nearCount}
+          description="Target yang sudah mendekati batas capai."
+          tone="amber"
+        />
+        <QuickInfoCard
+          label="Not Achieved"
+          value={notAchievedCount}
+          description="Target yang masih perlu didorong."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
+
+      <div className="hidden grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
           <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
             Total Ranking
@@ -1010,15 +1045,14 @@ export default function TargetPage() {
                             -
                           </span>
                         ) : (
-                          <button
-                            type="button"
+                          <RowActionButton
+                            icon={PowerOff}
+                            tone="deactivate"
+                            title="Nonaktifkan"
                             onClick={() =>
                               void handleDeactivateDefinition(item)
                             }
-                            className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-200"
-                          >
-                            Nonaktifkan
-                          </button>
+                          />
                         )}
                       </td>
                     </tr>
@@ -1048,10 +1082,10 @@ export default function TargetPage() {
         >
           <div className="flex min-h-full items-center justify-center p-4 md:p-6">
             <div
-              className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+              className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+              <div className="app-modal-header px-5 py-4 md:px-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -1070,14 +1104,14 @@ export default function TargetPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedRanking(null)}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                    className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
                   >
                     Tutup
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
+              <div className="app-modal-body grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                 {[
                   ["Rank", `#${selectedRanking.rank_position || "-"}`],
                   ["Sales Code", selectedRanking.sales_code || "-"],

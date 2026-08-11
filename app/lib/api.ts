@@ -1,12 +1,84 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { clearPersistedQueryCache } from "@/app/lib/queryPersistence";
+import { frontendEnv } from "@/app/lib/env";
+
+const API_BASE_URL = frontendEnv.apiBaseUrl;
 const ACCESS_TOKEN_KEY = "piposmart_access_token";
 const REFRESH_TOKEN_KEY = "piposmart_refresh_token";
 const LEGACY_ACCESS_TOKEN_KEY = "piposmart_token";
 const nativeFetch: typeof globalThis.fetch = (input, init) =>
   globalThis.fetch(input, init);
 let refreshTokenPromise: Promise<string | null> | null = null;
+const responseContextMap = new WeakMap<Response, ApiRequestContext>();
 
 export type AppRole = "ADMIN" | "SUPERVISOR" | "SALES" | "UNKNOWN";
+
+export interface ApiRequestContext {
+  method: string;
+  endpoint: string;
+}
+
+export interface ApiErrorPayload {
+  code: string;
+  message: string;
+  requestId?: string;
+  details?: unknown;
+  status: number;
+  method?: string;
+  endpoint?: string;
+}
+
+export class ApiError extends Error {
+  code: string;
+  requestId?: string;
+  details?: unknown;
+  status: number;
+  method?: string;
+  endpoint?: string;
+
+  constructor(payload: ApiErrorPayload) {
+    super(
+      `[${payload.code}] ${payload.message}${
+        payload.requestId ? ` (ref: ${payload.requestId})` : ""
+      }`,
+    );
+    this.name = "ApiError";
+    this.code = payload.code;
+    this.requestId = payload.requestId;
+    this.details = payload.details;
+    this.status = payload.status;
+    this.method = payload.method;
+    this.endpoint = payload.endpoint;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+export function getApiErrorTechnicalDetails(error: unknown): string {
+  if (error instanceof ApiError) {
+    const lines = [
+      `status: ${error.status}`,
+      error.code ? `code: ${error.code}` : null,
+      error.requestId ? `request_id: ${error.requestId}` : null,
+      error.method || error.endpoint
+        ? `endpoint: ${error.method || "GET"} ${error.endpoint || "-"}`
+        : null,
+      error.details !== undefined
+        ? `details: ${
+            typeof error.details === "string"
+              ? error.details
+              : JSON.stringify(error.details, null, 2)
+          }`
+        : null,
+    ].filter(Boolean);
+
+    return lines.join("\n");
+  }
+
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
 
 export interface StoredUserSession {
   isAuthenticated: boolean;
@@ -165,6 +237,7 @@ export function storeAuthSession(payload?: {
 export function clearStoredAuth(options: { redirectToLogin?: boolean } = {}) {
   if (typeof window === "undefined") return;
 
+  clearPersistedQueryCache();
   localStorage.removeItem("piposmart_is_logged_in");
   localStorage.removeItem("piposmart_user_name");
   localStorage.removeItem("piposmart_user_role");
@@ -248,6 +321,23 @@ function shouldBypassRefresh(url: string) {
   );
 }
 
+function normalizeEndpoint(url: string) {
+  if (url.startsWith(API_BASE_URL)) {
+    return url.slice(API_BASE_URL.length) || "/";
+  }
+
+  try {
+    const parsed = new URL(url, API_BASE_URL);
+    if (parsed.origin === new URL(API_BASE_URL).origin) {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    // ignore parse errors and fall back to raw url
+  }
+
+  return url;
+}
+
 export async function authFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -275,11 +365,18 @@ export async function authFetch(
       headers.set("Authorization", `Bearer ${token}`);
     }
 
-    return nativeFetch(input, {
+    const response = await nativeFetch(input, {
       ...init,
       credentials: init.credentials || "include",
       headers,
     });
+
+    responseContextMap.set(response, {
+      method: String(init.method || "GET").toUpperCase(),
+      endpoint: normalizeEndpoint(url),
+    });
+
+    return response;
   };
 
   let response = await execute();
@@ -321,8 +418,38 @@ async function handleResponse<T = unknown>(res: Response): Promise<T> {
   if (!res.ok) {
     const code = body?.error?.code || "UNKNOWN";
     const message = body?.error?.message || `Request gagal (${res.status})`;
+    const requestId = body?.error?.request_id;
+    const details = body?.error?.details;
+    const requestContext = responseContextMap.get(res);
+    const apiError = new ApiError({
+      code,
+      message,
+      requestId,
+      details,
+      status: res.status,
+      method: requestContext?.method,
+      endpoint: requestContext?.endpoint,
+    });
 
-    throw new Error(`[${code}] ${message}`);
+    const logPayload = {
+      code,
+      message,
+      status: res.status,
+      request_id: requestId,
+      method: requestContext?.method,
+      endpoint: requestContext?.endpoint,
+      details,
+    };
+
+    if (frontendEnv.enableApiErrorDebug) {
+      if (res.status >= 500) {
+        console.error("[api] server error", logPayload);
+      } else {
+        console.warn("[api] request error", logPayload);
+      }
+    }
+
+    throw apiError;
   }
 
   return body as T;
@@ -383,6 +510,8 @@ export interface BackendOutlet {
   sub_district?: string;
   address?: string;
   status?: string;
+  entered_by_user_id?: number;
+  entered_by_name?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -794,7 +923,7 @@ export interface ScheduleTrainingRequest {
 
 export async function getLeads(): Promise<BackendLead[]> {
   const headers = getAuthHeaders();
-  const res = await fetch(`${API_BASE_URL}/api/v1/leads?all=true`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/leads/all`, {
     headers,
   });
   const data = await handleResponse<{ data: LeadListResponse }>(res);
@@ -847,6 +976,25 @@ export async function getLead(leadId: number): Promise<BackendLead> {
   });
   const data = await handleResponse<{ data: BackendLead }>(res);
   return data.data;
+}
+
+export async function findRelatedLead(params: {
+  ownerId?: number | null;
+  outletId?: number | null;
+}): Promise<BackendLead | null> {
+  const leads = await getLeads();
+
+  if (params.outletId) {
+    const outletLead = leads.find((lead) => lead.outlet_id === params.outletId);
+    if (outletLead) return outletLead;
+  }
+
+  if (params.ownerId) {
+    const ownerLead = leads.find((lead) => lead.owner?.id === params.ownerId);
+    if (ownerLead) return ownerLead;
+  }
+
+  return null;
 }
 
 export interface CreateLeadRequest {
@@ -981,6 +1129,7 @@ export interface TrainingItem {
 
 
 export interface TrainingListParams {
+  q?: string;
   status?: string;
   training_type?: string;
   sales_id?: number;
@@ -1008,6 +1157,12 @@ export async function fetchTrainings(
 export async function getTrainingById(id: number): Promise<TrainingItem> {
   const res = await fetch(`${API_BASE_URL}/api/v1/trainings/${id}`, { headers: getAuthHeaders() });
   const data = await handleResponse<{ data: TrainingItem }>(res);
+  return data.data;
+}
+
+export async function getInteractionById(id: number): Promise<InteractionItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/customer-interactions/${id}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: InteractionItem }>(res);
   return data.data;
 }
 
@@ -1089,6 +1244,10 @@ export interface ClosingItem {
   currency: string;
   closed_at: string;
   sales?: { id: number; name: string; role?: string } | null;
+  supervisor?: { id: number; name: string; role?: string } | null;
+  outlet_id?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ClosingListParams {
@@ -1123,6 +1282,12 @@ export async function getLeadClosings(leadId: number): Promise<ClosingItem[]> {
   );
   const data = await handleResponse<{ data: { items: ClosingItem[] } }>(res);
   return data.data?.items || [];
+}
+
+export async function getClosingById(id: number): Promise<ClosingItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/closings/${id}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: ClosingItem }>(res);
+  return data.data;
 }
 
 
@@ -1415,6 +1580,7 @@ export interface CatalogPromotionItem {
   effective_to?: string;
   active: boolean;
   benefits?: CatalogBenefitItem[];
+  plan_ids?: number[];
   created_at: string;
   updated_at: string;
 }
@@ -2535,7 +2701,9 @@ export async function listPartnerTypeCommissionRules(
     headers: getAuthHeaders(),
   });
 
-  const data = await handleResponse<ApiEnvelope<any>>(res);
+  const data = await handleResponse<
+    ApiEnvelope<PartnerCommissionRuleItem[] | { items?: PartnerCommissionRuleItem[] }>
+  >(res);
   const raw = data.data;
   const items = Array.isArray(raw) ? raw : (raw?.items || []);
   return { items };
@@ -2656,6 +2824,8 @@ export interface OutletOverviewItem {
   sub_district?: string;
   address?: string;
   status: string;
+  entered_by_user_id?: number;
+  entered_by_name?: string;
   subscription_summary: OutletSubscriptionSummary;
   created_at: string;
   updated_at: string;
@@ -2718,6 +2888,19 @@ export interface ExportOwnerOutletRow {
   outlet_count: number;
 }
 
+export type OwnerExportKind = "owner" | "owner-outlet";
+
+export interface OwnerExportFilters extends ListGlobalOutletsParams {
+  owner_keyword?: string;
+  status?: string;
+  subscription_status?: string;
+  subscription_month?: string;
+  created_from?: string;
+  created_to?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
 export async function exportOwnerOutlets(
   params: ListGlobalOutletsParams = {},
 ): Promise<ExportOwnerOutletRow[]> {
@@ -2730,6 +2913,163 @@ export async function exportOwnerOutlets(
 
   const data = await handleResponse<ApiEnvelope<ExportOwnerOutletRow[]>>(res);
   return data.data;
+}
+
+export async function downloadOwnerExportFile(
+  kind: OwnerExportKind,
+  params: OwnerExportFilters = {},
+): Promise<{ blob: Blob; disposition: string | null }> {
+  const qs = buildQueryString({ ...params });
+  const endpoint =
+    kind === "owner"
+      ? "/api/v1/owners/export/download-owner"
+      : "/api/v1/owners/export/download";
+  const res = await fetch(`${API_BASE_URL}${endpoint}${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || "Gagal mengunduh file export");
+  }
+
+  return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
+}
+
+export async function downloadGlobalOutletExportFile(
+  params: OwnerExportFilters = {},
+): Promise<{ blob: Blob; disposition: string | null }> {
+  const qs = buildQueryString({ ...params });
+  const res = await fetch(`${API_BASE_URL}/api/v1/outlets/export/download${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || "Gagal mengunduh file export outlet");
+  }
+
+  return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
+}
+
+export type ReportExportKey =
+  | "activities"
+  | "topups"
+  | "closings"
+  | "subscriptions"
+  | "partners"
+  | "targets_kpi"
+  | "owners_outlets"
+  | "admin_owner_outlet"
+  | "admin_new_subscribe"
+  | "admin_nasabah_baru_provinsi";
+
+export type ReportExportFormat = "CSV" | "XLSX" | "PDF";
+
+export interface ReportExportFilters {
+  date_from?: string;
+  date_to?: string;
+  created_from?: string;
+  created_to?: string;
+  status?: string;
+  q?: string;
+  province?: string;
+  city?: string;
+  sales_id?: string | number;
+  supervisor_id?: string | number;
+}
+
+export interface ReportExportItem {
+  id: number;
+  code: string;
+  report_key: ReportExportKey | string;
+  format: ReportExportFormat | string;
+  status: string;
+  filters?: Record<string, string>;
+  file_name?: string;
+  mime_type?: string;
+  row_count: number;
+  last_error?: string;
+  download_url?: string;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string | null;
+}
+
+export async function createReportExport(
+  reportKey: ReportExportKey,
+  format: ReportExportFormat = "XLSX",
+  filters: ReportExportFilters = {},
+): Promise<ReportExportItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/reports/exports`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      report_key: reportKey,
+      format,
+      filters,
+    }),
+  });
+
+  const data = await handleResponse<ApiEnvelope<ReportExportItem>>(res);
+  return data.data;
+}
+
+export async function getReportExport(exportId: number): Promise<ReportExportItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/reports/exports/${exportId}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await handleResponse<ApiEnvelope<ReportExportItem>>(res);
+  return data.data;
+}
+
+export async function waitForReportExport(
+  exportId: number,
+  options: { intervalMs?: number; maxAttempts?: number } = {},
+): Promise<ReportExportItem> {
+  const intervalMs = options.intervalMs ?? 1500;
+  const maxAttempts = options.maxAttempts ?? 40;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const item = await getReportExport(exportId);
+
+    if (item.status === "COMPLETED") {
+      return item;
+    }
+
+    if (item.status === "FAILED") {
+      throw new Error(item.last_error || "Export report gagal diproses.");
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error("File export belum selesai diproses. Silakan coba lagi beberapa saat.");
+}
+
+export async function downloadReportExportFile(
+  exportId: number,
+): Promise<{ blob: Blob; disposition: string | null }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/reports/exports/${exportId}/download`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || "Gagal mengunduh file export report");
+  }
+
+  return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
 }
 
 export interface PackagePlanBrief {
@@ -2755,6 +3095,8 @@ export interface OutletSubscriptionStatusItem {
   owner: OutletOwnerBrief;
   subscription_status_code: string;
   subscription_status_label: string;
+  due_status_code: string;
+  due_status_label: string;
   remaining_days?: number;
   remaining_days_display: string;
   last_subscription_end?: string;
@@ -2784,8 +3126,13 @@ export interface ListOutletSubscriptionStatusesParams {
   city?: string;
   owner_id?: number;
   subscription_status?: string;
+  status_langganan?: string;
+  status_jatuh_tempo?: string;
   month?: string;
   due_date?: string;
+  due_date_reference?: string;
+  due_date_start?: string;
+  due_date_end?: string;
   page?: number;
   limit?: number;
   sort?: string;
@@ -2819,6 +3166,8 @@ export interface OutletDetail {
   address?: string;
   status: string;
   subscription_summary: OutletSubscriptionSummary;
+  entered_by_user_id?: number;
+  entered_by_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -3741,32 +4090,39 @@ export interface OwnerSubscriptionItem {
   created_at: string;
 }
 
+type ArrayPayload<T> =
+  | T[]
+  | {
+    data?: T[] | { items?: T[] };
+    items?: T[];
+  };
+
+function normalizeArrayPayload<T>(payload: ArrayPayload<T>): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.data?.items)) return payload.data.items;
+  if (Array.isArray(payload.items)) return payload.items;
+  return [];
+}
+
 export async function fetchOwnerWalletTransactions(ownerId: number): Promise<WalletTransactionItem[]> {
   const res = await fetch(`${API_BASE_URL}/api/v1/owners/${ownerId}/wallet/transactions`, {
     method: "GET",
     credentials: "include",
     headers: getAuthHeaders(),
   });
-  const data = await handleResponse<any>(res);
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.data?.items)) return data.data.items;
-  if (Array.isArray(data?.items)) return data.items;
-  return [];
+  const data = await handleResponse<ArrayPayload<WalletTransactionItem>>(res);
+  return normalizeArrayPayload(data);
 }
 
 export async function fetchOwnerSubscriptions(ownerId: number): Promise<OwnerSubscriptionItem[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/subscription-orders?owner_id=${ownerId}`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/subscription-orders/all?owner_id=${ownerId}&sort=-purchased_at`, {
     method: "GET",
     credentials: "include",
     headers: getAuthHeaders(),
   });
-  const data = await handleResponse<any>(res);
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.data?.items)) return data.data.items;
-  if (Array.isArray(data?.items)) return data.items;
-  return [];
+  const data = await handleResponse<ArrayPayload<OwnerSubscriptionItem>>(res);
+  return normalizeArrayPayload(data);
 }
 
 

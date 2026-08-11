@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { formatPhoneDisplay } from "@/app/lib/phone";
 import {
   assignPartnerPic,
   createPartnerInteraction,
@@ -33,6 +34,7 @@ import {
   type PartnerReferralItem,
   type UserResponse,
 } from "@/app/lib/api";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
@@ -178,6 +180,7 @@ export default function PartnerDetailPage() {
 
 function PartnerDetailPageInner() {
   usePageTitle("Detail Mitra");
+  const { confirm, withLoading } = useFeedback();
   const searchParams = useSearchParams();
   const partnerId = Number(searchParams.get("id"));
   const focusInteraction = searchParams.get("tab") === "interaction";
@@ -296,12 +299,21 @@ function PartnerDetailPageInner() {
   };
 
   const handleReleasePic = async () => {
-    if (!window.confirm("Lepas PIC aktif dari mitra ini?")) return;
+    const ok = await confirm({
+      title: "Lepas PIC Aktif",
+      message: "Lepas PIC aktif dari mitra ini? Mitra akan tidak memiliki penanggung jawab sampai PIC baru ditugaskan.",
+      confirmLabel: "Lepas PIC",
+      danger: true,
+    });
+    if (!ok) return;
+
     setSaving(true);
     setActionError("");
     setActionSuccess("");
     try {
-      await releasePartnerPic(partnerId);
+      await withLoading(() => releasePartnerPic(partnerId), {
+        label: "Melepas PIC aktif...",
+      });
       setActionSuccess("PIC aktif berhasil dilepas.");
       await reload();
     } catch (error) {
@@ -361,12 +373,22 @@ function PartnerDetailPageInner() {
   };
 
   const handleRestore = async () => {
-    if (!partner || !window.confirm(`Pulihkan ${partner.name} menjadi ACTIVE?`)) return;
+    if (!partner) return;
+
+    const ok = await confirm({
+      title: "Pulihkan Mitra",
+      message: `Pulihkan ${partner.name} menjadi aktif kembali?`,
+      confirmLabel: "Pulihkan",
+    });
+    if (!ok) return;
+
     setSaving(true);
     setActionError("");
     setActionSuccess("");
     try {
-      await updatePartner(partner.id, { status: "ACTIVE" });
+      await withLoading(() => updatePartner(partner.id, { status: "ACTIVE" }), {
+        label: "Memulihkan mitra...",
+      });
       setActionSuccess("Mitra berhasil dipulihkan.");
       await reload();
     } catch (error) {
@@ -439,9 +461,9 @@ function PartnerDetailPageInner() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kode</p><p className="mt-2 text-sm font-black text-slate-900">{partner.code}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Nama Owner/Mitra</p><p className="mt-2 text-sm font-black text-slate-900">{partner.owner_name || partner.name}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Nama Owner/Mitra</p><p className="mt-2 text-sm font-black text-slate-900">{partner.name}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status</p><p className="mt-2 text-sm font-black text-slate-900">{partner.status}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Telepon</p><p className="mt-2 text-sm font-black text-slate-900">{partner.phone || "-"}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Telepon</p><p className="mt-2 text-sm font-black text-slate-900">{partner.phone ? formatPhoneDisplay(partner.phone) : "-"}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Email</p><p className="mt-2 text-sm font-black text-slate-900">{partner.email || "-"}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Provinsi</p><p className="mt-2 text-sm font-black text-slate-900">{partner.province || "-"}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Kabupaten/Kota</p><p className="mt-2 text-sm font-black text-slate-900">{partner.city || "-"}</p></div>

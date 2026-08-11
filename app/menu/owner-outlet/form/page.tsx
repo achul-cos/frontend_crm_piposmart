@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getLeads, createOwner, updateOwner, bulkCreateOwnerOutlets, fetchOwnerDetail, fetchOwnerOutlets, getSalesList, getSupervisorList, assignSalesToLead, assignSupervisorToLead, bulkForceDeleteOutlets, getProfile, isAdminRole, isSupervisorRole, type CreateLeadRequest, type UserResponse } from "@/app/lib/api";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 
 type OwnerOutletItem = {
   namaOutlet: string;
@@ -315,6 +316,7 @@ function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "pho
 
 export default function FormInputDummyPage() {
   const router = useRouter();
+  const { showSuccess, showError, withLoading } = useFeedback();
   const [editId, setEditId] = useState<number | null>(null);
 
   const [formInput, setFormInput] = useState<Partial<NasabahItem>>({
@@ -558,89 +560,104 @@ export default function FormInputDummyPage() {
     setValidationErrors({});
 
     try {
-      if (editId !== null) {
-        const actualOwnerId = editId;
+      await withLoading(async () => {
+        if (editId !== null) {
+          const actualOwnerId = editId;
 
-        const payloadUpdate = {
-          code: nextFormInput.kodeOwner || "",
-          name: nextFormInput.namaOwner || "",
-          brand_name: nextFormInput.projectBrand || "",
-          phone: nextFormInput.noHpOwner || "",
-        };
-        await updateOwner(actualOwnerId, payloadUpdate);
+          const payloadUpdate = {
+            code: nextFormInput.kodeOwner || "",
+            name: nextFormInput.namaOwner || "",
+            brand_name: nextFormInput.projectBrand || "",
+            phone: nextFormInput.noHpOwner || "",
+          };
+          await updateOwner(actualOwnerId, payloadUpdate);
 
-        // Hapus outlet lama lalu buat baru agar ter-update dengan benar
-        try {
-          const existingOutletsData = await fetchOwnerOutlets(actualOwnerId);
-          if (existingOutletsData && existingOutletsData.length > 0) {
-            const existingIds = existingOutletsData.map(o => o.id);
-            await bulkForceDeleteOutlets(actualOwnerId, existingIds);
-          }
-        } catch (err) {
-          console.error("Gagal menghapus outlet lama", err);
-        }
-
-        const outletsPayload = normalizedOutlets.map((o, idx) => ({
-          code: `${nextFormInput.kodeOwner || "OUT"}-${idx + 1}`,
-          name: o.namaOutlet,
-          phone: o.noHpOutlet
-        }));
-        await bulkCreateOwnerOutlets(actualOwnerId, outletsPayload);
-
-        // Jika PIC berubah, assign PIC baru (Admin hanya bisa assign ke Supervisor)
-        if (nextFormInput.pic && nextFormInput.pic !== "No PIC") {
-          const targetPicUser = supervisorList.find(s => s.name === nextFormInput.pic);
-          if (targetPicUser) {
-            try {
-              await assignSupervisorToLead(editId, targetPicUser.id);
-            } catch (err) {
-              console.error("Gagal assign PIC", err);
+          // Hapus outlet lama lalu buat baru agar ter-update dengan benar
+          try {
+            const existingOutletsData = await fetchOwnerOutlets(actualOwnerId);
+            if (existingOutletsData && existingOutletsData.length > 0) {
+              const existingIds = existingOutletsData.map(o => o.id);
+              await bulkForceDeleteOutlets(actualOwnerId, existingIds);
             }
+          } catch (err) {
+            console.error("Gagal menghapus outlet lama", err);
           }
-        }
 
-        alert("Data owner dan outlet berhasil diperbarui di backend.");
-      } else {
-        // 1. Buat Owner
-        const payloadCreateOwner = {
-          code: nextFormInput.kodeOwner || "",
-          name: nextFormInput.namaOwner || "",
-          brand_name: nextFormInput.projectBrand || "",
-          phone: nextFormInput.noHpOwner || "",
-        };
-        const createdOwner = await createOwner(payloadCreateOwner);
-        const newOwnerId = createdOwner.data.id;
-
-        // 2. Buat Outlet
-        if (newOwnerId) {
           const outletsPayload = normalizedOutlets.map((o, idx) => ({
             code: `${nextFormInput.kodeOwner || "OUT"}-${idx + 1}`,
             name: o.namaOutlet,
             phone: o.noHpOutlet
           }));
-          await bulkCreateOwnerOutlets(newOwnerId, outletsPayload);
+          await bulkCreateOwnerOutlets(actualOwnerId, outletsPayload);
+
+          // Jika PIC berubah, assign PIC baru (Admin hanya bisa assign ke Supervisor)
+          if (nextFormInput.pic && nextFormInput.pic !== "No PIC") {
+            const targetPicUser = supervisorList.find(s => s.name === nextFormInput.pic);
+            if (targetPicUser) {
+              try {
+                await assignSupervisorToLead(editId, targetPicUser.id);
+              } catch (err) {
+                console.error("Gagal assign PIC", err);
+              }
+            }
+          }
+
+          showSuccess({
+            title: "Owner berhasil diperbarui",
+            message: "Data owner dan outlet berhasil diperbarui di backend.",
+          });
+        } else {
+          // 1. Buat Owner
+          const payloadCreateOwner = {
+            code: nextFormInput.kodeOwner || "",
+            name: nextFormInput.namaOwner || "",
+            brand_name: nextFormInput.projectBrand || "",
+            phone: nextFormInput.noHpOwner || "",
+          };
+          const createdOwner = await createOwner(payloadCreateOwner);
+          const newOwnerId = createdOwner.data.id;
+
+          // 2. Buat Outlet
+          if (newOwnerId) {
+            const outletsPayload = normalizedOutlets.map((o, idx) => ({
+              code: `${nextFormInput.kodeOwner || "OUT"}-${idx + 1}`,
+              name: o.namaOutlet,
+              phone: o.noHpOutlet
+            }));
+            await bulkCreateOwnerOutlets(newOwnerId, outletsPayload);
+          }
+
+          // 3. Ambil Lead yang otomatis dibuat oleh backend untuk Owner ini
+          const leads = await getLeads();
+          const autoCreatedLead = leads.find((lead) => lead.owner?.id === newOwnerId);
+
+          // 4. Assign PIC jika dipilih (hanya Supervisor)
+          const targetPicUser = nextFormInput.pic !== "No PIC" ? supervisorList.find(s => s.name === nextFormInput.pic) : null;
+          if (autoCreatedLead?.id && targetPicUser) {
+               await assignSupervisorToLead(autoCreatedLead.id, targetPicUser.id).catch(e => console.error(e));
+          }
+
+          // Catatan: source_type (sumberNasabah) saat ini diset otomatis ke "MANUAL" oleh backend
+          // dan belum ada endpoint UpdateLead untuk mengubahnya dari frontend.
+
+          showSuccess({
+            title: "Data berhasil ditambahkan",
+            message: "Data profil, prospek (Lead), dan outlet berhasil ditambahkan ke backend.",
+          });
         }
-
-        // 3. Ambil Lead yang otomatis dibuat oleh backend untuk Owner ini
-        const leads = await getLeads();
-        const autoCreatedLead = leads.find((lead) => lead.owner?.id === newOwnerId);
-
-        // 4. Assign PIC jika dipilih (hanya Supervisor)
-        const targetPicUser = nextFormInput.pic !== "No PIC" ? supervisorList.find(s => s.name === nextFormInput.pic) : null;
-        if (autoCreatedLead?.id && targetPicUser) {
-             await assignSupervisorToLead(autoCreatedLead.id, targetPicUser.id).catch(e => console.error(e));
-        }
-
-        // Catatan: source_type (sumberNasabah) saat ini diset otomatis ke "MANUAL" oleh backend
-        // dan belum ada endpoint UpdateLead untuk mengubahnya dari frontend.
-
-        alert("Data profil, prospek (Lead), dan outlet berhasil ditambahkan ke backend.");
-      }
+      }, { label: "Menyimpan data owner..." });
 
       router.push("/menu/owner-outlet");
     } catch (err: unknown) {
       console.error("Gagal menyimpan ke backend", err);
-      alert(`Gagal menyimpan ke backend: ${getErrorMessage(err, "Unknown error")}`);
+      showError({
+        title: "Gagal menyimpan data",
+        message: "Sistem gagal menyimpan data owner dan outlet ke backend.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau data yang tidak valid (misal kode owner sudah dipakai).",
+        solution: "Periksa kembali data dan koneksi Anda, lalu coba lagi.",
+        technicalDetails: getErrorMessage(err, "Unknown error"),
+        onRetry: () => void handleSave(e),
+      });
     } finally {
       setIsSaving(false);
     }

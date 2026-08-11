@@ -508,11 +508,12 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditI
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl relative">
-        <div className="mx-auto space-y-6 font-sans text-[#1C1C1E] p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-black text-gray-900">
+      <div className="app-modal-panel relative w-full max-w-lg rounded-2xl shadow-xl">
+        <div className="app-modal-header p-6">
+          <div className="mx-auto font-sans text-[#1C1C1E]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="flex items-center gap-2 text-xl font-black text-gray-900">
             <svg
               className="h-5 w-5 text-[#C92C1E]"
               fill="none"
@@ -527,28 +528,31 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditI
               />
             </svg>
             {editId !== null ? "Edit Lead & Assignment" : "Tambah Lead & Assignment"}
-          </h1>
-          <p className="mt-0.5 text-xs font-medium text-gray-500">
-            Form penambahan Lead & pembagian kepemilikan (Sprint 5 Lead Assignment).
-          </p>
+                </h1>
+                <p className="mt-0.5 text-xs font-medium text-gray-500">
+                  Form penambahan Lead & pembagian kepemilikan (Sprint 5 Lead Assignment).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="app-modal-close inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-black shadow-sm transition hover:border-[#C92C1E]/30 hover:text-[#C92C1E]"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>Batal</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-700 shadow-sm transition hover:border-[#C92C1E]/30 hover:bg-red-50 hover:text-[#C92C1E]"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          <span>Batal</span>
-        </button>
-      </div>
-
-      <form
-        onSubmit={handleSave}
-        className="space-y-5 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm md:p-8"
-      >
+        <div className="app-modal-body p-6">
+          <form
+            onSubmit={handleSave}
+            className="space-y-5 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm md:p-8"
+          >
         {/* SECTION 1: SELEKSI OWNER (Sprint 5 Owner Picker) */}
         <div className="space-y-4 rounded-2xl border border-red-100 bg-red-50/30 p-4 md:p-5">
           <div className="flex items-center justify-between border-b border-red-100 pb-3">

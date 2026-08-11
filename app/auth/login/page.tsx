@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { frontendEnv } from "@/app/lib/env";
 import { Eye, EyeOff } from "lucide-react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { normalizeAppRole, storeAuthSession } from "@/app/lib/api";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 
 
 
@@ -37,6 +39,7 @@ const getUserDisplayName = (value?: string) => {
 export default function LoginPage() {
   usePageTitle("Login");
   const router = useRouter();
+  const { showError, showInfo } = useFeedback();
 
   useEffect(() => {
     if (!document.querySelector("script[src*='lottie-player']")) {
@@ -49,17 +52,15 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("admin@piposmart.id");
   const [password, setPassword] = useState("Password123!");
-  const [errorMessage, setErrorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
-    setErrorMessage("");
     setIsLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const apiUrl = frontendEnv.apiBaseUrl;
       const loginResponse = await fetch(`${apiUrl}/api/v1/auth/login`, {
         method: "POST",
         credentials: "include",
@@ -111,9 +112,22 @@ export default function LoginPage() {
 
       router.replace("/");
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Login gagal karena backend tidak bisa diakses.",
-      );
+      const technicalDetails =
+        error instanceof Error ? error.message : "Login gagal karena backend tidak bisa diakses.";
+
+      showError({
+        title: "Login gagal",
+        message: "Sistem tidak bisa memproses login Anda saat ini.",
+        cause: "Bisa disebabkan oleh email atau password yang salah, sesi backend bermasalah, atau server tidak dapat dijangkau.",
+        solution: "Periksa kembali email dan password Anda, lalu coba lagi. Jika masalah tetap muncul, hubungi admin sistem.",
+        technicalDetails,
+        onRetry: () => {
+          const form = document.getElementById("login-form");
+          if (form instanceof HTMLFormElement) {
+            form.requestSubmit();
+          }
+        },
+      });
     } finally {
       setIsLoading(false);
     }
@@ -207,7 +221,7 @@ export default function LoginPage() {
               <img
                 src="/assets/logo.png"
                 alt="PipoSmart Logo"
-                className="h-14 sm:h-16 w-auto object-contain mb-6"
+                className="app-logo-mark mb-6 h-14 w-auto object-contain sm:h-16"
               />
               <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-950">
                 Selamat Datang Kembali
@@ -217,7 +231,7 @@ export default function LoginPage() {
               </p>
             </header>
 
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form id="login-form" onSubmit={handleLogin} className="space-y-6">
               <div>
                 <label htmlFor="email" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700">
                   Email
@@ -230,7 +244,6 @@ export default function LoginPage() {
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value);
-                    setErrorMessage("");
                   }}
                   placeholder="nama@piposmart.id"
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-base font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#C92C1E] focus:bg-white focus:ring-4 focus:ring-red-100"
@@ -247,7 +260,6 @@ export default function LoginPage() {
                     value={password}
                     onChange={(event) => {
                       setPassword(event.target.value);
-                      setErrorMessage("");
                     }}
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
@@ -271,15 +283,26 @@ export default function LoginPage() {
               </div>
 
               {email && (
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-5 py-3.5 text-xs font-bold">
-                  <span className="text-slate-500">Akses terdeteksi</span>
-                  <span className="font-extrabold text-[#C92C1E]">{previewRole}</span>
-                </div>
-              )}
-
-              {errorMessage && (
-                <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-xs font-bold text-red-700">
-                  {errorMessage}
+                <div className="rounded-2xl bg-slate-50 px-5 py-3.5 text-xs font-bold">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Akses terdeteksi</span>
+                    <span className="font-extrabold text-[#C92C1E]">{previewRole}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      showInfo({
+                        title: "Bantuan Login",
+                        message: "Gunakan akun yang sudah terdaftar di backend CRM untuk masuk ke sistem.",
+                        cause: "Halaman login ini mengikuti data user aktif di database backend, jadi kredensial demo atau akun produksi harus sesuai data backend yang sedang dipakai.",
+                        solution: "Pastikan email dan password sesuai akun Anda. Jika baru selesai seed data, gunakan akun hasil seed atau bootstrap admin yang aktif pada database tersebut.",
+                        technicalDetails: `Contoh akun seed demo umum:\n- admin.001@demo.piposmart.id\n- supervisor.001@demo.piposmart.id\n- sales.001@demo.piposmart.id\n\nContoh akun bootstrap admin:\n- admin@piposmart.id`,
+                      })
+                    }
+                    className="mt-3 text-[11px] font-black text-[#C92C1E] transition-colors hover:text-[#A82216]"
+                  >
+                    Lihat bantuan login
+                  </button>
                 </div>
               )}
 
@@ -319,7 +342,7 @@ export default function LoginPage() {
             <img
               src="/assets/logo teks.png"
               alt="PipoSmart Logo Teks"
-              className="h-7 sm:h-8 w-auto object-contain brightness-0 invert drop-shadow-md"
+              className="app-logo-on-accent h-7 w-auto object-contain drop-shadow-md sm:h-8"
             />
           </div>
 

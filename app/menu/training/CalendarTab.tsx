@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { type TrainingItem } from "@/app/lib/api";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
 
 interface CalendarTabProps {
   trainings: TrainingItem[];
@@ -141,11 +142,11 @@ export default function CalendarTab({ trainings, onSelectTraining }: CalendarTab
                     </div>
                     
                     <div className="flex-1 overflow-y-auto space-y-1 mt-1 pb-1 px-0.5" style={{ maxHeight: '100px' }}>
-                      {events.map((evt) => {
+                      {events.map((evt, evtIndex) => {
                         let bgColor = "bg-blue-100";
                         let textColor = "text-blue-700";
                         let borderLeftColor = "border-l-blue-500";
-                        
+
                         if (evt.status === "COMPLETED") {
                           bgColor = "bg-emerald-100";
                           textColor = "text-emerald-700";
@@ -165,25 +166,30 @@ export default function CalendarTab({ trainings, onSelectTraining }: CalendarTab
                         }
 
                         return (
-                          <div
+                          <AnimatedListItem
                             key={evt.id}
-                            onClick={() => onSelectTraining(evt)}
+                            as="div"
+                            index={evtIndex}
                             className={`text-[10px] p-1 rounded border-l-2 ${borderLeftColor} ${bgColor} ${textColor} truncate cursor-pointer hover:opacity-80 transition group relative`}
-                            title={`${formatTime(evt.scheduled_at)} - ${evt.training_type} (${evt.sales?.name})`}
                           >
-                            <span className="font-bold mr-1">{formatTime(evt.scheduled_at)}</span>
-                            {evt.training_type === "ONLINE" ? "Virtual" : "Praktek"}
-                            
-                            {/* Simple tooltip simulation */}
-                            <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 w-max max-w-[200px] p-2 bg-gray-900 text-white text-[10px] rounded shadow-lg whitespace-normal pointer-events-none">
-                              <div className="font-bold border-b border-gray-700 pb-1 mb-1">
-                                {formatTime(evt.scheduled_at)} - {evt.training_type}
+                            <div
+                              onClick={() => onSelectTraining(evt)}
+                              title={`${formatTime(evt.scheduled_at)} - ${evt.training_type} (${evt.sales?.name})`}
+                            >
+                              <span className="font-bold mr-1">{formatTime(evt.scheduled_at)}</span>
+                              {evt.training_type === "ONLINE" ? "Virtual" : "Praktek"}
+
+                              {/* Simple tooltip simulation */}
+                              <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 w-max max-w-[200px] p-2 bg-gray-900 text-white text-[10px] rounded shadow-lg whitespace-normal pointer-events-none">
+                                <div className="font-bold border-b border-gray-700 pb-1 mb-1">
+                                  {formatTime(evt.scheduled_at)} - {evt.training_type}
+                                </div>
+                                <div className="text-gray-300">Status: {evt.status}</div>
+                                <div className="text-gray-300">Sales: {evt.sales?.name || "-"}</div>
+                                {evt.location && <div className="text-gray-300">Lok: {evt.location}</div>}
                               </div>
-                              <div className="text-gray-300">Status: {evt.status}</div>
-                              <div className="text-gray-300">Sales: {evt.sales?.name || "-"}</div>
-                              {evt.location && <div className="text-gray-300">Lok: {evt.location}</div>}
                             </div>
-                          </div>
+                          </AnimatedListItem>
                         );
                       })}
                     </div>
