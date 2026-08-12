@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { Search } from "lucide-react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { frontendEnv } from "@/app/lib/env";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
@@ -9,6 +10,7 @@ import type { Sprint14g1Section } from "@/app/components/analytics/Sprint14g1Boa
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ReportExportButton from "@/app/components/export/ReportExportButton";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import {
   uploadImportFile,
   getImportBatch,
@@ -924,116 +926,92 @@ export default function TargetPage() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
-              <span>Menu</span>
-              <svg
-                className="h-3 w-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={3}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-              <span className="text-[#C92C1E]">Target & KPI (Sprint 15)</span>
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div className="flex flex-col w-full gap-4">
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+                <span>Menu</span>
+                <svg
+                  className="h-3 w-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={3}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+                <span className="text-[#C92C1E]">Target & KPI (Sprint 15)</span>
+              </div>
+  
+              <h1 className="text-2xl font-black tracking-tight text-gray-900">
+                Sales Target, KPI, dan Ranking
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Manajemen Target Bulanan, Override Per Sales, Import Target Excel (Sprint 15), KPI Worker Recompute, dan Leaderboard.
+              </p>
             </div>
-
-            <h1 className="text-2xl font-black tracking-tight text-gray-900">
-              Sales Target, KPI, dan Ranking
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Manajemen Target Bulanan, Override Per Sales, Import Target Excel (Sprint 15), KPI Worker Recompute, dan Leaderboard.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setIsImportModalOpen(true)}
-              className="rounded-xl bg-blue-50 px-3.5 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-100 flex items-center gap-1.5"
-            >
-              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <span>Import Target Excel</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsImportHistoryModalOpen(true)}
-              className="rounded-xl bg-purple-50 px-3.5 py-2 text-xs font-black text-purple-700 transition hover:bg-purple-100 flex items-center gap-1.5"
-            >
-              <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Riwayat Import</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("TARGET_BULK")}
-              className="rounded-xl bg-orange-50 px-3.5 py-2 text-xs font-black text-orange-700 transition hover:bg-orange-100"
-            >
-              + Bulk Target
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("TARGET_OVERRIDE")}
-              className="rounded-xl bg-amber-50 px-3.5 py-2 text-xs font-black text-amber-700 transition hover:bg-amber-100"
-            >
-              + Override Target
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("KPI_DEFINITION")}
-              className="rounded-xl bg-red-50 px-3.5 py-2 text-xs font-black text-[#C92C1E] transition hover:bg-red-100"
-            >
-              + KPI Definition
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("RECOMPUTE")}
-              className="rounded-xl bg-[#C92C1E] px-3.5 py-2 text-xs font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-            >
-              ⚡ Recompute KPI
-            </button>
           </div>
         </div>
+      </div>
 
-        {/* Sub Menu Tabs */}
-        <div className="flex flex-wrap gap-2 border-t border-gray-100 p-4">
+      {/* Metric Cards Summary */}
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Ranking Sales"
+          value={ranking.length}
+          description="Jumlah sales yang masuk ranking periode aktif."
+          tone="accent"
+          silhouette="target"
+        />
+        <QuickInfoCard
+          label="Achieved (>= 100%)"
+          value={achievedCount}
+          description="Target yang sudah tercapai atau terlampaui."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Near Achieved (>= 80%)"
+          value={nearCount}
+          description="Target yang hampir tercapai."
+          tone="amber"
+        />
+        <QuickInfoCard
+          label="Not Achieved (< 80%)"
+          value={notAchievedCount}
+          description="Target yang masih tertinggal jauh."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
+
+      <div className="flex w-max max-w-full overflow-x-auto rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
           <button
             type="button"
             onClick={() => setActiveSubMenu("OPERATIONS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+            className={`rounded-lg px-5 py-2.5 transition-all ${
               activeSubMenu === "OPERATIONS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
             }`}
           >
-            <span>Kelola Target, KPI & Ranking</span>
+            Kelola Target, KPI & Ranking
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubMenu("ANALYTICS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+            className={`rounded-lg px-5 py-2.5 transition-all ${
               activeSubMenu === "ANALYTICS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
             }`}
           >
-            <span>Analitik & Progress Board</span>
+            Analitik & Progress Board
           </button>
         </div>
       </div>
@@ -1058,35 +1036,6 @@ export default function TargetPage() {
               {pageSuccess}
             </div>
           ) : null}
-
-          {/* Metric Cards Summary */}
-          <QuickInfoCardGrid>
-            <QuickInfoCard
-              label="Total Ranking Sales"
-              value={ranking.length}
-              description="Jumlah sales yang masuk ranking periode aktif."
-              tone="accent"
-              silhouette="target"
-            />
-            <QuickInfoCard
-              label="Achieved (>= 100%)"
-              value={achievedCount}
-              description="Target yang sudah tercapai atau terlampaui."
-              tone="emerald"
-            />
-            <QuickInfoCard
-              label="Near Achieved (>= 80%)"
-              value={nearCount}
-              description="Target yang hampir tercapai."
-              tone="amber"
-            />
-            <QuickInfoCard
-              label="Not Achieved (< 80%)"
-              value={notAchievedCount}
-              description="Target yang masih tertinggal jauh."
-              tone="rose"
-            />
-          </QuickInfoCardGrid>
 
           <div className="hidden grid grid-cols-1 gap-4 md:grid-cols-4">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
@@ -1202,23 +1151,16 @@ export default function TargetPage() {
 
           {/* Ranking & Leaderboard Table */}
           <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
               <div>
-                <p className="text-sm font-black text-gray-900">
+                <h2 className="text-xl font-bold text-gray-900">
                   Ranking & Leaderboard KPI Sales
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-400">
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
                   Ranking dihitung otomatis lewat window function RANK() per periode.
                 </p>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  value={search || ""}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Cari nama sales, kode, score, atau klasifikasi"
-                  className="min-w-[280px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-                />
+              <div className="flex w-full flex-wrap items-center gap-3">
                 <ReportExportButton
                   reportKey="targets_kpi"
                   filters={{
@@ -1228,13 +1170,37 @@ export default function TargetPage() {
                   label="Export KPI"
                   loadingLabel="Menyiapkan Export..."
                   successMessage="File KPI sedang diunduh."
-                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm text-gray-600">
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="relative flex-1">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                    <Search className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={search || ""}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Cari nama sales, kode, score, atau klasifikasi..."
+                    className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
+                <ColumnVisibilityControl
+                  tableId="target-table"
+                  storageKey="column-visibility:target-table"
+                  buttonLabel="Kolom"
+                />
+              </div>
+            </div>
+
+            <div className="relative w-full">
+              <div className="flex flex-col">
+                <div className="overflow-x-auto">
+                  <table id="target-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
                 <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="px-4 py-4 font-bold">Rank</th>
@@ -1313,21 +1279,84 @@ export default function TargetPage() {
               </table>
             </div>
           </div>
+        </div>
+          </div>
 
           {/* Tables Grid: Sales Target & KPI Definitions */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-              <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-                <p className="text-sm font-black text-gray-900">
-                  Target Bulanan Sales (`/sales-targets`)
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-400">
-                  Target per Sales ID dan Metric.
-                </p>
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Target Bulanan Sales
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Target per Sales ID dan Metric.
+                  </p>
+                </div>
+                <div className="flex w-full flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200 flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span>Import Target Excel</span>
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => setIsImportHistoryModalOpen(true)}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200 flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Riwayat Import</span>
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("TARGET_BULK")}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200"
+                    >
+                      + Bulk Target
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("TARGET_OVERRIDE")}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200"
+                    >
+                      + Override Target
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("KPI_DEFINITION")}
+                      className="rounded-xl bg-[#C92C1E] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#A82216]"
+                    >
+                      + KPI Definition
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("RECOMPUTE")}
+                      className="rounded-xl bg-[#C92C1E] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#A82216]"
+                    >
+                      ⚡ Recompute KPI
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-sm text-gray-600">
+              <div className="relative w-full flex-1">
+                <div className="flex flex-col h-full">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-left text-sm text-gray-600">
                   <thead className="border-b border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                     <tr>
                       <th className="px-4 py-4">Sales</th>
@@ -1370,19 +1399,25 @@ export default function TargetPage() {
                 </table>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-              <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-                <p className="text-sm font-black text-gray-900">
-                  KPI Definitions (`/kpi-definitions`)
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-400">
-                  Weight dan threshold evaluasi per metric.
-                </p>
+        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    KPI Definitions
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Weight dan threshold evaluasi per metric.
+                  </p>
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm text-gray-600">
+              <div className="relative w-full flex-1">
+                <div className="flex flex-col h-full">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-sm text-gray-600">
                   <thead className="border-b border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                     <tr>
                       <th className="px-4 py-4">Metric</th>
@@ -1433,23 +1468,26 @@ export default function TargetPage() {
                             ) : (
                               <button
                                 type="button"
+                                title="Nonaktifkan"
                                 onClick={() =>
                                   void handleDeactivateDefinition(item)
                                 }
-                                className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-200"
+                                className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200"
                               >
-                                Nonaktifkan
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                               </button>
                             )}
                           </td>
                         </tr>
                       ))
                     )}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
           <TargetFormModal
             open={showModal}

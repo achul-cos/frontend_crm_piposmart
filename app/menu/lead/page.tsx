@@ -1,13 +1,28 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { Search } from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
 
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 import {
-  type OwnerListParams,
   type BackendLead,
   getSalesList,
   getSupervisorList,
@@ -38,18 +53,11 @@ import {
 } from "@/app/lib/api";
 import * as XLSX from "xlsx";
 import CallPage, { CallFormResult } from "./call/components";
-import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ActionButtons from "./action/components";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import LeadFormModal from "./LeadFormModal";
 import { useLeadsQuery } from "@/app/lib/queries/leads";
-import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
-
-const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
-  ssr: false,
-  loading: () => <AnalyticsTabSkeleton sections={2} />,
-});
 
 const EditProfileModal = ActionButtons.EditProfileModal;
 
@@ -124,6 +132,7 @@ interface NasabahItem {
       kodeUnik: number;
     };
   }[];
+  stage?: string;
 }
 
 type EditModalMode = "profil";
@@ -235,27 +244,6 @@ const getProfileFieldErrors = (item: Partial<NasabahItem>) => {
   return errors;
 };
 
-const getOwnerFilterDate = (item: Partial<NasabahItem>) => {
-  const rawDate = (
-    item.tanggalFu ||
-    item.createDateProject ||
-    item.tanggalDibagikan ||
-    ""
-  );
-  return rawDate ? rawDate.split("T")[0] : "";
-};
-
-const getOwnerFilterMonth = (item: Partial<NasabahItem>) => {
-  const dateValue = getOwnerFilterDate(item);
-
-  if (dateValue && dateValue.includes("-")) {
-    const monthIndex = Number(dateValue.split("-")[1]) - 1;
-    return LIST_BULAN[monthIndex] || item.bulan || "";
-  }
-
-  return item.bulan || "";
-};
-
 const TrashIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -269,33 +257,27 @@ const EditIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 );
 
-const UserIcon = () => (
-  <svg className="w-3.5 h-3.5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-  </svg>
-);
-
-const UploadIcon = () => (
-  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+const UploadIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
   </svg>
 );
 
-const DownloadIcon = () => (
-  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+const DownloadIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
   </svg>
 );
 
-const PlusIcon = () => (
-  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+const PlusIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
   </svg>
 );
 
-const RefreshIcon = () => (
-  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.253 8H18" />
+const HistoryIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 
@@ -355,7 +337,6 @@ function PicBadge({
     } else if (effectiveRole === "ADMIN") {
       colorClass = "bg-amber-50 border-amber-200 text-amber-800 font-black";
     } else {
-      // Default color for PIC Sales when role is not explicitly set
       colorClass = "bg-blue-50 border-blue-200 text-blue-700 font-black";
     }
   }
@@ -389,90 +370,12 @@ function SkorBadge({ item }: { item: NasabahItem }) {
   );
 }
 
-function FieldIcon({ type }: { type: "code" | "user" | "brand" | "outlet" | "phone" | "sales" }) {
+function FieldIcon({ type }: { type: "sales" }) {
   const className = "h-4 w-4 text-[#C92C1E]";
-
-  if (type === "code") {
-    return (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h10M7 12h6m-6 5h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
-      </svg>
-    );
-  }
-
-  if (type === "user") {
-    return (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" />
-      </svg>
-    );
-  }
-
-  if (type === "brand") {
-    return (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 21V8.25A2.25 2.25 0 016.75 6h10.5a2.25 2.25 0 012.25 2.25V21M8.25 6V3.75h7.5V6M8.25 11.25h.008M12 11.25h.008M15.75 11.25h.008M8.25 15h.008M12 15h.008M15.75 15h.008" />
-      </svg>
-    );
-  }
-
-  if (type === "outlet") {
-    return (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 4l7.5 6.5M6.75 9.5V20.25h10.5V9.5M9.75 20.25v-6h4.5v6" />
-      </svg>
-    );
-  }
-
-  if (type === "phone") {
-    return (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372a1.125 1.125 0 00-.852-1.091l-4.423-1.106a1.125 1.125 0 00-1.173.417l-.97 1.293a1.125 1.125 0 01-1.21.38 12.035 12.035 0 01-7.143-7.143 1.125 1.125 0 01.38-1.21l1.293-.97a1.125 1.125 0 00.417-1.173L6.963 3.102A1.125 1.125 0 005.872 2.25H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
-      </svg>
-    );
-  }
-
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM3.75 21a8.25 8.25 0 0116.5 0M18.75 8.25h2.25M19.875 7.125v2.25" />
     </svg>
-  );
-}
-
-function SummaryMetricCard({
-  title,
-  value,
-  description,
-  isPrimary = false,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  isPrimary?: boolean;
-}) {
-  if (isPrimary) {
-    return (
-      <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between min-h-[140px]">
-        <div className="relative z-10">
-          <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-          <h2 className="text-3xl font-black">{value}</h2>
-          <p className="text-red-200 text-[10px] font-medium mt-2 max-w-[90%]">{description}</p>
-        </div>
-        <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.001 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors min-h-[140px]">
-      <div className="relative z-10">
-        <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h2 className="text-3xl font-black text-gray-900">{value}</h2>
-        <p className="text-gray-400 text-[10px] font-medium mt-2">{description}</p>
-      </div>
-    </div>
   );
 }
 
@@ -481,13 +384,15 @@ export default function DataKelolaanPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-
   const [dataNasabah, setDataNasabah] = useState<NasabahItem[]>([]);
   const [backendTotal, setBackendTotal] = useState<number>(0);
   const [salesList, setSalesList] = useState<UserResponse[]>([]);
   const [supervisorList, setSupervisorList] = useState<UserResponse[]>([]);
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
   const [isManualAddModalOpen, setIsManualAddModalOpen] = useState(false);
+
+  const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
@@ -497,14 +402,22 @@ export default function DataKelolaanPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importErrorRows, setImportErrorRows] = useState<ImportRowError[]>([]);
   const [editedErrorRows, setEditedErrorRows] = useState<Record<number, any>>({});
-  const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
-  const [correctionProgress, setCorrectionProgress] = useState(0);
-  const [correctionStatusText, setCorrectionStatusText] = useState("");
-  // Ref untuk menyimpan timer polling — agar bisa dibatalkan kapanpun
+  const [, setIsApplyingCorrections] = useState(false);
+  const [, setCorrectionProgress] = useState(0);
+  const [, setCorrectionStatusText] = useState("");
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ref untuk combobox input PIC — dipakai menghitung posisi dropdown fixed
   const picSearchRef = useRef<HTMLInputElement>(null);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreActionsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (searchParams.get("action") === "create") {
@@ -529,8 +442,6 @@ export default function DataKelolaanPage() {
     setBulkPicDropdownOpen(true);
   };
 
-
-  // Batalkan polling otomatis saat komponen unmount
   useEffect(() => {
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -556,13 +467,10 @@ export default function DataKelolaanPage() {
   const [sort, setSort] = useState<string>("no");
   const [openFilter, setOpenFilter] = useState<string | null>(null);
 
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectionAction, setSelectionAction] = useState<"edit" | "delete" | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
-  // hasMoved mencegah drag-select aktif hanya karena klik biasa (tanpa gerakan mouse)
-  const hasMoved = React.useRef(false);
+  const hasMoved = useRef(false);
 
   useEffect(() => {
     const handleMouseUp = () => {
@@ -573,33 +481,38 @@ export default function DataKelolaanPage() {
     return () => window.removeEventListener("mouseup", handleMouseUp);
   }, []);
 
+  const handleToggleSelectRow = useCallback((id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((itemId) => itemId !== id)
+        : [...prev, id],
+    );
+  }, []);
+
   const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
     setIsDragging(true);
     hasMoved.current = false;
-    const mode = currentlySelected ? "deselect" : "select";
-    setDragMode(mode);
-
+    setDragMode(currentlySelected ? "deselect" : "select");
+    
+    // Select instant saat pertama kali klik row (klik biasa)
     setSelectedIds(prev => {
-      if (mode === "select" && !prev.includes(id)) return [...prev, id];
-      if (mode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
+      if (!currentlySelected && !prev.includes(id)) return [...prev, id];
+      if (currentlySelected && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
       return prev;
     });
   };
 
   const handleRowMouseEnter = (id: number) => {
-    // Hanya jalankan drag-select jika mouse benar-benar sudah bergerak
-    if (isDragging && hasMoved.current) {
+    if (isDragging) {
+      hasMoved.current = true;
       setSelectedIds(prev => {
         if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
         if (dragMode === "deselect" && prev.includes(id)) return prev.filter(selectedId => selectedId !== id);
         return prev;
       });
     }
-    // Tandai bahwa mouse sudah memasuki row lain (artinya sudah bergerak)
-    if (isDragging) {
-      hasMoved.current = true;
-    }
   };
+
   const [deleteTargetMode, setDeleteTargetMode] = useState<DeleteTargetMode>("selected");
   const [deleteCustomLimit, setDeleteCustomLimit] = useState("25");
   const [trashCount, setTrashCount] = useState(0);
@@ -616,7 +529,6 @@ export default function DataKelolaanPage() {
   const [bulkPicSearch, setBulkPicSearch] = useState("");
   const [bulkPicDropdownOpen, setBulkPicDropdownOpen] = useState(false);
 
-
   const [loggedInUser, setLoggedInUser] = useState("Satria");
   const [loggedInRole, setLoggedInRole] = useState("SALES");
   const [isAdminState, setIsAdminState] = useState(false);
@@ -629,14 +541,12 @@ export default function DataKelolaanPage() {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
     
-    const formatted = new Intl.DateTimeFormat("id-ID", {
+    return new Intl.DateTimeFormat("id-ID", {
       day: "numeric",
       month: "long",
       year: "numeric",
       ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
     }).format(date);
-
-    return formatted;
   }, []);
 
   const mapBackendLeadToNasabahItem = useCallback((lead: BackendLead): NasabahItem => {
@@ -693,11 +603,10 @@ export default function DataKelolaanPage() {
 
     if (picFilter !== "Semua") {
       if (picFilter === "No PIC") {
-        params.status = "OPEN"; // Assuming No PIC means unassigned or open stage
+        params.status = "OPEN"; 
       } else if (picFilter.startsWith("ROLE:")) {
         params.ownership = picFilter.replace("ROLE:", "");
       } else {
-        // If it's a specific PIC name, append to search query
         params.q = params.q ? `${params.q} ${picFilter}` : picFilter;
       }
     }
@@ -710,7 +619,6 @@ export default function DataKelolaanPage() {
     if (endDateFilter) params.created_to = endDateFilter;
 
     if (sort && sort !== "no" && sort !== "-no") {
-      // Map frontend sort keys to backend sort keys
       const isDesc = sort.startsWith("-");
       const key = sort.replace("-", "");
 
@@ -743,7 +651,6 @@ export default function DataKelolaanPage() {
   ]);
 
   const leadsQuery = useLeadsQuery(leadsQueryParams);
-  const isLoading = leadsQuery.isLoading;
 
   useEffect(() => {
     if (!leadsQuery.data) return;
@@ -820,7 +727,6 @@ export default function DataKelolaanPage() {
   useEffect(() => {
     const interval = window.setInterval(() => {
       const today = getTodayInputDate();
-
       if (today !== activeTodayDate) {
         setActiveTodayDate(today);
       }
@@ -831,7 +737,6 @@ export default function DataKelolaanPage() {
 
   useEffect(() => {
     const isAnyPopupOpen = editModalOpen || bulkPicModalOpen;
-
     if (!isAnyPopupOpen || typeof window === "undefined") return;
 
     const previousOverflow = document.body.style.overflow;
@@ -839,7 +744,6 @@ export default function DataKelolaanPage() {
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 
     document.body.style.overflow = "hidden";
-
     if (scrollbarWidth > 0) {
       document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
@@ -852,31 +756,6 @@ export default function DataKelolaanPage() {
 
   const saveDataNasabah = (nextData: NasabahItem[]) => {
     setDataNasabah(nextData);
-  };
-
-  const handleExportExcel = () => {
-    if (dataNasabah.length === 0) {
-      alert("Tidak ada data kelolaan untuk diexport.");
-      return;
-    }
-
-    const dataToExport = dataNasabah.map(o => ({
-      "Kode Baris": o.kodeBaris,
-      "Kode Owner": o.kodeOwner,
-      "Nama Owner": o.namaOwner,
-      "Brand/Usaha": o.projectBrand,
-      "Status Akun": o.statusAkun,
-      "PIC": o.pic,
-      "Tanggal Dibagikan": o.tanggalDibagikan,
-      "Total FU": o.totalFu,
-      "Tanggal FU": o.tanggalFu,
-      "Nilai Skor": o.scor,
-    }));
-    
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Lead");
-    XLSX.writeFile(workbook, `Data_Lead_${new Date().getTime()}.xlsx`);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -901,7 +780,6 @@ export default function DataKelolaanPage() {
   };
 
   const pollImportStatus = async (batchId: number) => {
-    // Batalkan timer sebelumnya (jika ada) sebelum mulai polling baru
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -912,10 +790,8 @@ export default function DataKelolaanPage() {
 
       const isInProgress = ["UPLOADED", "VALIDATING", "COMMITTING"].includes(resp.status);
       if (isInProgress) {
-        // Jadwalkan polling berikutnya dan simpan timer ID-nya
         pollTimerRef.current = setTimeout(() => pollImportStatus(batchId), 2500);
       } else {
-        // Status sudah final — hentikan polling
         pollTimerRef.current = null;
         setIsImportLoading(false);
         setCorrectionProgress(100);
@@ -962,7 +838,6 @@ export default function DataKelolaanPage() {
   };
 
   const resetImportState = () => {
-    // Batalkan polling yang sedang berjalan sebelum reset state
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -977,90 +852,6 @@ export default function DataKelolaanPage() {
     setCorrectionStatusText("");
   };
 
-  const handleEditErrorRow = (rowId: number, field: string, value: string) => {
-    setEditedErrorRows((prev) => {
-      const originalRow = importErrorRows.find((r) => r.id === rowId);
-      const currentPayload = prev[rowId] || (originalRow ? originalRow.raw_payload : {});
-      return {
-        ...prev,
-        [rowId]: {
-          ...currentPayload,
-          [field]: value,
-        },
-      };
-    });
-  };
-
-  const handleApplyCorrections = async () => {
-    if (!importBatch) return;
-    setIsApplyingCorrections(true);
-    setImportError(null);
-    setCorrectionProgress(10);
-    setCorrectionStatusText("Menyiapkan data perbaikan...");
-    
-    try {
-      const correctedPayloads = importErrorRows.map(row => {
-        return editedErrorRows[row.id] || row.raw_payload;
-      });
-
-      setCorrectionProgress(30);
-      setCorrectionStatusText("Mengambil data valid dari server...");
-      const validResp = await getImportValidRows(importBatch.id);
-      const validPayloads = validResp.items.map(item => item.raw_payload);
-      
-      setCorrectionProgress(50);
-      setCorrectionStatusText("Menyusun ulang file Excel...");
-      const allPayloads = [...validPayloads, ...correctedPayloads];
-
-      const worksheet = XLSX.utils.json_to_sheet(allPayloads);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Lead");
-      
-      const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-      const file = new File([wbout], "import_corrected.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-
-      setCorrectionProgress(70);
-      setCorrectionStatusText("Mengunggah ulang file perbaikan...");
-      setIsImportLoading(true);
-      const resp = await uploadImportFile(file, "LEAD");
-      setImportBatch(resp);
-      
-      setCorrectionProgress(90);
-      setCorrectionStatusText("Memvalidasi ulang data...");
-      pollImportStatus(resp.id);
-    } catch (e: any) {
-      console.error(e);
-      setImportError(e.message || "Gagal menerapkan perbaikan.");
-      setIsApplyingCorrections(false);
-      setCorrectionProgress(0);
-      setCorrectionStatusText("");
-    }
-  };
-
-  const handleStartSelectionMode = (action: "edit" | "delete") => {
-    setSelectionMode(true);
-    setSelectionAction(action);
-    setSelectedIds([]);
-
-    if (action === "delete") {
-      setDeleteTargetMode("page");
-    }
-  };
-
-  const handleCancelSelectionMode = () => {
-    setSelectionMode(false);
-    setSelectionAction(null);
-    setSelectedIds([]);
-  };
-
-  const handleToggleSelectRow = (id: number) => {
-    setSelectedIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((itemId) => itemId !== id)
-        : [...prev, id],
-    );
-  };
-
   const moveItemsToTrash = async (itemsToDelete: NasabahItem[]) => {
     if (itemsToDelete.length === 0) {
       alert("Belum ada data yang dipilih untuk dihapus.");
@@ -1071,12 +862,10 @@ export default function DataKelolaanPage() {
 
     saveDataNasabah(nextData);
     
-    // Call API to soft delete
     const ownerIds = itemsToDelete.map(item => item.ownerId).filter((id): id is number => id !== undefined);
     if (ownerIds.length > 0) {
       try {
         await bulkSoftDeleteOwners(ownerIds);
-        console.log("Successfully soft deleted owners via API");
         fetchOwners({ scope: "trash", limit: 1 })
           .then((res) => setTrashCount(res.data.pagination.total))
           .catch(() => {});
@@ -1086,24 +875,12 @@ export default function DataKelolaanPage() {
     }
 
     setSelectedIds([]);
-    setSelectionMode(false);
-    setSelectionAction(null);
-
     alert(`${itemsToDelete.length} data dipindahkan ke Riwayat Hapus.`);
-  };
-
-  const prepareDeleteTarget = () => {
-    setDeleteTargetMode(selectedIds.length > 0 ? "selected" : "filtered");
-    setDeleteCustomLimit(String(Math.min(rowsPerPage, backendTotal || 1)));
   };
 
   const getCustomDeleteLimit = () => {
     const parsedLimit = Number(deleteCustomLimit);
-
-    if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
-      return 0;
-    }
-
+    if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) return 0;
     return Math.min(Math.floor(parsedLimit), backendTotal);
   };
 
@@ -1112,41 +889,33 @@ export default function DataKelolaanPage() {
       const selectedSet = new Set(selectedIds);
       return dataNasabah.filter((item) => selectedSet.has(item.no));
     }
-
     if (deleteTargetMode === "page") {
       const pageSet = new Set(currentPageIds);
       return dataNasabah.filter((item) => pageSet.has(item.no));
     }
-
     if (deleteTargetMode === "custom") {
       return dataNasabah.slice(0, getCustomDeleteLimit());
     }
-
     return dataNasabah;
   };
 
   const handleConfirmDeleteBulk = () => {
     const targetItems = getDeleteTargetItems();
-
     if (targetItems.length === 0) {
       alert("Belum ada data yang masuk ke pilihan hapus.");
       return;
     }
-
     const yakin = confirm(
-      `Yakin ingin memindahkan ${targetItems.length} data ke Riwayat Hapus? Data masih bisa dipulihkan dari halaman Trash.`,
+      `Yakin ingin memindahkan ${targetItems.length} data ke Riwayat Hapus? Data masih bisa dipulihkan dari halaman Trash.`
     );
-
     if (!yakin) return;
-
     moveItemsToTrash(targetItems);
   };
 
   const handleHapusSatuData = async (item: NasabahItem) => {
     const yakin = confirm(
-      `Yakin ingin memindahkan data "${item.namaOwner}" ke Riwayat Hapus?`,
+      `Yakin ingin memindahkan data "${item.namaOwner}" ke Riwayat Hapus?`
     );
-
     if (!yakin) return;
 
     const nextData = dataNasabah.filter((row) => row.no !== item.no);
@@ -1168,13 +937,11 @@ export default function DataKelolaanPage() {
 
   const handleOpenCallAction = async (item: NasabahItem) => {
     try {
-      // Tarik riwayat interaksi & training dari backend secara paralel
       const [interactions, trainings] = await Promise.all([
         getLeadInteractions(item.no),
         getLeadTrainings(item.no),
       ]);
 
-      // Map riwayat call/chat dari backend → format callHistories
       const callHistories = interactions.map((i) => ({
         waktuCall: new Date(i.interaction_at).toLocaleString("id-ID"),
         picSales: i.sales?.name || i.created_by?.name || "-",
@@ -1184,7 +951,6 @@ export default function DataKelolaanPage() {
         conclusion: i.note || "-",
       }));
 
-      // Map riwayat training dari backend → format trainingHistories
       const trainingHistories = trainings.map((t) => ({
         waktuTraining: t.scheduled_at
           ? new Date(t.scheduled_at).toLocaleString("id-ID")
@@ -1192,7 +958,6 @@ export default function DataKelolaanPage() {
         lokasiTraining: t.location || t.training_type || "-",
       }));
 
-      // Merge ke item agar tampil di modal
       const enrichedItem: NasabahItem = {
         ...item,
         callHistories,
@@ -1203,19 +968,16 @@ export default function DataKelolaanPage() {
       setCallModalItem(enrichedItem);
     } catch (err) {
       console.error("Gagal memuat riwayat interaksi:", err);
-      // Tetap buka modal meski gagal memuat riwayat
       setCallModalItem(item);
     }
   };
 
   const handleSaveCallResult = async (result: CallFormResult) => {
-    // 1. Panggil API jika remark-nya valid
     try {
       const { rawPayload, customerId } = result;
       if (rawPayload && rawPayload.selectedRemarkScore === "3") {
         if (!rawPayload.salesPayload) throw new Error("Missing sales payload for closing");
         
-        // Use backend plan_id if available, else parse from packageType (legacy fallback)
         const planId = rawPayload.salesPayload.planId
           || parseInt(rawPayload.salesPayload.packageType.replace(/\D/g, "")) || 1;
         
@@ -1264,7 +1026,6 @@ export default function DataKelolaanPage() {
       return;
     }
 
-    // 2. Update state lokal
     const nextData = dataNasabah.map((item) => {
       if (item.no === result.customerId) {
         const raw = result.rawPayload;
@@ -1388,11 +1149,9 @@ export default function DataKelolaanPage() {
         }
       }
 
-      // Optimistic UI update
       const nextData = dataNasabah.map((item) => {
         if (selectedSet.has(item.no)) {
           if (isSalesState) {
-            // When released, the PIC goes back to admin (or is cleared). We'll set it to "-" or "Admin"
             return { ...item, pic: "-" };
           }
           return { ...item, pic: bulkSelectedPic };
@@ -1404,8 +1163,6 @@ export default function DataKelolaanPage() {
 
       closeBulkPicModal();
       setSelectedIds([]);
-      setSelectionMode(false);
-      setSelectionAction(null);
       
       if (isSalesState) {
         alert(`${selectedSet.size} data berhasil dikembalikan ke Admin.`);
@@ -1417,16 +1174,6 @@ export default function DataKelolaanPage() {
       alert(`Gagal menyimpan aksi: ${err?.message || err}`);
     }
   };
-
-  const daftarPicUnik = useMemo(() => {
-    const setPic = new Set<string>();
-
-    dataNasabah.forEach((item) => {
-      if (item.pic) setPic.add(item.pic);
-    });
-
-    return Array.from(setPic).sort();
-  }, [dataNasabah]);
 
   const summaryData = useMemo(() => {
     const totalCustomer = backendTotal > 0 ? backendTotal : dataNasabah.length;
@@ -1443,7 +1190,6 @@ export default function DataKelolaanPage() {
 
     const totalCustomerKemungkinan = dataNasabah.filter((item) => {
       const latestScore = getLatestRemarkScore(item);
-
       return latestScore === "1" && !isInvalidPic(item.pic);
     }).length;
 
@@ -1460,8 +1206,6 @@ export default function DataKelolaanPage() {
       perbandinganBerlangganan,
     };
   }, [dataNasabah, backendTotal]);
-
-
 
   const uniquePreviousPics = useMemo(() => {
     const set = new Set<string>();
@@ -1494,7 +1238,6 @@ export default function DataKelolaanPage() {
     }
     return dataNasabah;
   }, [dataNasabah, previousPicFilter]);
-
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1536,48 +1279,6 @@ export default function DataKelolaanPage() {
     }
 
     setSelectedIds((prev) => Array.from(new Set([...prev, ...currentPageIds])));
-
-    if (selectionAction === "delete") {
-      setDeleteTargetMode("selected");
-    }
-  };
-
-  const formatTgl = (str: string) => {
-    if (!str || str.trim() === "") return "-";
-
-    if (str.includes("-")) {
-      const parts = str.split("-");
-      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0].substring(2)}`;
-    }
-
-    return str;
-  };
-
-  const formatRupiah = (value: number) => {
-    if (!value || value === 0) return "-";
-
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const getSkorLabel = (item: NasabahItem) => {
-    const skorValue = getSkorValueFromItem(item);
-    const skor = LIST_SKOR.find((row) => row.value === skorValue);
-
-    return skor?.label || "Tidak Potensial (0)";
-  };
-
-  const getSkorBadgeClass = (item: NasabahItem) => {
-    const value = getSkorValueFromItem(item);
-
-    if (value === "3") return "bg-blue-100 text-blue-700";
-    if (value === "2") return "bg-yellow-100 text-yellow-800";
-    if (value === "1") return "bg-orange-100 text-orange-800";
-
-    return "bg-red-100 text-red-700";
   };
 
   const openEditModal = (item: NasabahItem, mode: EditModalMode) => {
@@ -1604,7 +1305,6 @@ export default function DataKelolaanPage() {
       [field]: "",
     }));
   };
-
 
   const handleSaveEditModal = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1716,13 +1416,11 @@ export default function DataKelolaanPage() {
       existingOutletKeysAfterEdit.add(outletKey);
     });
 
-    // Tutup modal dan perbarui state lokal dulu (optimistic)
     closeEditModal();
     saveDataNasabah(nextData);
 
     let picAssigned = false;
 
-    // 1. Update profil owner di backend
     if (normalizedEditingItem.ownerId && modalMode === "profil") {
       try {
         await updateOwner(normalizedEditingItem.ownerId, {
@@ -1736,13 +1434,11 @@ export default function DataKelolaanPage() {
       }
     }
 
-    // 2. Assign PIC jika berubah
     if (normalizedEditingItem.pic && normalizedEditingItem.pic !== "-" && normalizedEditingItem.no) {
       const originalItem = dataNasabah.find(item => item.no === normalizedEditingItem.no);
       const picChanged = !originalItem || originalItem.pic !== normalizedEditingItem.pic;
 
       if (picChanged) {
-        // Cari di supervisorList dulu, lalu salesList
         const targetSupervisor = supervisorList.find(s => s.name === normalizedEditingItem.pic);
         const targetSales = salesList.find(s => s.name === normalizedEditingItem.pic);
         const targetUser = targetSupervisor || targetSales || combinedPicList.find(p => p.name === normalizedEditingItem.pic);
@@ -1759,18 +1455,14 @@ export default function DataKelolaanPage() {
               await bulkAssignSalesToLeads([normalizedEditingItem.no], targetUser.id);
             }
             picAssigned = true;
-            console.log("Successfully assigned PIC on backend", targetUser.name, isTargetSupervisor ? "(SUPERVISOR)" : "(SALES)");
           } catch (err: any) {
             console.error("Failed to assign PIC on backend", err?.message || err);
             alert(`Gagal memperbarui PIC: ${err?.message || "Kesalahan server"}`);
           }
-        } else {
-          console.warn("Target user not found in supervisorList or salesList for pic:", normalizedEditingItem.pic);
         }
       }
     }
 
-    // 3. Reload dari backend untuk sinkronisasi data terbaru
     loadOwnersFromBackend();
     if (picAssigned) {
       alert("Data profil dan PIC berhasil diperbarui.");
@@ -1835,6 +1527,36 @@ export default function DataKelolaanPage() {
     </th>
     );
   };
+
+  const reportFilters = useMemo(() => {
+    const q = [search, searchKodeOwner, searchNamaOwner, searchNamaBrand]
+      .filter(Boolean)
+      .join(" ");
+
+    let finalQ = q || undefined;
+    let status = undefined;
+    let ownership = undefined;
+
+    if (picFilter !== "Semua") {
+      if (picFilter === "No PIC") {
+        status = "OPEN";
+      } else if (picFilter.startsWith("ROLE:")) {
+        ownership = picFilter.replace("ROLE:", "");
+      } else {
+        finalQ = finalQ ? `${finalQ} ${picFilter}` : picFilter;
+      }
+    }
+
+    const filters: Record<string, string> = {};
+    if (finalQ) filters.q = finalQ;
+    if (status) filters.status = status;
+    if (ownership) filters.ownership = ownership;
+    if (skorFilter !== "Semua") filters.score = skorFilter;
+    if (startDateFilter) filters.created_from = startDateFilter;
+    if (endDateFilter) filters.created_to = endDateFilter;
+    
+    return filters;
+  }, [search, searchKodeOwner, searchNamaOwner, searchNamaBrand, picFilter, skorFilter, startDateFilter, endDateFilter]);
 
   return (
     <div className="space-y-6">
@@ -1929,174 +1651,105 @@ export default function DataKelolaanPage() {
                 Daftar seluruh data lead yang terdaftar dalam sistem beserta PIC dan status remark.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 w-full">
+            
+            {/* ACTION BUTTONS & BULK SELECTION (DI SEBELAH KIRI) */}
+            <div className="flex w-full flex-wrap items-center gap-3">
               <button
                 onClick={() => setIsManualAddModalOpen(true)}
                 className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"
               >
-                <PlusIcon /> Tambah Data Manual
+                <PlusIcon className="h-4 w-4" /> Tambah Data Manual
               </button>
-              <button
-                onClick={() => setIsImportModalOpen(true)}
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
-              >
-                <UploadIcon /> Import Excel
-              </button>
-              <button
-                onClick={handleExportExcel}
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
-              >
-                <DownloadIcon /> Export Excel
-              </button>
-              <button
-                onClick={() => setIsImportHistoryModalOpen(true)}
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Riwayat Import
-              </button>
-              <Link
-                href="/menu/lead/trash"
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"
-              >
-                <TrashIcon className="h-4 w-4" /> Riwayat Hapus ({trashCount})
-              </Link>
 
-              {!selectionMode ? (
-                <button
-                  onClick={() => handleStartSelectionMode("edit")}
-                  className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100"
-                >
-                  <EditIcon className="h-4 w-4" />
-                  {isAdminState ? "Pilih untuk Assign Supervisor" : isSupervisorState ? "Pilih untuk Assign Sales" : "Pilih untuk Lepas Lead (Invalid)"}
-                </button>
-              ) : null}
+              <ReportExportButton
+                reportKey="owners_outlets"
+                filters={reportFilters}
+                label="Export Data"
+                loadingLabel="Menyiapkan Export..."
+                successMessage="File sedang diunduh."
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:opacity-60"
+              />
 
-              {!selectionMode ? (
-                <button
-                  onClick={() => handleStartSelectionMode("delete")}
-                  className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                  Pilih untuk Hapus
-                </button>
-              ) : (
+              {/* TOMBOL AKSI MASSAL SAAT CENTANG TERPILIH */}
+              {selectedIds.length > 0 && (
                 <>
-                  <div
-                    className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
-                      selectionAction === "edit"
-                        ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border border-red-200 bg-red-50 text-red-700"
-                    }`}
-                  >
-                    Mode: {selectionAction === "edit" ? "Edit PIC" : "Hapus Data"}
+                  <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
+                    <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                    {selectedIds.length} terpilih
                   </div>
 
-                  <button
-                    onClick={handleCancelSelectionMode}
-                    className="rounded-xl border border-gray-900 bg-gray-900 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-black"
-                  >
-                    Batal Pilih
-                  </button>
-
-                  {selectionAction === "edit" && (
+                  {!isSalesState && (
                     <button
                       onClick={openBulkPicModal}
-                      disabled={selectedIds.length === 0}
-                      className="rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100"
                     >
-                      {isAdminState ? "Assign Supervisor Terpilih" : isSupervisorState ? "Assign Sales Terpilih" : "Lepas Lead Terpilih"} ({selectedIds.length})
+                      <EditIcon className="h-4 w-4" />
+                      Pilih PIC ({selectedIds.length})
                     </button>
                   )}
 
-                  {selectionAction === "delete" && (
-                    <>
-                      <select
-                        value={deleteTargetMode}
-                        onChange={(event) => setDeleteTargetMode(event.target.value as DeleteTargetMode)}
-                        className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 outline-none focus:border-red-500"
-                      >
-                        <option value="selected">
-                          Yang dicentang ({selectedIds.length})
-                        </option>
-                        <option value="page">
-                          Halaman ini ({currentPageIds.length})
-                        </option>
-                        <option value="filtered">
-                          Semua hasil filter ({backendTotal})
-                        </option>
-                        <option value="custom">
-                          Jumlah tertentu
-                        </option>
-                      </select>
+                  <button
+                    onClick={handleConfirmDeleteBulk}
+                    className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    Hapus Terpilih ({selectedIds.length})
+                  </button>
 
-                      {deleteTargetMode === "custom" && (
-                        <input
-                          type="number"
-                          min={1}
-                          max={backendTotal}
-                          value={deleteCustomLimit}
-                          onFocus={(event) => event.currentTarget.select()}
-                          onChange={(event) => {
-                            const rawValue = event.target.value.replace(/\D/g, "");
-                            setDeleteCustomLimit(rawValue);
-                          }}
-                          onBlur={() => {
-                            const safeLimit = getCustomDeleteLimit();
-                            setDeleteCustomLimit(safeLimit > 0 ? String(safeLimit) : "1");
-                          }}
-                          className="w-24 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-sm font-bold text-red-700 outline-none focus:border-red-500"
-                          title="Jumlah data dari hasil filter"
-                        />
-                      )}
-
-                      <button
-                        onClick={handleConfirmDeleteBulk}
-                        disabled={dataNasabah.length === 0 || getDeleteTargetItems().length === 0}
-                        className="rounded-xl border border-red-600 bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Hapus {getDeleteTargetItems().length} Data
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => setSelectedIds([])}
+                    className="flex items-center justify-center rounded-xl border border-gray-200 bg-white h-10 w-10 text-gray-500 shadow-sm transition-all hover:bg-gray-100 hover:text-gray-900"
+                    title="Batalkan Pilihan"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </>
               )}
+
+              {/* TOMBOL MORE (3 Titik) */}
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  onClick={() => setIsMoreActionsOpen(!isMoreActionsOpen)}
+                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+                  title="Lainnya"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                  </svg>
+                </button>
+
+                {isMoreActionsOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                    <button
+                      onClick={() => { setIsMoreActionsOpen(false); setIsImportModalOpen(true); }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <UploadIcon className="h-4 w-4" /> Import Excel
+                    </button>
+                    <button
+                      onClick={() => { setIsMoreActionsOpen(false); setIsImportHistoryModalOpen(true); }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <HistoryIcon className="h-4 w-4" /> Riwayat Import
+                    </button>
+                    <button
+                      onClick={() => { setIsMoreActionsOpen(false); router.push("/menu/lead/trash"); }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+                    >
+                      <TrashIcon className="h-4 w-4" /> Riwayat Hapus
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Global Search & Column Visibility Bar */}
           <div className="border-b border-gray-50 px-6 py-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex w-full items-center gap-3 md:w-96">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setCurrentPage(1);
-                    loadOwnersFromBackend();
-                  }}
-                  className="relative flex-1"
-                >
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Cari kode, nama owner, outlet, brand, PIC..."
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                  />
-                </form>
-              </div>
-
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600">
                   <span className="text-gray-400">Tanggal:</span>
                   <input
@@ -2133,9 +1786,37 @@ export default function DataKelolaanPage() {
                     </button>
                   )}
                 </div>
-
-                <ColumnVisibilityControl tableId="lead-table" storageKey="column-visibility:lead-table" buttonLabel="Kolom" />
               </div>
+            </div>
+          </div>
+
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex w-full items-center gap-3 flex-wrap md:flex-nowrap">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setCurrentPage(1);
+                  loadOwnersFromBackend();
+                }}
+                className="relative flex-1 min-w-[200px]"
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Cari kode, nama owner, outlet, brand, PIC..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                />
+              </form>
+              <ColumnVisibilityControl tableId="lead-table" storageKey="column-visibility:lead-table" buttonLabel="Kolom" />
             </div>
           </div>
 
@@ -2144,8 +1825,7 @@ export default function DataKelolaanPage() {
           <table id="lead-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
             <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
               <tr>
-                {selectionMode && (
-                  <th className="px-4 py-4 text-center w-12">
+                <th className="px-4 py-4 text-center w-12">
                     <input
                       type="checkbox"
                       checked={isAllCurrentPageSelected}
@@ -2154,7 +1834,6 @@ export default function DataKelolaanPage() {
                       title="Pilih semua data di halaman ini"
                     />
                   </th>
-                )}
 
                 <th className="px-4 py-4 text-center font-bold">No</th>
                 {renderFilterHeader("kodeOwner", "Kode", searchKodeOwner, setSearchKodeOwner)}
@@ -2295,7 +1974,6 @@ export default function DataKelolaanPage() {
                     </>
                   )}
                 </th>
-
                 <th className="px-4 py-4 min-w-[150px] font-bold relative group whitespace-nowrap">
                   <div 
                     className="flex items-center justify-center gap-2 select-none cursor-pointer hover:text-red-700 transition-colors"
@@ -2349,7 +2027,7 @@ export default function DataKelolaanPage() {
           {displayData.length === 0 ? (
             <tr>
               <td
-                colSpan={11 + (selectionMode ? 1 : 0)}
+                colSpan={12}
                 className="p-8 text-center text-gray-400 font-bold italic"
               >
                 Data tidak ditemukan pada rentang filter ini.
@@ -2359,30 +2037,27 @@ export default function DataKelolaanPage() {
             paginatedData.map((row, idx) => (
               <tr
                 key={`lead-row-${row.no || idx}-${row.kodeOutlet || idx}`}
-                className={`transition-colors ${
-                  selectionMode ? "cursor-pointer" : ""
-                } ${
-                  selectionMode ? "select-none" : ""
-                } ${
+                className={`transition-colors cursor-pointer select-none ${
                   selectedIds.includes(row.no)
                     ? "bg-red-100/70 hover:bg-red-100"
                     : "hover:bg-gray-50"
                 }`}
                 onMouseDown={(e) => {
-                  if (!selectionMode || e.button !== 0) return;
+                  if ((e.target as HTMLElement).closest('button, a')) return;
+                  if (e.button !== 0) return;
                   handleRowMouseDown(row.no, selectedIds.includes(row.no));
                 }}
                 onMouseEnter={() => {
-                  if (selectionMode) handleRowMouseEnter(row.no);
-                }}
-                onMouseMove={() => {
-                  // Tandai mouse sudah bergerak agar drag-select bisa aktif
-                  if (isDragging && !hasMoved.current) hasMoved.current = true;
+                  handleRowMouseEnter(row.no);
                 }}
               >
-                {selectionMode && (
-                  <td
-                    className="px-4 py-4 text-center"
+                <td
+                    className="px-4 py-4 text-center cursor-pointer"
+                    onMouseDown={(e) => e.stopPropagation()} 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleSelectRow(row.no);
+                    }}
                   >
                     <input
                       type="checkbox"
@@ -2391,7 +2066,6 @@ export default function DataKelolaanPage() {
                       className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
                     />
                   </td>
-                )}
 
                     <td className="px-4 py-4 text-center align-top font-medium text-gray-500 whitespace-nowrap">
                       {startDataIndex + idx + 1}
@@ -2474,13 +2148,20 @@ export default function DataKelolaanPage() {
                           <SkorBadge item={row} />
                         </td>
 
-                        <td
-                          className="px-4 py-4 align-top text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <td className="px-4 py-4 align-top text-center">
                           <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleOpenCallAction(row); }}
+                              className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                              title="Panggilan Telepon"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              </svg>
+                            </button>
                             <Link
                               href={`/menu/lead/${row.no}`}
+                              onClick={(e) => e.stopPropagation()}
                               className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
                               title="Lihat Detail Lead"
                             >
@@ -2489,15 +2170,6 @@ export default function DataKelolaanPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                               </svg>
                             </Link>
-                            <ActionButtons
-                              item={row}
-                              onCall={handleOpenCallAction}
-                              onEdit={openEditModal}
-                              onDelete={handleHapusSatuData}
-                              canEdit={isAdminState}
-                              canDelete={isAdminState}
-                              canCall={isSalesState}
-                            />
                           </div>
                         </td>
                   </tr>
@@ -2506,7 +2178,6 @@ export default function DataKelolaanPage() {
             </tbody>
           </table>
         </div>
-
 
         <div className="flex flex-col gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">

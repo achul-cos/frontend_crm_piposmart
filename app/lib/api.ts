@@ -510,6 +510,8 @@ export interface BackendOutlet {
   sub_district?: string;
   address?: string;
   status?: string;
+  entered_by_user_id?: number;
+  entered_by_name?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -921,7 +923,7 @@ export interface ScheduleTrainingRequest {
 
 export async function getLeads(): Promise<BackendLead[]> {
   const headers = getAuthHeaders();
-  const res = await fetch(`${API_BASE_URL}/api/v1/leads?all=true`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/leads/all`, {
     headers,
   });
   const data = await handleResponse<{ data: LeadListResponse }>(res);
@@ -1127,6 +1129,7 @@ export interface TrainingItem {
 
 
 export interface TrainingListParams {
+  q?: string;
   status?: string;
   training_type?: string;
   sales_id?: number;
@@ -1154,6 +1157,12 @@ export async function fetchTrainings(
 export async function getTrainingById(id: number): Promise<TrainingItem> {
   const res = await fetch(`${API_BASE_URL}/api/v1/trainings/${id}`, { headers: getAuthHeaders() });
   const data = await handleResponse<{ data: TrainingItem }>(res);
+  return data.data;
+}
+
+export async function getInteractionById(id: number): Promise<InteractionItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/customer-interactions/${id}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: InteractionItem }>(res);
   return data.data;
 }
 
@@ -1235,6 +1244,10 @@ export interface ClosingItem {
   currency: string;
   closed_at: string;
   sales?: { id: number; name: string; role?: string } | null;
+  supervisor?: { id: number; name: string; role?: string } | null;
+  outlet_id?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ClosingListParams {
@@ -1269,6 +1282,12 @@ export async function getLeadClosings(leadId: number): Promise<ClosingItem[]> {
   );
   const data = await handleResponse<{ data: { items: ClosingItem[] } }>(res);
   return data.data?.items || [];
+}
+
+export async function getClosingById(id: number): Promise<ClosingItem> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/closings/${id}`, { headers: getAuthHeaders() });
+  const data = await handleResponse<{ data: ClosingItem }>(res);
+  return data.data;
 }
 
 
@@ -1561,6 +1580,7 @@ export interface CatalogPromotionItem {
   effective_to?: string;
   active: boolean;
   benefits?: CatalogBenefitItem[];
+  plan_ids?: number[];
   created_at: string;
   updated_at: string;
 }
@@ -2067,7 +2087,12 @@ export interface PartnerItem {
   name: string;
   phone?: string | null;
   email?: string | null;
+  province?: string | null;
+  city?: string | null;
+  district?: string | null;
+  sub_district?: string | null;
   address?: string | null;
+  pic_name?: string | null;
   bank_account_masked?: string | null;
   status: "ACTIVE" | "INACTIVE";
   created_at: string;
@@ -2177,6 +2202,10 @@ export interface UpdatePartnerPayload {
   name?: string;
   phone?: string;
   email?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  sub_district?: string;
   address?: string;
   bank_account?: string;
   status?: "ACTIVE" | "INACTIVE";
@@ -2795,6 +2824,8 @@ export interface OutletOverviewItem {
   sub_district?: string;
   address?: string;
   status: string;
+  entered_by_user_id?: number;
+  entered_by_name?: string;
   subscription_summary: OutletSubscriptionSummary;
   created_at: string;
   updated_at: string;
@@ -2931,7 +2962,11 @@ export type ReportExportKey =
   | "closings"
   | "subscriptions"
   | "partners"
-  | "targets_kpi";
+  | "targets_kpi"
+  | "owners_outlets"
+  | "admin_owner_outlet"
+  | "admin_new_subscribe"
+  | "admin_nasabah_baru_provinsi";
 
 export type ReportExportFormat = "CSV" | "XLSX" | "PDF";
 
@@ -3131,6 +3166,8 @@ export interface OutletDetail {
   address?: string;
   status: string;
   subscription_summary: OutletSubscriptionSummary;
+  entered_by_user_id?: number;
+  entered_by_name?: string;
   created_at: string;
   updated_at: string;
 }

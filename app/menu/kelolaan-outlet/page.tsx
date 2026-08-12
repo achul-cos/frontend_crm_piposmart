@@ -1,9 +1,11 @@
 "use client";
+
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   restoreOutletForOwner,
   forceDeleteOutletForOwner,
@@ -16,7 +18,6 @@ import {
   type OutletSubscriptionStatusItem,
 } from "@/app/lib/api";
 import { useGlobalOutletsQuery, useOutletSubscriptionStatusesQuery } from "@/app/lib/queries/outlets";
-import { useBulkSelect } from "@/app/lib/hooks/useBulkSelect";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import OutletFormModal from "./OutletFormModal";
 import BulkEditOutletModal, { type BulkEditFields } from "./BulkEditOutletModal";
@@ -159,16 +160,6 @@ function getEndOfMonth(monthStr: string): string {
   return `${monthStr}-${String(lastDay).padStart(2, "0")}`;
 }
 
-const isDueStatus = (status: string) =>
-  status === "AKAN_JATUH_TEMPO" ||
-  status === "JATUH_TEMPO" ||
-  status === "TELAH_JATUH_TEMPO";
-
-function formatRupiah(value?: string): string {
-  const num = Number(value || 0);
-  return `Rp ${num.toLocaleString("id-ID")}`;
-}
-
 function formatIndonesianDate(value?: string | null): string {
   if (!value) return "—";
   const trimmed = value.trim();
@@ -191,11 +182,6 @@ function formatIndonesianDate(value?: string | null): string {
   }).format(date);
 }
 
-// Bulk mutation backend hanya expose endpoint owner-scoped
-// (`/owners/:owner_id/outlets/bulk*`) — baris terpilih di tabel global bisa
-// lintas-owner, jadi dikelompokkan per owner_id lebih dulu di sini, lalu
-// dieksekusi satu request per grup. Hasil diagregasi (sukses/gagal) supaya
-// kegagalan sebagian owner tidak menyembunyikan sukses sebagian yang lain.
 async function runBulkByOwner(
   items: OutletOverviewItem[],
   action: (ownerId: number, ids: number[]) => Promise<unknown>,
@@ -213,7 +199,7 @@ async function runBulkByOwner(
       await action(ownerId, ids);
       successCount += ids.length;
     } catch {
-      // Kegagalan satu grup owner tidak menghentikan grup lain.
+      // ignore
     }
   }
   return { successCount, failCount: items.length - successCount };
@@ -246,15 +232,15 @@ export default function KelolaanOutletPage() {
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
-  const [showForm, setShowForm] = useState<{ mode: "create" | "edit"; outlet?: BackendOutlet } | null>(
-    null,
-  );
-  const [restoreTarget, setRestoreTarget] = useState<{ id: number; ownerId: number; name: string } | null>(
-    null,
-  );
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; ownerId: number; name: string } | null>(
-    null,
-  );
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
+  const hasMoved = useRef(false);
+
+  const [showForm, setShowForm] = useState<{ mode: "create" | "edit"; outlet?: BackendOutlet } | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<{ id: number; ownerId: number; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; ownerId: number; name: string } | null>(null);
   const [isActing, setIsActing] = useState(false);
 
   const [showBulkEdit, setShowBulkEdit] = useState(false);
@@ -262,6 +248,19 @@ export default function KelolaanOutletPage() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [isBulkActing, setIsBulkActing] = useState(false);
   const [bulkResultMessage, setBulkResultMessage] = useState<string | null>(null);
+
+  const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreActionsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const overviewScope = tableState === "sampah" ? "trash" : "active";
   const overviewParams = useMemo(
@@ -274,6 +273,7 @@ export default function KelolaanOutletPage() {
     }),
     [search, page, createdFrom, createdTo],
   );
+
   const subscriptionParams = useMemo(
     () => ({
       q: search || undefined,
@@ -363,12 +363,8 @@ export default function KelolaanOutletPage() {
 
   const filteredOverviewItems = useMemo(() => {
     return overviewItems.filter((item) => {
-      if (filterCode && !item.code.toLowerCase().includes(filterCode.toLowerCase())) {
-        return false;
-      }
-      if (filterName && !item.name.toLowerCase().includes(filterName.toLowerCase())) {
-        return false;
-      }
+      if (filterCode && !item.code.toLowerCase().includes(filterCode.toLowerCase())) return false;
+      if (filterName && !item.name.toLowerCase().includes(filterName.toLowerCase())) return false;
       if (
         filterOwner &&
         !(item.owner.name || "").toLowerCase().includes(filterOwner.toLowerCase()) &&
@@ -397,12 +393,8 @@ export default function KelolaanOutletPage() {
 
   const filteredSubscriptionItems = useMemo(() => {
     return subscriptionItems.filter((item) => {
-      if (filterCode && !item.outlet_code.toLowerCase().includes(filterCode.toLowerCase())) {
-        return false;
-      }
-      if (filterName && !item.outlet_name.toLowerCase().includes(filterName.toLowerCase())) {
-        return false;
-      }
+      if (filterCode && !item.outlet_code.toLowerCase().includes(filterCode.toLowerCase())) return false;
+      if (filterName && !item.outlet_name.toLowerCase().includes(filterName.toLowerCase())) return false;
       if (
         filterOwner &&
         !(item.owner.name || "").toLowerCase().includes(filterOwner.toLowerCase()) &&
@@ -423,7 +415,44 @@ export default function KelolaanOutletPage() {
     });
   }, [subscriptionItems, filterCode, filterName, filterOwner, filterPlan, createdFrom, createdTo]);
 
-  const bulkSelect = useBulkSelect(filteredOverviewItems);
+  // Handle Drag / Click Selection
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      hasMoved.current = false;
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleToggleSelectRow = useCallback((id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
+    setIsDragging(true);
+    hasMoved.current = false;
+    setDragMode(currentlySelected ? "deselect" : "select");
+    
+    setSelectedIds((prev) => {
+      if (!currentlySelected && !prev.includes(id)) return [...prev, id];
+      if (currentlySelected && prev.includes(id)) return prev.filter((selectedId) => selectedId !== id);
+      return prev;
+    });
+  };
+
+  const handleRowMouseEnter = (id: number) => {
+    if (isDragging) {
+      hasMoved.current = true;
+      setSelectedIds((prev) => {
+        if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
+        if (dragMode === "deselect" && prev.includes(id)) return prev.filter((selectedId) => selectedId !== id);
+        return prev;
+      });
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -439,12 +468,9 @@ export default function KelolaanOutletPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Selection tidak dipertahankan lintas halaman/tab/filter — baris yang
-  // ter-render berubah, jadi ID terpilih lama bisa jadi tidak relevan lagi.
   useEffect(() => {
-    bulkSelect.clear();
+    setSelectedIds([]);
     setBulkResultMessage(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableState, page, search, statusLangganan, statusJatuhTempo, dueDateReference, month, dueDateStart, dueDateEnd, timeStatusFilter, filterCode, filterName, filterOwner, filterCity, filterPlan]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -552,7 +578,7 @@ export default function KelolaanOutletPage() {
     }
   };
 
-  const selectedItems = overviewItems.filter((item) => bulkSelect.isSelected(item.id));
+  const selectedItems = overviewItems.filter((item) => selectedIds.includes(item.id));
 
   const handleBulkEditSubmit = async (fields: BulkEditFields) => {
     setIsBulkActing(true);
@@ -564,7 +590,7 @@ export default function KelolaanOutletPage() {
     );
     setIsBulkActing(false);
     setShowBulkEdit(false);
-    bulkSelect.clear();
+    setSelectedIds([]);
     setBulkResultMessage(
       result.failCount > 0
         ? `${result.successCount} outlet berhasil diubah, ${result.failCount} gagal.`
@@ -580,7 +606,7 @@ export default function KelolaanOutletPage() {
     );
     setIsBulkActing(false);
     setBulkTrashConfirm(false);
-    bulkSelect.clear();
+    setSelectedIds([]);
     setBulkResultMessage(
       result.failCount > 0
         ? `${result.successCount} outlet dipindahkan ke sampah, ${result.failCount} gagal.`
@@ -596,13 +622,25 @@ export default function KelolaanOutletPage() {
     );
     setIsBulkActing(false);
     setBulkDeleteConfirm(false);
-    bulkSelect.clear();
+    setSelectedIds([]);
     setBulkResultMessage(
       result.failCount > 0
         ? `${result.successCount} outlet dihapus permanen, ${result.failCount} gagal.`
         : `${result.successCount} outlet dihapus permanen.`,
     );
     refetch();
+  };
+
+  const isAllCurrentPageSelected =
+    filteredOverviewItems.length > 0 &&
+    filteredOverviewItems.every((item) => selectedIds.includes(item.id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllCurrentPageSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredOverviewItems.map((item) => item.id));
+    }
   };
 
   return (
@@ -700,6 +738,8 @@ export default function KelolaanOutletPage() {
                 <h2 className="text-xl font-bold text-gray-900">{activeTabLabel}</h2>
                 <p className="mt-1 text-sm text-gray-500">{activeTabDescription}</p>
               </div>
+
+              {/* ACTION BUTTONS (SEBELAH KIRI) */}
               <div className="flex flex-wrap items-center gap-3 w-full">
                 {isAdmin && tableState !== "sampah" && (
                   <button
@@ -713,6 +753,7 @@ export default function KelolaanOutletPage() {
                     Tambah Outlet
                   </button>
                 )}
+
                 {tableState === "umum" && (
                   <button
                     type="button"
@@ -726,31 +767,53 @@ export default function KelolaanOutletPage() {
                     {isExporting ? "Mengunduh..." : "Export Owner-Outlet"}
                   </button>
                 )}
-                {isAdmin && bulkSelect.selectedCount > 0 && tableState === "umum" && (
+
+                {/* TOMBOL AKSI MASSAL TERPILIH DI SEBELAH KIRI */}
+                {isAdmin && selectedIds.length > 0 && tableState === "umum" && (
                   <>
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
+                      <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                      {selectedIds.length} terpilih
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => setShowBulkEdit(true)}
-                      className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+                      className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100"
                     >
-                      Ubah Bulk ({bulkSelect.selectedCount})
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      Ubah Bulk ({selectedIds.length})
                     </button>
+
                     <button
                       type="button"
                       onClick={() => setBulkTrashConfirm(true)}
-                      className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"
+                      className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
                     >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       Pindahkan ke Sampah
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIds([])}
+                      className="flex items-center justify-center rounded-xl border border-gray-200 bg-white h-10 w-10 text-gray-500 shadow-sm transition-all hover:bg-gray-100 hover:text-gray-900"
+                      title="Batalkan Pilihan"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </>
                 )}
-                {isAdmin && bulkSelect.selectedCount > 0 && tableState === "sampah" && (
+
+                {isAdmin && selectedIds.length > 0 && tableState === "sampah" && (
                   <button
                     type="button"
                     onClick={() => setBulkDeleteConfirm(true)}
-                    className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"
+                    className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
                   >
-                    Hapus Permanen ({bulkSelect.selectedCount})
+                    Hapus Permanen ({selectedIds.length})
                   </button>
                 )}
               </div>
@@ -1075,7 +1138,13 @@ export default function KelolaanOutletPage() {
                   items={filteredOverviewItems}
                   scope={tableState}
                   isAdmin={isAdmin}
-                  bulkSelect={bulkSelect}
+                  selectedIds={selectedIds}
+                  isAllCurrentPageSelected={isAllCurrentPageSelected}
+                  onToggleSelectAll={handleToggleSelectAll}
+                  onToggleSelectRow={handleToggleSelectRow}
+                  onRowMouseDown={handleRowMouseDown}
+                  onRowMouseEnter={handleRowMouseEnter}
+                  hasMovedRef={hasMoved}
                   monthFilter={month}
                   onEdit={(outlet) => setShowForm({ mode: "edit", outlet })}
                   onRestore={(outlet) =>
@@ -1167,7 +1236,7 @@ export default function KelolaanOutletPage() {
       {bulkTrashConfirm && (
         <ConfirmDialog
           title="Pindahkan ke Sampah?"
-          message={`${bulkSelect.selectedCount} outlet terpilih akan dipindahkan ke sampah.`}
+          message={`${selectedIds.length} outlet terpilih akan dipindahkan ke sampah.`}
           confirmLabel="Pindahkan"
           isBusy={isBulkActing}
           onClose={() => setBulkTrashConfirm(false)}
@@ -1178,7 +1247,7 @@ export default function KelolaanOutletPage() {
       {bulkDeleteConfirm && (
         <ConfirmDialog
           title="Hapus Permanen?"
-          message={`${bulkSelect.selectedCount} outlet terpilih akan dihapus PERMANEN dan tidak bisa dipulihkan lagi.`}
+          message={`${selectedIds.length} outlet terpilih akan dihapus PERMANEN dan tidak bisa dipulihkan lagi.`}
           confirmLabel="Hapus Permanen"
           danger
           isBusy={isBulkActing}
@@ -1190,13 +1259,17 @@ export default function KelolaanOutletPage() {
   );
 }
 
-type BulkSelectApi = ReturnType<typeof useBulkSelect<OutletOverviewItem>>;
-
 function OverviewTable({
   items,
   scope,
   isAdmin,
-  bulkSelect,
+  selectedIds,
+  isAllCurrentPageSelected,
+  onToggleSelectAll,
+  onToggleSelectRow,
+  onRowMouseDown,
+  onRowMouseEnter,
+  hasMovedRef,
   monthFilter,
   onEdit,
   onRestore,
@@ -1205,7 +1278,13 @@ function OverviewTable({
   items: OutletOverviewItem[];
   scope: string;
   isAdmin: boolean;
-  bulkSelect: BulkSelectApi;
+  selectedIds: number[];
+  isAllCurrentPageSelected: boolean;
+  onToggleSelectAll: () => void;
+  onToggleSelectRow: (id: number) => void;
+  onRowMouseDown: (id: number, currentlySelected: boolean) => void;
+  onRowMouseEnter: (id: number) => void;
+  hasMovedRef: React.MutableRefObject<boolean>;
   monthFilter: string;
   onEdit: (outlet: BackendOutlet) => void;
   onRestore: (outlet: OutletOverviewItem) => void;
@@ -1218,7 +1297,7 @@ function OverviewTable({
     return "border-gray-200 bg-gray-100 text-gray-500";
   };
 
-  const colCount = isAdmin ? 8 : 7;
+  const colCount = isAdmin ? 10 : 9;
 
   return (
     <table id="kelolaan-outlet-overview-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
@@ -1228,8 +1307,8 @@ function OverviewTable({
             <th className="w-12 px-4 py-4 text-center">
               <input
                 type="checkbox"
-                checked={bulkSelect.isAllSelected}
-                onChange={() => bulkSelect.toggleAll()}
+                checked={isAllCurrentPageSelected}
+                onChange={onToggleSelectAll}
                 className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
               />
             </th>
@@ -1238,6 +1317,8 @@ function OverviewTable({
           <th className="px-4 py-4 font-bold">Nama Outlet</th>
           <th className="px-4 py-4 font-bold">Owner</th>
           <th className="px-4 py-4 font-bold">Kota / Provinsi</th>
+          <th className="px-4 py-4 font-bold">Kecamatan / Kelurahan</th>
+          <th className="px-4 py-4 font-bold">Nama Penginput</th>
           <th className="px-4 py-4 font-bold">Tgl Dibuat</th>
           <th className="px-4 py-4 text-center font-bold">Status</th>
           <th className="px-4 py-4 text-center font-bold">Aksi</th>
@@ -1254,21 +1335,31 @@ function OverviewTable({
           items.map((item) => (
           <tr
             key={item.id}
-            className={`transition-colors hover:bg-gray-50 ${bulkSelect.isSelected(item.id) ? "bg-red-50/60" : ""
+            className={`transition-colors cursor-pointer select-none ${selectedIds.includes(item.id) ? "bg-red-50/60" : "hover:bg-gray-50"
               }`}
+            onMouseDown={(e) => {
+              if ((e.target as HTMLElement).closest('button, a')) return;
+              if (e.button !== 0) return;
+              onRowMouseDown(item.id, selectedIds.includes(item.id));
+            }}
+            onMouseEnter={() => {
+              onRowMouseEnter(item.id);
+            }}
           >
             {isAdmin && (
-              <td className="px-4 py-4 align-top text-center">
+              <td 
+                className="px-4 py-4 align-top text-center cursor-pointer"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelectRow(item.id);
+                }}
+              >
                 <input
                   type="checkbox"
-                  checked={bulkSelect.isSelected(item.id)}
-                  onChange={(event) => {
-                    bulkSelect.toggleRow(item.id, event.nativeEvent instanceof MouseEvent ? event.nativeEvent.shiftKey : false);
-                  }}
-                  onClick={(event) => {
-                    (event as React.MouseEvent<HTMLInputElement>).stopPropagation();
-                  }}
-                  className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                  checked={selectedIds.includes(item.id)}
+                  readOnly
+                  className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
                 />
               </td>
             )}
@@ -1281,6 +1372,13 @@ function OverviewTable({
             <td className="px-4 py-4 align-top">
               {item.city || "—"}
               {item.province ? `, ${item.province}` : ""}
+            </td>
+            <td className="px-4 py-4 align-top">
+              {item.district || "—"}
+              {item.sub_district ? `, ${item.sub_district}` : ""}
+            </td>
+            <td className="px-4 py-4 align-top">
+              {item.entered_by_name || "—"}
             </td>
             <td className="px-4 py-4 align-top font-medium text-gray-700 whitespace-nowrap">
               {formatIndonesianDate(item.created_at)}
@@ -1303,6 +1401,7 @@ function OverviewTable({
                   href={`/menu/kelolaan-outlet/detail?id=${item.id}`}
                   className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
                   title="Lihat Detail Outlet"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1312,7 +1411,8 @@ function OverviewTable({
                 {isAdmin && scope === "umum" && (
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation();
                       onEdit({
                         id: item.id,
                         owner_id: item.owner.id || 0,
@@ -1324,8 +1424,8 @@ function OverviewTable({
                         district: item.district || "",
                         sub_district: item.sub_district || "",
                         address: item.address || "",
-                      })
-                    }
+                      });
+                    }}
                     className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
                     title="Edit Outlet"
                   >
@@ -1338,7 +1438,7 @@ function OverviewTable({
                   <>
                     <button
                       type="button"
-                      onClick={() => onRestore(item)}
+                      onClick={(e) => { e.stopPropagation(); onRestore(item); }}
                       className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
                       title="Pulihkan Outlet"
                     >
@@ -1348,7 +1448,7 @@ function OverviewTable({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onForceDelete(item)}
+                      onClick={(e) => { e.stopPropagation(); onForceDelete(item); }}
                       className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
                       title="Hapus Permanen"
                     >

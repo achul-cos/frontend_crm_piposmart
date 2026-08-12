@@ -704,21 +704,10 @@ function ActionButtons<T extends ActionItem>({
         <button
           type="button"
           onClick={() => onEdit(item, editMode)}
-          className="text-gray-600 transition hover:scale-110 hover:text-[#C92C1E]"
+          className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
           title="Edit profil"
         >
-          <EditIcon className="h-5 w-5" />
-        </button>
-      )}
-
-      {canDelete && (
-        <button
-          type="button"
-          onClick={() => onDelete(item)}
-          className="text-gray-500 transition hover:scale-110 hover:text-red-600"
-          title="Hapus data"
-        >
-          <TrashIcon className="h-5 w-5" />
+          <EditIcon className="h-4 w-4" />
         </button>
       )}
     </div>

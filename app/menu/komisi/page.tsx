@@ -76,6 +76,7 @@ function getStatusDotClass(status?: string) {
 export default function KomisiPage() {
   const { confirm, withLoading, showSuccess, showError } = useFeedback();
   const [activeTab, setActiveTab] = useState<"OPERATIONS" | "ANALYTICS">("OPERATIONS");
+  const [komisiPage, setKomisiPage] = useState(1);
   const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(
     null,
   );
@@ -436,6 +437,14 @@ export default function KomisiPage() {
     }
   };
 
+  const komisiPageSize = 20;
+  const komisiTotalItems = commissions.length;
+  const komisiTotalPages = Math.max(1, Math.ceil(komisiTotalItems / komisiPageSize));
+  const paginatedKomisi = useMemo(() => {
+    const start = (komisiPage - 1) * komisiPageSize;
+    return commissions.slice(start, start + komisiPageSize);
+  }, [commissions, komisiPage]);
+
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
@@ -468,76 +477,8 @@ export default function KomisiPage() {
               mulai dari sync, approve, payment, cancel, hingga payout batch.
             </p>
           </div>
-
-          <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto">
-            <button
-              type="button"
-              onClick={handleSync}
-              disabled={!selectedPartnerId || actionLoading === "sync"}
-              className="w-full rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-black text-white shadow-sm shadow-red-200 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-            >
-              {actionLoading === "sync" ? "Sync..." : "Sync Komisi"}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCreatePayout}
-              disabled={!selectedPartnerId || actionLoading === "create-payout"}
-              title={
-                !selectedPartnerId
-                  ? "Pilih partner terlebih dahulu."
-                  : summary.approved === 0
-                    ? "Approve komisi terlebih dahulu sebelum membuat payout."
-                    : "Buat payout dari komisi approved."
-              }
-              className="w-full rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-[#C92C1E] transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {actionLoading === "create-payout"
-                ? "Membuat..."
-                : summary.approved === 0
-                  ? "Approve Komisi Dulu"
-                  : "Buat Payout"}
-            </button>
-          </div>
-        </div>
-
-        {/* Sub Menu / Tab Selection */}
-        <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-100 p-4">
-          <button
-            type="button"
-            onClick={() => setActiveTab("OPERATIONS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
-              activeTab === "OPERATIONS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <span>Daftar Komisi & Payout</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("ANALYTICS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
-              activeTab === "ANALYTICS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            <span>Analitik & Health Komisi</span>
-          </button>
         </div>
       </div>
-
-      {activeTab === "ANALYTICS" ? (
-        <AnalyticsTab />
-      ) : (
-        <>
-          {pageError ? (
-            <div className="min-w-0 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
-              {pageError}
-            </div>
-          ) : null}
 
       <QuickInfoCardGrid>
         <QuickInfoCard
@@ -567,11 +508,49 @@ export default function KomisiPage() {
         />
       </QuickInfoCardGrid>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex min-w-0 flex-col gap-3 border-b border-gray-100 bg-gray-50/50 p-4 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-black text-gray-900">Ledger Komisi</p>
-            <p className="mt-1 break-words text-xs font-medium text-gray-400">
+      <div className="flex w-max max-w-full overflow-x-auto rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
+          <button
+            type="button"
+            onClick={() => setActiveTab("OPERATIONS")}
+            className={`rounded-lg px-5 py-2.5 transition-all ${
+              activeTab === "OPERATIONS"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+            }`}
+          >
+            Daftar Komisi & Payout
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("ANALYTICS")}
+            className={`rounded-lg px-5 py-2.5 transition-all ${
+              activeTab === "ANALYTICS"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
+            }`}
+          >
+            Analitik & Health Komisi
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "ANALYTICS" ? (
+        <AnalyticsTab />
+      ) : (
+        <>
+          {pageError ? (
+            <div className="min-w-0 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+              {pageError}
+            </div>
+          ) : null}
+
+      <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Ledger Komisi</h2>
+            <p className="mt-1 text-sm text-gray-500">
               {selectedPartner
                 ? `${selectedPartner.name || "-"} · ${
                     selectedPartner.code || `ID #${selectedPartner.id}`
@@ -579,17 +558,48 @@ export default function KomisiPage() {
                 : "Pilih partner terlebih dahulu."}
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              selectedPartnerId && void loadPartnerDetail(selectedPartnerId)
-            }
-            disabled={!selectedPartnerId || loadingDetail}
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            {loadingDetail ? "Refresh..." : "Refresh"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3 w-full">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSync}
+                disabled={!selectedPartnerId || actionLoading === "sync"}
+                className="w-full sm:w-auto rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-black text-white shadow-sm shadow-red-200 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {actionLoading === "sync" ? "Sync..." : "Sync Komisi"}
+              </button>
+  
+              <button
+                type="button"
+                onClick={handleCreatePayout}
+                disabled={!selectedPartnerId || actionLoading === "create-payout"}
+                title={
+                  !selectedPartnerId
+                    ? "Pilih partner terlebih dahulu."
+                    : summary.approved === 0
+                      ? "Approve komisi terlebih dahulu sebelum membuat payout."
+                      : "Buat payout dari komisi approved."
+                }
+                className="w-full sm:w-auto rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-[#C92C1E] transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionLoading === "create-payout"
+                  ? "Membuat..."
+                  : summary.approved === 0
+                    ? "Approve Komisi Dulu"
+                    : "Buat Payout"}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                selectedPartnerId && void loadPartnerDetail(selectedPartnerId)
+              }
+              disabled={!selectedPartnerId || loadingDetail}
+              className="rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loadingDetail ? "Refresh..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         <div className="min-w-0 p-4">
@@ -687,41 +697,50 @@ export default function KomisiPage() {
                       {status === "PENDING" ? (
                         <button
                           type="button"
+                          title="Approve"
                           onClick={() => void handleApprove(commission)}
-                          disabled={
-                            actionLoading === `approve-${commission.id}`
-                          }
-                          className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={actionLoading === `approve-${commission.id}`}
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {actionLoading === `approve-${commission.id}`
-                            ? "Approve..."
-                            : "Approve"}
+                          {actionLoading === `approve-${commission.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          )}
                         </button>
                       ) : null}
 
                       {status === "APPROVED" ? (
                         <button
                           type="button"
+                          title="Pay"
                           onClick={() => void handlePay(commission)}
                           disabled={actionLoading === `pay-${commission.id}`}
-                          className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {actionLoading === `pay-${commission.id}`
-                            ? "Pay..."
-                            : "Pay"}
+                          {actionLoading === `pay-${commission.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          )}
                         </button>
                       ) : null}
 
                       {status === "PENDING" || status === "APPROVED" ? (
                         <button
                           type="button"
+                          title="Cancel"
                           onClick={() => void handleCancel(commission)}
                           disabled={
                             actionLoading === `cancel-${commission.id}`
                           }
-                          className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Cancel
+                          {actionLoading === `cancel-${commission.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          )}
                         </button>
                       ) : null}
 
@@ -739,13 +758,15 @@ export default function KomisiPage() {
         </div>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-          <p className="text-sm font-black text-gray-900">Payout Batch</p>
-          <p className="mt-1 break-words text-xs font-medium text-gray-400">
-            Payout akan membatch commission berstatus APPROVED untuk partner
-            terpilih.
-          </p>
+      <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Payout Batch</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Payout akan membatch commission berstatus APPROVED untuk partner
+              terpilih.
+            </p>
+          </div>
         </div>
 
         <div className="min-w-0 p-4">
@@ -820,24 +841,34 @@ export default function KomisiPage() {
                       <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 sm:flex sm:justify-end">
                         <button
                           type="button"
+                          title="Pay"
                           onClick={() => void handlePayPayout(payout)}
                           disabled={
                             actionLoading === `pay-payout-${payout.id}`
                           }
-                          className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Pay
+                          {actionLoading === `pay-payout-${payout.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          )}
                         </button>
 
                         <button
                           type="button"
+                          title="Cancel"
                           onClick={() => void handleCancelPayout(payout)}
                           disabled={
                             actionLoading === `cancel-payout-${payout.id}`
                           }
-                          className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Cancel
+                          {actionLoading === `cancel-payout-${payout.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          )}
                         </button>
                       </div>
                     ) : null}
@@ -849,12 +880,14 @@ export default function KomisiPage() {
         </div>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
-        <div className="border-b border-gray-100 bg-gray-50/70 p-4">
-          <p className="text-sm font-black text-gray-900">Daftar Partner</p>
-          <p className="mt-1 break-words text-xs font-medium text-gray-400">
-            Pilih partner untuk melihat ledger komisi.
-          </p>
+      <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Daftar Partner</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Pilih partner untuk melihat ledger komisi.
+            </p>
+          </div>
         </div>
 
         <div className="min-w-0 p-4">

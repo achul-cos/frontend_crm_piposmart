@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { Search } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -12,6 +13,7 @@ import {
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ReportExportButton from "@/app/components/export/ReportExportButton";
@@ -489,6 +491,10 @@ export default function SubscriptionPage() {
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
+  const [selectedSubscriptionIds, setSelectedSubscriptionIds] = useState<number[]>([]);
+  const [selectedReconciliationIds, setSelectedReconciliationIds] = useState<number[]>([]);
+  const [selectedIssueIds, setSelectedIssueIds] = useState<number[]>([]);
   const [statusFilter, setStatusFilter] = useState("Semua");
   const [orderTypeFilter, setOrderTypeFilter] = useState("Semua");
   const [purchasedFrom, setPurchasedFrom] = useState("");
@@ -1148,19 +1154,6 @@ export default function SubscriptionPage() {
               reconciliation, dan issue queue tanpa double counting revenue.
             </p>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-
-            {isMounted && isAdmin && (
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(true)}
-                className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-              >
-                + Buat Order
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
@@ -1220,219 +1213,312 @@ export default function SubscriptionPage() {
         <AnalyticsTab />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
             <div>
-              <h2 className="text-sm font-black text-gray-900">
-                Filter Subscription
+              <h2 className="text-xl font-bold text-gray-900">
+                {activeTab === "orders" ? "Daftar Subscription Order" : 
+                 activeTab === "subscriptions" ? "Daftar Subscription Aktif" : 
+                 activeTab === "reconciliations" ? "Daftar Reconciliation" : 
+                 "Daftar Issue Queue"}
               </h2>
-              <p className="mt-1 text-xs font-medium text-gray-400">
-                Pencarian, status, dan tanggal otomatis diterapkan tanpa tombol
-                terapkan.
+              <p className="mt-1 text-sm text-gray-500">
+                Pencarian, status, dan tanggal otomatis diterapkan.
               </p>
             </div>
+            
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <div className="flex flex-wrap gap-2">
+                {isMounted && isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateOpen(true)}
+                    className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
+                  >
+                    + Buat Order
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {activeTab === "subscriptions" ? (
+                  <ReportExportButton
+                    reportKey="subscriptions"
+                    filters={{
+                      q: debouncedSearch || undefined,
+                      status: statusFilter !== "Semua" ? statusFilter : undefined,
+                      date_from: purchasedFrom || undefined,
+                      date_to: purchasedTo || undefined,
+                    }}
+                    label="Export Subscription"
+                    loadingLabel="Menyiapkan Export..."
+                    successMessage="File subscription sedang diunduh."
+                    className="flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-200 active:scale-[0.98]"
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={
-                  activeTab === "orders"
-                    ? "Cari order / owner"
-                    : activeTab === "subscriptions"
-                      ? "Cari subscription / owner"
-                      : activeTab === "reconciliations"
-                        ? "Cari reconciliation / owner"
-                        : "Cari issue / owner"
-                }
-                className="min-w-[200px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              />
-
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-              >
-                <option value="Semua">Semua Status</option>
-                {statusOptions.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-wrap items-start gap-4">
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Status</span>
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                >
+                  <option value="Semua">Semua Status</option>
+                  {statusOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {activeTab === "orders" && (
-                <select
-                  value={orderTypeFilter}
-                  onChange={(event) => setOrderTypeFilter(event.target.value)}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-                >
-                  <option value="Semua">Semua Tipe Order</option>
-                  <option value="NEW">Baru (NEW)</option>
-                  <option value="UPGRADE">Upgrade (UPGRADE)</option>
-                </select>
+                <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                  <span className="text-xs font-semibold text-black">Tipe Order</span>
+                  <select
+                    value={orderTypeFilter}
+                    onChange={(event) => setOrderTypeFilter(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                  >
+                    <option value="Semua">Semua Tipe Order</option>
+                    <option value="NEW">Baru (NEW)</option>
+                    <option value="UPGRADE">Upgrade (UPGRADE)</option>
+                  </select>
+                </div>
               )}
 
               {(activeTab === "orders" || activeTab === "subscriptions") && (
                 <>
-                  <input
-                    type="date"
-                    value={purchasedFrom}
-                    onChange={(event) => setPurchasedFrom(event.target.value)}
-                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-                  />
+                  <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                    <span className="text-xs font-semibold text-black">Tanggal Mulai</span>
+                    <input
+                      type="date"
+                      value={purchasedFrom}
+                      onChange={(event) => setPurchasedFrom(event.target.value)}
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                    />
+                  </div>
 
-                  <input
-                    type="date"
-                    value={purchasedTo}
-                    onChange={(event) => setPurchasedTo(event.target.value)}
-                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
-                  />
+                  <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                    <span className="text-xs font-semibold text-black">Tanggal Akhir</span>
+                    <input
+                      type="date"
+                      value={purchasedTo}
+                      onChange={(event) => setPurchasedTo(event.target.value)}
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                    />
+                  </div>
                 </>
               )}
-
-              {activeTab === "subscriptions" ? (
-                <ReportExportButton
-                  reportKey="subscriptions"
-                  filters={{
-                    q: debouncedSearch || undefined,
-                    status: statusFilter !== "Semua" ? statusFilter : undefined,
-                    date_from: purchasedFrom || undefined,
-                    date_to: purchasedTo || undefined,
-                  }}
-                  label="Export Subscription"
-                  loadingLabel="Menyiapkan Export..."
-                  successMessage="File subscription sedang diunduh."
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-              ) : null}
             </div>
           </div>
 
-          {errorMessage && (
-            <div className="mx-4 mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
-              {errorMessage}
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder={
+                    activeTab === "orders"
+                      ? "Cari order / owner..."
+                      : activeTab === "subscriptions"
+                        ? "Cari subscription / owner..."
+                        : activeTab === "reconciliations"
+                          ? "Cari reconciliation / owner..."
+                          : "Cari issue / owner..."
+                  }
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                />
+              </div>
+              <ColumnVisibilityControl
+                tableId={`${activeTab}-table`}
+                storageKey={`column-visibility:subscribe-${activeTab}`}
+                buttonLabel="Kolom"
+              />
             </div>
-          )}
+          </div>
 
-          <p className="px-4 pt-4 text-[11px] font-bold text-gray-400">
-            Klik baris order atau subscription untuk membuka detail. Reconciliation
-            dapat dilakukan Admin/Supervisor.
-          </p>
-
-          <div className="h-2" />
+          <div className="px-6 py-4 border-b border-gray-50">
+            {errorMessage && (
+              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">
+                {errorMessage}
+              </div>
+            )}
+          </div>
 
           {activeTab === "orders" && (
-            <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[1120px] text-left text-xs">
-                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-                  <tr>
-                    <th className="p-3 font-black">Order</th>
-                    <th className="p-3 font-black">Owner</th>
-                    <th className="p-3 font-black">Plan</th>
-                    <th className="p-3 font-black">Status</th>
-                    <th className="p-3 font-black">Purchased</th>
-                    <th className="p-3 text-right font-black">Amount</th>
-                    {canReconcile && (
-                      <th className="p-3 text-center font-black">Reconcile</th>
-                    )}
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {orders.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={canReconcile ? 7 : 6}
-                        className="p-8 text-center font-bold text-gray-400"
-                      >
-                        Data subscription order tidak ditemukan.
-                      </td>
-                    </tr>
-                  ) : (
-                    orders.map((order) => (
-                      <tr
-                        key={order.id}
-                        onClick={() => handleOpenOrderDetail(order)}
-                        className="cursor-pointer transition-colors hover:bg-gray-50"
-                      >
-                        <td className="p-3 align-top">
-                          <p className="font-black text-gray-900">
-                            {order.code || `ORDER-${order.id}`}
-                          </p>
-                          <p className="mt-1 text-[11px] font-bold text-gray-400">
-                            Closing: {order.closing?.code || order.closing?.id || "-"}
-                          </p>
-                        </td>
-
-                        <td className="p-3 align-top">
-                          <p className="font-black text-gray-900">
-                            {getOwnerName(order.owner)}
-                          </p>
-                          <p className="mt-1 text-[11px] font-bold text-gray-400">
-                            {getOwnerCode(order.owner)}
-                          </p>
-                        </td>
-
-                        <td className="p-3 align-top">
-                          <p className="font-black text-gray-900">
-                            {order.plan?.name || "-"}
-                          </p>
-                          <p className="mt-1 text-[11px] font-bold text-gray-400">
-                            {order.duration_days || 0} hari
-                          </p>
-                        </td>
-
-                        <td className="p-3 align-top">
-                          <span
-                            className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
-                              order.status,
-                            )}`}
-                          >
-                            {order.status || "-"}
-                          </span>
-                        </td>
-
-                        <td className="p-3 align-top font-bold text-gray-600">
-                          <p>{formatTanggal(order.purchased_at)}</p>
-                          <p className="mt-1 text-[11px] text-gray-400">
-                            Start:{" "}
-                            {formatTanggalPendek(order.subscription_start_date)}
-                          </p>
-                        </td>
-
-                        <td className="p-3 text-right align-top">
-                          <span className="inline-flex min-w-[130px] justify-end rounded-2xl border border-red-100 bg-red-50 px-4 py-3 font-black text-[#C92C1E]">
-                            {formatRupiah(order.final_amount)}
-                          </span>
-                        </td>
-
+            <div className="relative w-full">
+              <div className="flex flex-col">
+                <div className="overflow-x-auto">
+                  <table id="orders-table" data-column-visibility-manual="true" className="w-full min-w-[1120px] text-left text-xs">
+                    <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+                      <tr>
+                        <th className="w-12 px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={orders.length > 0 && selectedOrderIds.length === orders.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedOrderIds(orders.map(o => o.id));
+                              } else {
+                                setSelectedOrderIds([]);
+                              }
+                            }}
+                            className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                          />
+                        </th>
+                        <th className="p-3 font-black">Order</th>
+                        <th className="p-3 font-black">Owner</th>
+                        <th className="p-3 font-black">Plan</th>
+                        <th className="p-3 font-black">Status</th>
+                        <th className="p-3 font-black">Purchased</th>
+                        <th className="p-3 text-right font-black">Amount</th>
                         {canReconcile && (
-                          <td className="p-3 text-center align-top">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openReconcileModal(order);
-                              }}
-                              className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black text-[#C92C1E] transition hover:bg-red-100"
-                            >
-                              Reconcile
-                            </button>
-                          </td>
+                          <th className="p-3 text-center font-black">Reconcile</th>
                         )}
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {orders.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={canReconcile ? 8 : 7}
+                            className="px-6 py-10 text-center text-gray-500"
+                          >
+                            Data pesanan tidak ditemukan.
+                          </td>
+                        </tr>
+                      ) : (
+                        orders.map((order) => (
+                          <tr
+                            key={order.id}
+                            className={`transition-colors hover:bg-gray-50 ${selectedOrderIds.includes(order.id) ? "bg-red-50/50" : ""}`}
+                          >
+                            <td className="w-12 px-4 py-4 text-center align-top">
+                              <input
+                                type="checkbox"
+                                checked={selectedOrderIds.includes(order.id)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setSelectedOrderIds(prev =>
+                                    checked ? [...prev, order.id] : prev.filter(id => id !== order.id)
+                                  );
+                                }}
+                                className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                              />
+                            </td>
+                            <td 
+                              className="p-3 align-top cursor-pointer"
+                              onClick={() => {
+                                handleOpenOrderDetail(order);
+                              }}
+                            >
+                              <p className="font-black text-gray-900">
+                                {order.code || `ORDER-${order.id}`}
+                              </p>
+                              <p className="mt-1 text-[11px] font-bold text-gray-400">
+                                Closing: {order.closing?.code || order.closing?.id || "-"}
+                              </p>
+                            </td>
+
+                            <td className="p-3 align-top">
+                              <p className="font-black text-gray-900">
+                                {getOwnerName(order.owner)}
+                              </p>
+                              <p className="mt-1 text-[11px] font-bold text-gray-400">
+                                {getOwnerCode(order.owner)}
+                              </p>
+                            </td>
+
+                            <td className="p-3 align-top">
+                              <p className="font-black text-gray-900">
+                                {order.plan?.name || "-"}
+                              </p>
+                              <p className="mt-1 text-[11px] font-bold text-gray-400">
+                                {order.duration_days || 0} hari
+                              </p>
+                            </td>
+
+                            <td className="p-3 align-top">
+                              <span
+                                className={`rounded-full border px-3 py-1 text-[10px] font-black ${getStatusClass(
+                                  order.status,
+                                )}`}
+                              >
+                                {order.status || "-"}
+                              </span>
+                            </td>
+
+                            <td className="p-3 align-top font-bold text-gray-600">
+                              <p>{formatTanggal(order.purchased_at)}</p>
+                              <p className="mt-1 text-[11px] text-gray-400">
+                                Start:{" "}
+                                {formatTanggalPendek(order.subscription_start_date)}
+                              </p>
+                            </td>
+
+                            <td className="p-3 text-right align-top">
+                              <span className="inline-flex min-w-[130px] justify-end rounded-2xl border border-red-100 bg-red-50 px-4 py-3 font-black text-[#C92C1E]">
+                                {formatRupiah(order.final_amount)}
+                              </span>
+                            </td>
+
+                            {canReconcile && (
+                              <td className="p-3 text-center align-top">
+                                <button
+                                  type="button"
+                                  title="Reconcile"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openReconcileModal(order);
+                                  }}
+                                  className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-red-100 bg-red-50 text-[#C92C1E] transition hover:bg-red-100"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "subscriptions" && (
-            <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-xs">
-                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+            <div className="relative w-full">
+              <div className="flex flex-col">
+                <div className="overflow-x-auto">
+                  <table id="subscriptions-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-xs">
+                    <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
+                    <th className="w-12 px-4 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={subscriptions.length > 0 && selectedSubscriptionIds.length === subscriptions.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSubscriptionIds(subscriptions.map(s => s.id));
+                          } else {
+                            setSelectedSubscriptionIds([]);
+                          }
+                        }}
+                        className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                      />
+                    </th>
                     <th className="p-3 font-black">Subscription</th>
                     <th className="p-3 font-black">Owner</th>
                     <th className="p-3 font-black">Plan</th>
@@ -1447,20 +1533,37 @@ export default function SubscriptionPage() {
                   {subscriptions.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
-                        className="p-8 text-center font-bold text-gray-400"
+                        colSpan={8}
+                        className="px-6 py-10 text-center text-gray-500"
                       >
-                        Data subscription tidak ditemukan.
+                        Data langganan tidak ditemukan.
                       </td>
                     </tr>
                   ) : (
                     subscriptions.map((subscription) => (
                       <tr
                         key={subscription.id}
-                        onClick={() => handleOpenSubscriptionDetail(subscription)}
-                        className="cursor-pointer transition-colors hover:bg-gray-50"
+                        className={`transition-colors hover:bg-gray-50 ${selectedSubscriptionIds.includes(subscription.id) ? "bg-red-50/50" : ""}`}
                       >
-                        <td className="p-3 align-top">
+                        <td className="w-12 px-4 py-4 text-center align-top">
+                          <input
+                            type="checkbox"
+                            checked={selectedSubscriptionIds.includes(subscription.id)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setSelectedSubscriptionIds(prev =>
+                                checked ? [...prev, subscription.id] : prev.filter(id => id !== subscription.id)
+                              );
+                            }}
+                            className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                          />
+                        </td>
+                        <td 
+                          className="p-3 align-top cursor-pointer"
+                          onClick={() => {
+                            handleOpenSubscriptionDetail(subscription);
+                          }}
+                        >
                           <Link
                             href={`/menu/subscribe/${subscription.id}`}
                             onClick={(event) => event.stopPropagation()}
@@ -1512,20 +1615,22 @@ export default function SubscriptionPage() {
                           className="p-3 text-center align-top"
                           onClick={(event) => event.stopPropagation()}
                         >
-                          <div className="flex flex-col gap-2 items-center">
+                          <div className="flex flex-row gap-2 items-center justify-center">
                             <Link
                               href={`/menu/subscribe/${subscription.id}`}
-                              className="w-full rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                              title="Detail"
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
                             >
-                              Detail
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                             </Link>
                             {String(subscription.status || "").toUpperCase() === "ACTIVE" && isAdmin && (
                               <button
                                 type="button"
+                                title="Upgrade"
                                 onClick={() => handleOpenUpgrade(subscription)}
-                                className="w-full rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-600 transition-colors hover:bg-amber-100 hover:text-amber-700"
+                                className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-amber-50 text-amber-600 transition-colors hover:bg-amber-100 hover:text-amber-700"
                               >
-                                Upgrade
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
                               </button>
                             )}
                           </div>
@@ -1533,15 +1638,19 @@ export default function SubscriptionPage() {
                       </tr>
                     ))
                   )}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "reconciliations" && (
-            <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[920px] text-left text-xs">
-                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+            <div className="relative w-full">
+              <div className="flex flex-col">
+                <div className="overflow-x-auto">
+                  <table id="reconciliations-table" data-column-visibility-manual="true" className="w-full min-w-[920px] text-left text-xs">
+                    <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="p-3 font-black">Reconciliation</th>
                     <th className="p-3 font-black">Owner</th>
@@ -1618,15 +1727,19 @@ export default function SubscriptionPage() {
                       </tr>
                     ))
                   )}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "issues" && (
-            <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-xs">
-                <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+            <div className="relative w-full">
+              <div className="flex flex-col">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-left text-xs">
+                    <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="p-3 font-black">Issue</th>
                     <th className="p-3 font-black">Owner</th>
@@ -1695,8 +1808,10 @@ export default function SubscriptionPage() {
                       </tr>
                     ))
                   )}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 

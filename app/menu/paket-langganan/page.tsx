@@ -44,6 +44,7 @@ import {
 } from "@/app/lib/api";
 import { usePackagesQuery, usePlansQuery, usePromotionsQuery } from "@/app/lib/queries/catalog";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
   ssr: false,
@@ -448,6 +449,12 @@ export default function PaketLanggananPage() {
   const plansQuery = usePlansQuery(planQueryParams, entity === "plan");
   const promotionsQuery = usePromotionsQuery(promotionQueryParams, entity === "promotion");
 
+  const allPlansQuery = usePlansQuery({ page: 1, limit: 1000, active: true }, entity === "package");
+  const allPromotionsQuery = usePromotionsQuery({ page: 1, limit: 1000, active: true }, entity === "package");
+
+  const allPlans = allPlansQuery.data?.items ?? [];
+  const allPromotions = allPromotionsQuery.data?.items ?? [];
+
   const activeQuery =
     entity === "package" ? packagesQuery : entity === "plan" ? plansQuery : promotionsQuery;
 
@@ -716,95 +723,24 @@ export default function PaketLanggananPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[180px] max-w-xs flex-1">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder={`Cari ${entityLabel.toLowerCase()}...`}
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-              />
-            </div>
-
-            {scope !== "DELETED" && (
-              <FilterSelect
-                value={activeFilter}
-                onChange={(v) => {
-                  setActiveFilter(v as "" | "true" | "false");
-                  setPage(1);
-                }}
-                options={[
-                  { value: "true", label: "Aktif" },
-                  { value: "false", label: "Nonaktif" },
-                ]}
-                placeholder="Semua Status"
-              />
-            )}
-
-            {entity === "plan" && (
-              <FilterSelect
-                value={packageFilter}
-                onChange={(v) => {
-                  setPackageFilter(v);
-                  setPage(1);
-                }}
-                options={packageOptions.map((p) => ({
-                  value: String(p.id),
-                  label: p.name,
-                }))}
-                placeholder="Semua Package"
-              />
-            )}
-
-            {entity === "promotion" && (
-              <FilterSelect
-                value={chargeTypeFilter}
-                onChange={(v) => {
-                  setChargeTypeFilter(v);
-                  setPage(1);
-                }}
-                options={[
-                  { value: "FREE", label: "Gratis" },
-                  { value: "PAID", label: "Berbayar" },
-                ]}
-                placeholder="Semua Tipe Biaya"
-              />
-            )}
-
-            {(search || activeFilter || packageFilter || chargeTypeFilter) && (
-              <button
-                onClick={() => {
-                  setSearch("");
-                  setActiveFilter("");
-                  setPackageFilter("");
-                  setChargeTypeFilter("");
-                  setPage(1);
-                }}
-                className="flex items-center gap-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Reset
-              </button>
-            )}
-
-            <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Daftar {entityLabel}</h2>
+            <p className="mt-1 text-sm text-gray-500">Daftar seluruh data {entityLabel.toLowerCase()} dalam katalog.</p>
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() =>
                   changeScope(scope === "DELETED" ? "ACTIVE" : "DELETED")
                 }
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-black transition ${
+                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
                   scope === "DELETED"
                     ? "border-gray-800 bg-gray-800 text-white"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    : "border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
                 }`}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
                 {scope === "DELETED" ? "Kembali" : "Trash"}
               </button>
 
@@ -815,9 +751,9 @@ export default function PaketLanggananPage() {
                     else if (entity === "plan") setPlanForm({ mode: "create" });
                     else setPromotionForm({ mode: "create" });
                   }}
-                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216] active:scale-[0.98]"
+                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#A82216] active:scale-[0.98]"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4" />
                   {addLabel}
                 </button>
               )}
@@ -825,8 +761,107 @@ export default function PaketLanggananPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-wrap items-start gap-4">
+            {scope !== "DELETED" && (
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Status</span>
+                <FilterSelect
+                  value={activeFilter}
+                  onChange={(v) => {
+                    setActiveFilter(v as "" | "true" | "false");
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "true", label: "Aktif" },
+                    { value: "false", label: "Nonaktif" },
+                  ]}
+                  placeholder="Semua Status"
+                />
+              </div>
+            )}
+
+            {entity === "plan" && (
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Package</span>
+                <FilterSelect
+                  value={packageFilter}
+                  onChange={(v) => {
+                    setPackageFilter(v);
+                    setPage(1);
+                  }}
+                  options={packageOptions.map((p) => ({
+                    value: String(p.id),
+                    label: p.name,
+                  }))}
+                  placeholder="Semua Package"
+                />
+              </div>
+            )}
+
+            {entity === "promotion" && (
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Tipe Biaya</span>
+                <FilterSelect
+                  value={chargeTypeFilter}
+                  onChange={(v) => {
+                    setChargeTypeFilter(v);
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "FREE", label: "Gratis" },
+                    { value: "PAID", label: "Berbayar" },
+                  ]}
+                  placeholder="Semua Tipe Biaya"
+                />
+              </div>
+            )}
+
+            {(search || activeFilter || packageFilter || chargeTypeFilter) && (
+              <div className="flex flex-col gap-1.5 mt-auto pb-[1px]">
+                <button
+                  onClick={() => {
+                    setSearch("");
+                    setActiveFilter("");
+                    setPackageFilter("");
+                    setChargeTypeFilter("");
+                    setPage(1);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 h-9"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reset
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder={`Cari ${entityLabel.toLowerCase()}...`}
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+              />
+            </div>
+            <ColumnVisibilityControl tableId="catalog-table" storageKey="column-visibility:catalog-table" buttonLabel="Kolom" />
+          </div>
+        </div>
+
+        <div className="relative w-full">
+          <div className="flex flex-col">
+            <div className="overflow-x-auto">
+          <table id="catalog-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="w-10 px-4 py-4 text-center">
@@ -847,6 +882,9 @@ export default function PaketLanggananPage() {
                     <th className="px-4 py-4">Nama</th>
                     <th className="px-4 py-4">Level</th>
                     <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4">Jumlah Plan</th>
+                    <th className="px-4 py-4">Jumlah Promo</th>
+                    <th className="px-4 py-4">Harga Per Tenor</th>
                   </>
                 )}
 
@@ -879,19 +917,19 @@ export default function PaketLanggananPage() {
             <tbody className="divide-y divide-gray-100 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
+                  <td colSpan={12} className="px-4 py-10 text-center text-gray-400">
                     Memuat...
                   </td>
                 </tr>
               ) : loadError ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-red-500">
+                  <td colSpan={12} className="px-4 py-10 text-center text-red-500">
                     {loadError}
                   </td>
                 </tr>
               ) : currentIds.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={12} className="px-4 py-14 text-center text-gray-400">
                     Tidak ada data.
                   </td>
                 </tr>
@@ -923,6 +961,40 @@ export default function PaketLanggananPage() {
 
                     <td className="px-4 py-3.5 align-top">
                       <StatusBadge active={p.active} />
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top font-bold text-gray-900">
+                      {allPlans.filter((plan) => plan.package?.id === p.id).length} Plan
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top font-bold text-purple-700">
+                      {(() => {
+                        const packagePlanIds = allPlans
+                          .filter((plan) => plan.package?.id === p.id)
+                          .map((plan) => plan.id);
+                        const count = allPromotions.filter((promo) =>
+                          promo.plan_ids?.some((pid) => packagePlanIds.includes(pid))
+                        ).length;
+                        return `${count} Promo`;
+                      })()}
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top max-w-xs">
+                      <div className="flex flex-wrap gap-1">
+                        {allPlans
+                          .filter((plan) => plan.package?.id === p.id)
+                          .map((plan) => (
+                            <span
+                              key={plan.id}
+                              className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-500/10"
+                            >
+                              {plan.tenure_months} Bln: {formatRupiah(plan.price)}
+                            </span>
+                          ))}
+                        {allPlans.filter((plan) => plan.package?.id === p.id).length === 0 && (
+                          <span className="text-gray-400 italic">-</span>
+                        )}
+                      </div>
                     </td>
 
                     <td className="px-4 py-3.5 align-top">
@@ -1095,7 +1167,8 @@ export default function PaketLanggananPage() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+          </div>
 
         {!isLoading && !loadError && (
           <Pagination
@@ -1110,6 +1183,7 @@ export default function PaketLanggananPage() {
             }}
           />
         )}
+      </div>
       </div>
         </>
       ) : (

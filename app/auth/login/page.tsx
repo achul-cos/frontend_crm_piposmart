@@ -50,7 +50,7 @@ export default function LoginPage() {
     }
   }, []);
 
-  const [email, setEmail] = useState("admin.001@demo.piposmart.id");
+  const [email, setEmail] = useState("admin@piposmart.id");
   const [password, setPassword] = useState("Password123!");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

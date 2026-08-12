@@ -283,6 +283,7 @@ function OutletDetailPageInner() {
             <FieldBox label="Kode Outlet" value={detail.code} />
             <FieldBox label="Nama Outlet" value={detail.name} />
             <FieldBox label="Telepon" value={formatPhoneDisplay(detail.phone)} />
+            <FieldBox label="Nama Penginput" value={detail.entered_by_name || "-"} />
             <FieldBox label="Tanggal Dibuat Outlet" value={formatDate(detail.created_at)} />
             <FieldBox label="Provinsi" value={detail.province} />
             <FieldBox label="Kota/Kabupaten" value={detail.city} />

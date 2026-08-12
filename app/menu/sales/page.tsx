@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Search, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import {
   RowActionButton,
   RowActionGroup,
@@ -18,6 +18,8 @@ import AnalyticsTab from './AnalyticsTab';
 import { authFetchJson } from '@/app/lib/api';
 import { formatPhoneDisplay } from '@/app/lib/phone';
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 
 const EMPTY_FORM: SalesFormState = {
   name: "",
@@ -155,6 +157,8 @@ export default function SalesPage() {
   const [saving, setSaving] = useState(false);
 
   const [search, setSearch] = useState("");
+  const [salesPage, setSalesPage] = useState(1);
+  const [selectedSalesIds, setSelectedSalesIds] = useState<number[]>([]);
   const [pageError, setPageError] = useState("");
   const [pageSuccess, setPageSuccess] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
@@ -165,6 +169,17 @@ export default function SalesPage() {
   const [formTemporaryPassword, setFormTemporaryPassword] = useState("");
   const [editingSales, setEditingSales] = useState<SalesItem | null>(null);
   const [selectedSales, setSelectedSales] = useState<SalesItem | null>(null);
+
+  useEffect(() => {
+    if (showModal || selectedSales) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showModal, selectedSales]);
 
   const totalSales = sales.length;
   const activeSales = sales.filter((item) => item.status === "ACTIVE").length;
@@ -188,6 +203,16 @@ export default function SalesPage() {
         .includes(keyword);
     });
   }, [sales, search]);
+
+  const salesPageSize = 20;
+  const salesTotalItems = filteredSales.length;
+  const salesTotalPages = Math.max(1, Math.ceil(salesTotalItems / salesPageSize));
+  const paginatedSales = useMemo(() => {
+    const start = (salesPage - 1) * salesPageSize;
+    return filteredSales.slice(start, start + salesPageSize);
+  }, [filteredSales, salesPage]);
+
+  useEffect(() => { setSalesPage(1); }, [search]);
 
   const loadSales = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -373,14 +398,6 @@ export default function SalesPage() {
               Manajemen akun Sales, status aktif, dan reset password.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-          >
-            + Buat Sales
-          </button>
         </div>
       </div>
 
@@ -425,33 +442,7 @@ export default function SalesPage() {
         />
       </QuickInfoCardGrid>
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-red-100 bg-[linear-gradient(135deg,#fff_0%,#fff7f5_100%)] p-5 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-[10px] font-black uppercase text-[#C92C1E]">
-            Mitra Sales & Lead Afiliasi
-          </span>
-          <h3 className="mt-2 text-lg font-black text-gray-900">
-            Kelola Mitra & Tambah Lead Afiliasi
-          </h3>
-          <p className="mt-1 text-xs font-medium text-gray-500">
-            Sales dapat mengatur mitra yang dinaungi, menugaskan PIC, dan mereferensikan Lead berafiliasi dengan Mitra.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/menu/mitra-sales"
-            className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white shadow-sm transition-all hover:bg-red-700"
-          >
-            Kelola Mitra Sales →
-          </Link>
-          <Link
-            href="/menu/lead?action=create"
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-black text-gray-700 shadow-xs transition-all hover:bg-gray-50 hover:text-[#C92C1E]"
-          >
-            + Tambah Lead Baru
-          </Link>
-        </div>
-      </div>
+
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
@@ -476,26 +467,66 @@ export default function SalesPage() {
 
       {activeTab === "data" ? (
         <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-          <div>
-            <p className="text-sm font-black text-gray-900">Daftar Sales</p>
-            <p className="mt-1 text-xs font-medium text-gray-400">
-              Klik baris sales untuk melihat detail.
-            </p>
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Daftar Sales</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Klik ikon detail pada kolom aksi untuk melihat informasi lengkap.
+              </p>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
+              >
+                + Buat Sales
+              </button>
+            </div>
           </div>
 
-          <input
-            value={search || ""}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Cari nama, email, nomor HP, atau status"
-            className="min-w-[260px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-          />
-        </div>
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={search || ""}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Cari nama, email, nomor HP, atau status..."
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                />
+              </div>
+              <ColumnVisibilityControl
+                tableId="sales-table"
+                storageKey="column-visibility:sales"
+                buttonLabel="Kolom"
+              />
+            </div>
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm text-gray-600">
+          <div className="relative w-full">
+            <div className="flex flex-col">
+              <div className="overflow-x-auto">
+                <table id="sales-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
+                <th className="w-12 px-4 py-4 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredSales.length > 0 && selectedSalesIds.length === filteredSales.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedSalesIds(paginatedSales.map(s => s.id));
+                      } else {
+                        setSelectedSalesIds([]);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                  />
+                </th>
                 <th className="px-4 py-4 font-bold">Sales</th>
                 <th className="px-4 py-4 font-bold">Email</th>
                 <th className="px-4 py-4 font-bold">Nomor HP</th>
@@ -507,51 +538,62 @@ export default function SalesPage() {
             <tbody className="divide-y divide-gray-100 bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-14 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-14 text-center text-gray-500">
                     Memuat data sales...
                   </td>
                 </tr>
               ) : filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-14 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-14 text-center text-gray-500">
                     Belum ada data sales.
                   </td>
                 </tr>
               ) : (
-                filteredSales.map((item) => (
+                paginatedSales.map((sale) => (
                   <tr
-                    key={`sales-${item.id}`}
-                    onClick={() => setSelectedSales(item)}
-                    className="cursor-pointer transition-colors hover:bg-red-50/40"
-                    title="Klik untuk lihat detail sales"
+                    key={sale.id}
+                    className={`transition-colors hover:bg-gray-50 ${selectedSalesIds.includes(sale.id) ? "bg-red-50/50" : ""}`}
                   >
-                    <td className="px-4 py-4">
-                      <p className="font-black text-gray-900">{item.name || "-"}</p>
-                      <p className="mt-1 text-xs text-gray-400">ID #{item.id}</p>
+                    <td className="w-12 px-4 py-4 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSalesIds.includes(sale.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedSalesIds(prev =>
+                            checked ? [...prev, sale.id] : prev.filter(id => id !== sale.id)
+                          );
+                        }}
+                        className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                      />
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <p className="font-black text-gray-900">{sale.name || "-"}</p>
+                      <p className="mt-1 text-xs text-gray-400">ID #{sale.id}</p>
                     </td>
 
                     <td className="px-4 py-4 font-bold text-gray-800">
-                      {item.email || "-"}
+                      {sale.email || "-"}
                     </td>
 
-                    <td className="px-4 py-4">{item.phone ? formatPhoneDisplay(item.phone) : "-"}</td>
+                    <td className="px-4 py-4">{sale.phone ? formatPhoneDisplay(sale.phone) : "-"}</td>
 
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black ${
-                          item.status === "ACTIVE"
+                          sale.status === "ACTIVE"
                             ? "bg-emerald-50 text-emerald-700"
                             : "bg-gray-100 text-gray-500"
                         }`}
                       >
                         <span
                           className={`h-2 w-2 rounded-full ${
-                            item.status === "ACTIVE"
+                            sale.status === "ACTIVE"
                               ? "bg-emerald-500"
                               : "bg-gray-400"
                           }`}
                         />
-                        {item.status === "ACTIVE" ? "AKTIF" : "NON AKTIF"}
+                        {sale.status === "ACTIVE" ? "AKTIF" : "NON AKTIF"}
                       </span>
                     </td>
 
@@ -560,31 +602,90 @@ export default function SalesPage() {
                       onClick={(event) => event.stopPropagation()}
                     >
                       <RowActionGroup>
+                        <RowActionButton
+                          icon={Eye}
+                          tone="view"
+                          title="Lihat Detail"
+                          onClick={() => setSelectedSales(sale)}
+                        />
+
                         <EditActionButton
                           title="Edit Sales"
-                          onClick={() => openEditModal(item)}
+                          onClick={() => openEditModal(sale)}
                         />
 
                         <ToggleActiveActionButton
-                          active={item.status === "ACTIVE"}
-                          onClick={() => void handleToggleStatus(item)}
+                          active={sale.status === "ACTIVE"}
+                          onClick={() => void handleToggleStatus(sale)}
                         />
 
                         <RowActionButton
                           icon={KeyRound}
-                          tone="edit"
+                          tone="password"
                           title="Reset Password"
-                          onClick={() => void handleResetPassword(item)}
+                          onClick={() => void handleResetPassword(sale)}
                         />
                       </RowActionGroup>
                     </td>
                   </tr>
                 ))
               )}
-            </tbody>
-          </table>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-gray-100 bg-[#f9fafb] px-6 py-4">
+              <span className="text-sm text-gray-500">
+                Menampilkan <span className="font-bold text-gray-900">{salesTotalItems === 0 ? 0 : (salesPage - 1) * salesPageSize + 1}</span> hingga{" "}
+                <span className="font-bold text-gray-900">{Math.min(salesPage * salesPageSize, salesTotalItems)}</span> dari{" "}
+                <span className="font-bold text-gray-900">{salesTotalItems}</span> entri
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSalesPage((p) => Math.max(1, p - 1))}
+                  disabled={salesPage === 1}
+                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Prev
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: salesTotalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === salesTotalPages || Math.abs(p - salesPage) <= 1)
+                    .map((p, i, arr) => (
+                      <div key={p} className="flex items-center">
+                        {i > 0 && p - arr[i - 1] > 1 && (
+                          <span className="px-2 text-gray-400">...</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSalesPage(p)}
+                          className={`h-9 min-w-[36px] rounded-xl border px-3 text-sm font-bold shadow-sm transition ${
+                            salesPage === p
+                              ? "border-[#C92C1E] bg-[#C92C1E] text-white"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </div>
+                    ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSalesPage((p) => Math.min(salesTotalPages, p + 1))}
+                  disabled={salesPage === salesTotalPages || salesTotalPages === 0}
+                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
       ) : (
         <AnalyticsTab />
       )}
@@ -602,11 +703,12 @@ export default function SalesPage() {
       />
 
       {selectedSales ? (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/70"
-          onClick={() => setSelectedSales(null)}
-        >
-          <div className="flex min-h-full items-center justify-center p-4 md:p-6">
+        <ScreenPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-slate-950/70 overflow-y-auto"
+            onClick={() => setSelectedSales(null)}
+          >
+            <div className="flex min-h-full items-center justify-center p-4 md:p-6">
             <div
               className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
               onClick={(event) => event.stopPropagation()}
@@ -668,6 +770,7 @@ export default function SalesPage() {
             </div>
           </div>
         </div>
+        </ScreenPortal>
       ) : null}
     </div>
   );

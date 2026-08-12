@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchCustomerInteractions,
   getSalesList,
+  getInteractionById,
   type InteractionListParams,
   type InteractionItem,
   type UserResponse,
@@ -14,12 +15,21 @@ export const interactKeys = {
   all: ["interact"] as const,
   list: (params: InteractionListParams) => [...interactKeys.all, "list", params] as const,
   salesList: () => [...interactKeys.all, "sales-list"] as const,
+  detail: (id: number) => [...interactKeys.all, "detail", id] as const,
 };
 
 export function useInteractionListQuery(params: InteractionListParams, enabled = true) {
   return useQuery<{ items: InteractionItem[]; pagination: ApiPagination }>({
     queryKey: interactKeys.list(params),
     queryFn: () => fetchCustomerInteractions(params),
+    enabled,
+  });
+}
+
+export function useInteractionDetailQuery(id: number, enabled = true) {
+  return useQuery<InteractionItem>({
+    queryKey: interactKeys.detail(id),
+    queryFn: () => getInteractionById(id),
     enabled,
   });
 }

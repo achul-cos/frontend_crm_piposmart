@@ -17,6 +17,9 @@ type ColumnVisibilityControlProps = {
 
 function readHeaderLabel(cell: Element, fallback: string) {
   const text = (cell.textContent || "").replace(/\s+/g, " ").trim();
+  if (!text && cell.querySelector("input[type='checkbox']")) {
+    return "Pilih Data";
+  }
   return text || fallback;
 }
 
@@ -27,7 +30,7 @@ function shouldHideByDefault(label: string) {
     return false;
   }
 
-  if (["payment", "wallet", "ledger"].includes(normalized)) {
+  if (["payment", "wallet", "ledger", "pilih data"].includes(normalized)) {
     return true;
   }
 
@@ -55,13 +58,14 @@ export default function ColumnVisibilityControl({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const table = document.getElementById(tableId);
-    if (!table) return;
+    let innerObserver: MutationObserver | null = null;
+    let outerObserver: MutationObserver | null = null;
+    let frame: number;
 
-    const updateColumns = () => {
-      const headers = Array.from(
-        table.querySelectorAll("thead tr:first-child th")
-      ).map((cell, index) => ({
+    const updateColumns = (table: HTMLElement) => {
+      const allCells = Array.from(table.querySelectorAll("thead tr:first-child th"));
+      
+      const headers = allCells.map((cell, index) => ({
         index: index + 1,
         label: readHeaderLabel(cell, `Kolom ${index + 1}`),
       }));
@@ -100,24 +104,39 @@ export default function ColumnVisibilityControl({
       });
     };
 
-    // Initial update
-    const frame = window.requestAnimationFrame(updateColumns);
+    const attachToTable = (table: HTMLElement) => {
+      frame = window.requestAnimationFrame(() => updateColumns(table));
 
-    // Watch for dynamic changes in the table header
-    const thead = table.querySelector("thead");
-    const observer = new MutationObserver(() => {
-      window.requestAnimationFrame(updateColumns);
-    });
+      const thead = table.querySelector("thead");
+      innerObserver = new MutationObserver(() => {
+        window.requestAnimationFrame(() => updateColumns(table));
+      });
 
-    if (thead) {
-      observer.observe(thead, { childList: true, subtree: true });
+      if (thead) {
+        innerObserver.observe(thead, { childList: true, subtree: true });
+      } else {
+        innerObserver.observe(table, { childList: true, subtree: true });
+      }
+    };
+
+    const table = document.getElementById(tableId);
+    if (table) {
+      attachToTable(table);
     } else {
-      observer.observe(table, { childList: true, subtree: true });
+      outerObserver = new MutationObserver(() => {
+        const t = document.getElementById(tableId);
+        if (t) {
+          outerObserver?.disconnect();
+          attachToTable(t);
+        }
+      });
+      outerObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     return () => {
       window.cancelAnimationFrame(frame);
-      observer.disconnect();
+      innerObserver?.disconnect();
+      outerObserver?.disconnect();
     };
   }, [tableId, storageKey]);
 
@@ -238,8 +257,8 @@ export default function ColumnVisibilityControl({
               }}
             >
               <div className="mb-3 border-b border-gray-100 pb-3 dark:border-slate-800">
-                <p className="text-sm font-black text-gray-900 dark:text-slate-50">Atur Kolom Tabel</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-300">{description}</p>
+                <p className="text-sm font-black text-[#111827]">Atur Kolom Tabel</p>
+                <p className="mt-1 text-xs text-[#6B7280]">{description}</p>
               </div>
 
               <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: "calc(min(70vh, 32rem) - 6.5rem)" }}>
@@ -264,7 +283,7 @@ export default function ColumnVisibilityControl({
                         className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       />
                       <div className="min-w-0">
-                        <p className="text-xs font-black text-gray-800 dark:text-slate-100">{column.label}</p>
+                        <p className="text-xs font-black text-[#1F2937]">{column.label}</p>
                       </div>
                     </label>
                   );

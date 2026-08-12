@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { Search } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { getProfile } from "@/app/lib/api";
@@ -27,6 +29,7 @@ export default function InteractPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [salesFilter, setSalesFilter] = useState("");
   const [scoreFilter, setScoreFilter] = useState("");
+  const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
@@ -204,8 +207,31 @@ export default function InteractPage() {
         <AnalyticsTab />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-            <div className="flex w-full flex-wrap items-center gap-3 lg:w-auto">
+          {/* Table Header */}
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Daftar Interaksi</h2>
+              <p className="mt-1 text-sm text-gray-500">Data seluruh aktivitas interaksi.</p>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <ReportExportButton
+                reportKey="activities"
+                filters={{
+                  date_from: dateFrom || undefined,
+                  date_to: dateTo || undefined,
+                  sales_id: !isSales && salesFilter ? salesFilter : undefined,
+                }}
+                label="Export Interaksi"
+                loadingLabel="Menyiapkan Export..."
+                successMessage="File interaksi sedang diunduh."
+                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-wrap items-center gap-3 w-full">
               <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 shadow-sm">
                 <span className="text-gray-400">Tanggal Interaksi:</span>
                 <input
@@ -279,18 +305,27 @@ export default function InteractPage() {
                 <option value="1">1 (Kemungkinan)</option>
                 <option value="0">0 (Tidak Potensial)</option>
               </select>
-              <ReportExportButton
-                reportKey="activities"
-                filters={{
-                  date_from: dateFrom || undefined,
-                  date_to: dateTo || undefined,
-                  sales_id: !isSales && salesFilter ? salesFilter : undefined,
-                }}
-                label="Export Interaksi"
-                loadingLabel="Menyiapkan Export..."
-                successMessage="File interaksi sedang diunduh."
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-              />
+            </div>
+          </div>
+          
+          {/* Search */}
+          <div className="border-b border-gray-100 px-4 py-3 bg-gray-50/50">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Cari interaksi..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                />
+              </div>
             </div>
           </div>
 
@@ -302,20 +337,21 @@ export default function InteractPage() {
                   <th className="px-4 py-4">Kustomer & PIC</th>
                   <th className="px-4 py-4 text-center">Tipe</th>
                   <th className="px-4 py-4 text-center">Skor & Remark</th>
-                  <th className="px-4 py-4">Catatan & Respon</th>
-                  <th className="px-4 py-4">Tanggal FU</th>
+                  <th className="px-4 py-4 font-bold">Catatan & Respon</th>
+                  <th className="px-4 py-4 font-bold">Tanggal FU</th>
+                  <th className="px-4 py-4 text-center font-bold">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400 italic">
+                    <td colSpan={7} className="p-8 text-center text-gray-400 italic">
                       Memuat data interaksi...
                     </td>
                   </tr>
                 ) : interactions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400 italic">
+                    <td colSpan={7} className="p-8 text-center text-gray-400 italic">
                       Tidak ada data interaksi yang sesuai dengan filter.
                     </td>
                   </tr>
@@ -385,6 +421,18 @@ export default function InteractPage() {
                       <td className="whitespace-nowrap px-4 py-4">
                         <div className="font-bold text-gray-900">{formatDate(row.follow_up_at || "")}</div>
                         <div className="mt-1 max-w-[150px] truncate text-xs text-gray-500">{row.follow_up_note || "-"}</div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <Link
+                          href={`/menu/interact/${row.id}`}
+                          className="inline-flex rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                          title="Detail"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </Link>
                       </td>
                     </AnimatedListItem>
                   ))

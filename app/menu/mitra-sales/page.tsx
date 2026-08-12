@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
-import { Eye, UserRoundCog } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Eye, UserRoundCog, Search } from "lucide-react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { formatPhoneDisplay } from "@/app/lib/phone";
 import {
@@ -9,8 +9,7 @@ import {
   RowActionGroup,
   ViewActionButton,
   EditActionButton,
-  DeleteActionButton,
-  RestoreActionButton,
+  ToggleActiveActionButton,
 } from "@/app/components/table/RowActionButton";
 import type { PartnerItem, PartnerTypeItem } from "@/app/lib/api";
 import {
@@ -44,6 +43,10 @@ const EMPTY_PARTNER_FORM: PartnerFormState = {
   name: "",
   phone: "",
   email: "",
+  province: "",
+  city: "",
+  district: "",
+  subDistrict: "",
   address: "",
   bankAccount: "",
   status: "ACTIVE",
@@ -114,6 +117,7 @@ export default function MitraSalesPage() {
 
   const { confirm, withLoading } = useFeedback();
   const [tableMode, setTableMode] = useState<TableMode>("PARTNER_TYPES");
+  const [mitraPage, setMitraPage] = useState(1);
 
   const [saving, setSaving] = useState(false);
 
@@ -124,6 +128,57 @@ export default function MitraSalesPage() {
   const [appliedSearch, setAppliedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [typeSearch, setTypeSearch] = useState("");
+  const [selectedPartnerTypeIds, setSelectedPartnerTypeIds] = useState<number[]>([]);
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
+  const hasMoved = useRef(false);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      hasMoved.current = false;
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleToggleSelectRow = useCallback((id: number) => {
+    setSelectedPartnerIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
+    setIsDragging(true);
+    hasMoved.current = false;
+    const mode = currentlySelected ? "deselect" : "select";
+    setDragMode(mode);
+
+    setSelectedPartnerIds((prev) => {
+      if (mode === "select" && !prev.includes(id)) return [...prev, id];
+      if (mode === "deselect" && prev.includes(id)) {
+        return prev.filter((selectedId) => selectedId !== id);
+      }
+      return prev;
+    });
+  };
+
+  const handleRowMouseEnter = (id: number) => {
+    if (!isDragging) return;
+
+    if (hasMoved.current) {
+      setSelectedPartnerIds((prev) => {
+        if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
+        if (dragMode === "deselect" && prev.includes(id)) {
+          return prev.filter((selectedId) => selectedId !== id);
+        }
+        return prev;
+      });
+    }
+    hasMoved.current = true;
+  };
+
   const [page, setPage] = useState(1);
 
   const [showPartnerModal, setShowPartnerModal] = useState(false);
@@ -182,6 +237,16 @@ export default function MitraSalesPage() {
     return tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
   }, [activePartners, inactivePartners, tableMode]);
 
+  useEffect(() => { setMitraPage(1); }, [appliedSearch, tableMode, typeFilter]);
+
+  const mitraPageSize = 20;
+  const mitraTotalItems = visiblePartners.length;
+  const mitraTotalPages = Math.max(1, Math.ceil(mitraTotalItems / mitraPageSize));
+  const paginatedMitra = useMemo(() => {
+    const start = (mitraPage - 1) * mitraPageSize;
+    return visiblePartners.slice(start, start + mitraPageSize);
+  }, [visiblePartners, mitraPage]);
+
   const filteredPartnerTypes = useMemo(() => {
     const keyword = typeSearch.trim().toLowerCase();
 
@@ -218,6 +283,10 @@ export default function MitraSalesPage() {
       name: partner.name || "",
       phone: partner.phone || "",
       email: partner.email || "",
+      province: partner.province || "",
+      city: partner.city || "",
+      district: partner.district || "",
+      subDistrict: partner.sub_district || "",
       address: partner.address || "",
       bankAccount: "",
       status: partner.status || "ACTIVE",
@@ -273,6 +342,10 @@ export default function MitraSalesPage() {
             name: partnerForm.name.trim(),
             phone: partnerForm.phone.trim() || undefined,
             email: partnerForm.email.trim() || undefined,
+            province: partnerForm.province.trim() || undefined,
+            city: partnerForm.city.trim() || undefined,
+            district: partnerForm.district.trim() || undefined,
+            sub_district: partnerForm.subDistrict.trim() || undefined,
             address: partnerForm.address.trim() || undefined,
             bank_account: partnerForm.bankAccount.trim() || undefined,
             status: partnerForm.status,
@@ -395,19 +468,10 @@ export default function MitraSalesPage() {
             </h1>
 
             <p className="mt-1 break-words text-sm text-gray-500">
-              Kelola mitra milik Sales, lihat jenis mitra, dan pantau analitik
+              Kelola mitra lihat jenis mitra, dan pantau analitik
               performa mitra.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={openCreatePartnerModal}
-            disabled={partnerTypes.length === 0 || loadingMaster}
-            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-          >
-            + Tambah Mitra
-          </button>
         </div>
       </div>
 
@@ -491,28 +555,54 @@ export default function MitraSalesPage() {
         <AnalyticsTab />
       ) : tableMode === "PARTNER_TYPES" ? (
         <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-col gap-4 border-b border-gray-100 bg-gray-50/50 p-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
             <div>
-              <p className="text-sm font-black text-gray-900">
+              <h2 className="text-xl font-bold text-gray-900">
                 Referensi Jenis Mitra
-              </p>
-              <p className="mt-1 text-xs font-medium text-gray-400">
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
                 Jenis mitra tampil sebagai referensi untuk Sales.
               </p>
             </div>
-
-            <input
-              value={typeSearch}
-              onChange={(event) => setTypeSearch(event.target.value)}
-              placeholder="Cari jenis mitra"
-              className="w-full rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100 md:max-w-sm"
-            />
           </div>
 
-          <div className="overflow-x-auto p-0">
-            <table className="w-full min-w-[800px] text-left text-sm text-gray-600">
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={typeSearch}
+                  onChange={(event) => setTypeSearch(event.target.value)}
+                  placeholder="Cari jenis mitra..."
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="relative w-full">
+            <div className="flex flex-col">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredPartnerTypes.length > 0 && selectedPartnerTypeIds.length === filteredPartnerTypes.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedPartnerTypeIds(filteredPartnerTypes.map(pt => pt.id));
+                        } else {
+                          setSelectedPartnerTypeIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Kode</th>
                   <th className="px-4 py-4 font-bold">Jenis Mitra</th>
                   <th className="px-4 py-4 font-bold">Komisi Dasar</th>
@@ -523,20 +613,33 @@ export default function MitraSalesPage() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loadingMaster ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Memuat jenis mitra...
                     </td>
                   </tr>
                 ) : filteredPartnerTypes.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Jenis mitra tidak ditemukan.
                     </td>
                   </tr>
                 ) : (
                   filteredPartnerTypes.map((item) => (
-                    <tr key={item.id} className="transition-colors hover:bg-gray-50">
-                      <td className="px-4 py-4 align-top font-bold text-gray-900">
+                    <tr key={item.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerTypeIds.includes(item.id) ? "bg-red-50/50" : ""}`}>
+                      <td className="w-12 px-4 py-4 text-center align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedPartnerTypeIds.includes(item.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedPartnerTypeIds(prev =>
+                              checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
+                            );
+                          }}
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        />
+                      </td>
+                      <td className="px-4 py-4 align-top font-medium text-gray-900">
                         {item.code}
                       </td>
                       <td className="px-4 py-4 align-top">
@@ -564,61 +667,132 @@ export default function MitraSalesPage() {
                     </tr>
                   ))
                 )}
-              </tbody>
-            </table>
+                  </tbody>
+                </table>
+          {mitraTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+              <div className="text-xs font-medium text-gray-500">
+                Menampilkan <span className="font-bold text-gray-900">{(mitraPage - 1) * mitraPageSize + 1}</span> hingga{" "}
+                <span className="font-bold text-gray-900">{Math.min(mitraPage * mitraPageSize, mitraTotalItems)}</span> dari{" "}
+                <span className="font-bold text-gray-900">{mitraTotalItems}</span> data
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setMitraPage((p) => Math.max(1, p - 1))}
+                  disabled={mitraPage === 1}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <span className="text-xs font-bold text-gray-700">Halaman {mitraPage} / {mitraTotalPages}</span>
+                <button
+                  onClick={() => setMitraPage((p) => Math.min(mitraTotalPages, p + 1))}
+                  disabled={mitraPage === mitraTotalPages}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            </div>
+          )}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-col gap-4 border-b border-gray-100 bg-gray-50/50 p-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <p className="text-sm font-black text-gray-900">
-                {tableMode === "ACTIVE_PARTNERS"
-                  ? "Daftar Mitra Aktif"
-                  : "Daftar Mitra Non Aktif"}
-              </p>
-              <p className="mt-1 text-xs font-medium text-gray-400">
-                Data mitra yang dikelola dari halaman Mitra Sales.
-              </p>
+          <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {tableMode === "ACTIVE_PARTNERS"
+                    ? "Daftar Mitra Aktif"
+                    : "Daftar Mitra Non Aktif"}
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Data mitra yang dikelola dari halaman Mitra Sales.
+                </p>
+              </div>
+              <div className="flex w-full flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={openCreatePartnerModal}
+                  disabled={partnerTypes.length === 0 || loadingMaster}
+                  className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  + Tambah Mitra
+                </button>
+              </div>
             </div>
 
-            <form
-              onSubmit={handleSearch}
-              className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]"
-            >
-              <input
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder="Cari nama atau code mitra"
-                className="rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-              />
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-wrap items-start gap-4">
+                <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                  <span className="text-xs font-semibold text-black">Jenis Mitra</span>
+                  <select
+                    value={typeFilter}
+                    onChange={(event) => setTypeFilter(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                  >
+                    <option value="ALL">Semua Jenis</option>
+                    {partnerTypes.map((type) => (
+                      <option key={type.id} value={type.code}>
+                        {type.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
 
-              <select
-                value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value)}
-                className="rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-              >
-                <option value="ALL">Semua Type</option>
-                {partnerTypes.map((item) => (
-                  <option key={item.id} value={item.code}>
-                    {item.name || item.code}
-                  </option>
-                ))}
-              </select>
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <form onSubmit={handleSearch} className="relative flex-1 flex gap-3">
+                  <div className="relative flex-1">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                      <Search className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchDraft}
+                      onChange={(event) => setSearchDraft(event.target.value)}
+                      placeholder="Cari nama, PIC, atau email..."
+                      className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 shrink-0"
+                  >
+                    Cari
+                  </button>
+                </form>
+              </div>
+            </div>
 
-              <button
-                type="submit"
-                className="rounded-lg bg-[#C92C1E] px-4 py-2 text-sm font-black text-white transition-colors hover:bg-red-700"
-              >
-                Cari
-              </button>
-            </form>
-          </div>
-
-          <div className="overflow-x-auto p-0">
-            <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+          <div className="relative w-full">
+            <div className="flex flex-col">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[920px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length > 0 &&
+                        selectedPartnerIds.length === (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length
+                      }
+                      onChange={(e) => {
+                        const targetList = tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
+                        if (e.target.checked) {
+                          setSelectedPartnerIds(targetList.map(p => p.id));
+                        } else {
+                          setSelectedPartnerIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Mitra</th>
                   <th className="px-4 py-4 font-bold">PIC</th>
                   <th className="px-4 py-4 font-bold">Jenis Mitra</th>
@@ -632,19 +806,51 @@ export default function MitraSalesPage() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
                       Memuat data mitra...
                     </td>
                   </tr>
-                ) : visiblePartners.length === 0 ? (
+                ) : paginatedMitra.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
                       Data mitra tidak ditemukan.
                     </td>
                   </tr>
                 ) : (
-                  visiblePartners.map((partner) => (
-                    <tr key={partner.id} className="transition-colors hover:bg-gray-50">
+                  paginatedMitra.map((partner) => {
+                    const isSelected = selectedPartnerIds.includes(partner.id);
+                    return (
+                      <tr
+                        key={partner.id}
+                        className={`transition-colors cursor-pointer select-none ${
+                          isSelected
+                            ? "bg-red-50/50 hover:bg-red-50/70"
+                            : "hover:bg-gray-50"
+                        }`}
+                        onMouseDown={(e) => {
+                          if ((e.target as HTMLElement).closest('button, a')) return;
+                          if (e.button !== 0) return;
+                          handleRowMouseDown(partner.id, isSelected);
+                        }}
+                        onMouseEnter={() => {
+                          handleRowMouseEnter(partner.id);
+                        }}
+                      >
+                        <td
+                          className="w-12 px-4 py-4 text-center align-top cursor-pointer"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelectRow(partner.id);
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            readOnly
+                            className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
+                          />
+                        </td>
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-1">
                           <p className="font-bold text-gray-900">{partner.name || "-"}</p>
@@ -670,7 +876,7 @@ export default function MitraSalesPage() {
                       </td>
                       <td className="px-4 py-4 align-top max-w-[200px]">
                         <p className="truncate whitespace-normal text-xs leading-relaxed text-gray-600">
-                          {partner.address || "-"}
+                          {[partner.address, partner.sub_district, partner.district, partner.city, partner.province].filter(Boolean).join(", ") || "-"}
                         </p>
                       </td>
                       <td className="px-4 py-4 align-top">
@@ -692,14 +898,15 @@ export default function MitraSalesPage() {
                               <EditActionButton
                                 onClick={() => openEditPartnerModal(partner)}
                               />
-                              <DeleteActionButton
-                                title="Nonaktif"
+                              <ToggleActiveActionButton
+                                active={true}
                                 onClick={() => void handleDeactivatePartner(partner)}
                                 disabled={saving}
                               />
                             </>
                           ) : (
-                            <RestoreActionButton
+                            <ToggleActiveActionButton
+                              active={false}
                               onClick={() => void handleRestorePartner(partner)}
                               disabled={saving}
                             />
@@ -707,35 +914,41 @@ export default function MitraSalesPage() {
                         </RowActionGroup>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
 
-          <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
-            <span className="text-xs font-bold text-gray-500">
-              Halaman {page}
-            </span>
-
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
-              >
-                Sebelumnya
-              </button>
-
-              <button
-                disabled={partners.length < PAGE_SIZE}
-                onClick={() => setPage((prev) => prev + 1)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
-              >
-                Selanjutnya
-              </button>
+          {mitraTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+              <div className="text-xs font-medium text-gray-500">
+                Menampilkan <span className="font-bold text-gray-900">{(mitraPage - 1) * mitraPageSize + 1}</span> hingga{" "}
+                <span className="font-bold text-gray-900">{Math.min(mitraPage * mitraPageSize, mitraTotalItems)}</span> dari{" "}
+                <span className="font-bold text-gray-900">{mitraTotalItems}</span> data
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setMitraPage((p) => Math.max(1, p - 1))}
+                  disabled={mitraPage === 1}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <span className="text-xs font-bold text-gray-700">Halaman {mitraPage} / {mitraTotalPages}</span>
+                <button
+                  onClick={() => setMitraPage((p) => Math.min(mitraTotalPages, p + 1))}
+                  disabled={mitraPage === mitraTotalPages}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Selanjutnya
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 

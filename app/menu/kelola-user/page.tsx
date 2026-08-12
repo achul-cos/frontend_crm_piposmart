@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, Search, Plus, RefreshCw, MoreVertical } from 'lucide-react';
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import { authFetchJson } from '@/app/lib/api';
 import {
   RowActionButton,
@@ -465,6 +466,8 @@ export default function KelolaUserPage() {
   const [resettingId, setResettingId] = useState<number | null>(null);
 
   const [search, setSearch] = useState("");
+  const [userPage, setUserPage] = useState(1);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const [pageError, setPageError] = useState("");
@@ -503,6 +506,16 @@ export default function KelolaUserPage() {
           .includes(keyword);
       });
   }, [activeTab, search, users]);
+
+  useEffect(() => { setUserPage(1); }, [search, activeTab]);
+
+  const userPageSize = 20;
+  const userTotalItems = filteredUsers.length;
+  const userTotalPages = Math.max(1, Math.ceil(userTotalItems / userPageSize));
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPageSize;
+    return filteredUsers.slice(start, start + userPageSize);
+  }, [filteredUsers, userPage]);
 
   const totalUsers = users.length;
   const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
@@ -853,13 +866,6 @@ export default function KelolaUserPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => openCreateModal(activeTab)}
-            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-          >
-            + Buat Akun
-          </button>
         </div>
       </div>
 
@@ -944,33 +950,73 @@ export default function KelolaUserPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
           <div>
-            <p className="text-sm font-black text-gray-900">
+            <h2 className="text-xl font-bold text-gray-900">
               Daftar{" "}
               {activeTab === "ADMIN"
                 ? "Admin"
                 : activeTab === "SUPERVISOR"
                   ? "Supervisor"
                   : "Sales"}
-            </p>
-            <p className="mt-1 text-xs font-medium text-gray-400">
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
               Kelola akun berdasarkan role yang dipilih.
             </p>
           </div>
-
-          <input
-            value={search || ""}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Cari nama, email, role, atau status"
-            className="min-w-[240px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-          />
+          <div className="flex w-full flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => openCreateModal(activeTab)}
+              className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
+            >
+              + Buat Akun
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={search || ""}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Cari nama, email, role, atau status..."
+                className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+              />
+            </div>
+            <ColumnVisibilityControl
+              tableId="users-table"
+              storageKey="column-visibility:kelola-user"
+              buttonLabel="Kolom"
+            />
+          </div>
+        </div>
+
+        <div className="relative w-full">
+          <div className="flex flex-col">
+            <div className="overflow-x-auto">
+              <table id="users-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
+                <th className="w-12 px-4 py-4 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredUsers.length > 0 && selectedUserIds.length === filteredUsers.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedUserIds(paginatedUsers.map(u => u.id));
+                      } else {
+                        setSelectedUserIds([]);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                  />
+                </th>
                 <th className="px-4 py-4 font-bold">User</th>
                 <th className="px-4 py-4 font-bold">Email Login</th>
                 <th className="px-4 py-4 font-bold">Role</th>
@@ -986,7 +1032,7 @@ export default function KelolaUserPage() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={activeTab === "SALES" ? 6 : 5}
+                    colSpan={activeTab === "SALES" ? 7 : 6}
                     className="px-6 py-14 text-center text-gray-500"
                   >
                     Memuat data user...
@@ -995,21 +1041,33 @@ export default function KelolaUserPage() {
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={activeTab === "SALES" ? 6 : 5}
+                    colSpan={activeTab === "SALES" ? 7 : 6}
                     className="px-6 py-14 text-center text-gray-500"
                   >
-                    Belum ada data {activeTab.toLowerCase()}.
+                    Data user tidak ditemukan.
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
-                  <tr
-                    key={`${user.role}-${user.id}`}
+                paginatedUsers.map((user) => (
+                  <tr 
+                    key={user.id} 
+                    className={`transition-colors hover:bg-gray-50 ${selectedUserIds.includes(user.id) ? "bg-red-50/50" : ""}`}
                     onClick={() => setSelectedUser(user)}
-                    className="cursor-pointer transition-colors hover:bg-red-50/40"
-                    title="Klik untuk lihat detail user"
                   >
-                    <td className="px-4 py-4">
+                    <td className="w-12 px-4 py-4 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(user.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedUserIds(prev =>
+                            checked ? [...prev, user.id] : prev.filter(id => id !== user.id)
+                          );
+                        }}
+                        className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                      />
+                    </td>
+                    <td className="px-4 py-4 align-top">
                       <p className="font-black text-gray-900">
                         {user.name || "-"}
                       </p>
@@ -1065,7 +1123,7 @@ export default function KelolaUserPage() {
 
                         <RowActionButton
                           icon={KeyRound}
-                          tone="edit"
+                          tone="password"
                           title={resettingId === user.id ? "Reset..." : "Reset Password"}
                           disabled={resettingId === user.id}
                           onClick={() => void handleResetPassword(user)}
@@ -1075,8 +1133,36 @@ export default function KelolaUserPage() {
                   </tr>
                 ))
               )}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+          {userTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+              <div className="text-xs font-medium text-gray-500">
+                Menampilkan <span className="font-bold text-gray-900">{(userPage - 1) * userPageSize + 1}</span> hingga{" "}
+                <span className="font-bold text-gray-900">{Math.min(userPage * userPageSize, userTotalItems)}</span> dari{" "}
+                <span className="font-bold text-gray-900">{userTotalItems}</span> data
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                  disabled={userPage === 1}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <span className="text-xs font-bold text-gray-700">Halaman {userPage} / {userTotalPages}</span>
+                <button
+                  onClick={() => setUserPage((p) => Math.min(userTotalPages, p + 1))}
+                  disabled={userPage === userTotalPages}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            </div>
+          )}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -14,8 +14,8 @@ import { formatPhoneDisplay } from "@/app/lib/phone";
 import {
   ViewActionButton,
   EditActionButton,
+  ToggleActiveActionButton,
   DeleteActionButton,
-  RestoreActionButton,
   RowActionGroup,
 } from "@/app/components/table/RowActionButton";
 import {
@@ -127,6 +127,10 @@ type PartnerFormState = {
   phone: string;
   email: string;
   address: string;
+  province: string;
+  city: string;
+  district: string;
+  sub_district: string;
   bankAccount: string;
   status: "ACTIVE" | "INACTIVE";
 };
@@ -176,6 +180,10 @@ const EMPTY_PARTNER_FORM: PartnerFormState = {
   phone: "",
   email: "",
   address: "",
+  province: "",
+  city: "",
+  district: "",
+  sub_district: "",
   bankAccount: "",
   status: "ACTIVE",
 };
@@ -416,6 +424,8 @@ export default function KelolaanMitraPage() {
   const [filterTypeCode, setFilterTypeCode] = useState("");
   const [filterTypeName, setFilterTypeName] = useState("");
   const [typeSearch, setTypeSearch] = useState("");
+  const [selectedPartnerTypeIds, setSelectedPartnerTypeIds] = useState<number[]>([]);
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
   const [page, setPage] = useState(1);
 
   const [showPartnerModal, setShowPartnerModal] = useState(false);
@@ -977,6 +987,10 @@ export default function KelolaanMitraPage() {
       phone: partner.phone || "",
       email: partner.email || "",
       address: partner.address || "",
+      province: partner.province || "",
+      city: partner.city || "",
+      district: partner.district || "",
+      sub_district: partner.sub_district || "",
       bankAccount: "",
       status: partner.status,
     });
@@ -1129,6 +1143,10 @@ export default function KelolaanMitraPage() {
           phone: partnerForm.phone.trim() || undefined,
           email: partnerForm.email.trim() || undefined,
           address: partnerForm.address.trim() || undefined,
+          province: partnerForm.province.trim() || undefined,
+          city: partnerForm.city.trim() || undefined,
+          district: partnerForm.district.trim() || undefined,
+          sub_district: partnerForm.sub_district.trim() || undefined,
           bank_account: partnerForm.bankAccount.trim() || undefined,
           status: partnerForm.status,
         });
@@ -1699,6 +1717,20 @@ export default function KelolaanMitraPage() {
             <table id="partner-types-table" data-column-visibility-manual="true" className="w-full min-w-[820px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredPartnerTypes.length > 0 && selectedPartnerTypeIds.length === filteredPartnerTypes.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedPartnerTypeIds(filteredPartnerTypes.map(pt => pt.id));
+                        } else {
+                          setSelectedPartnerTypeIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Code</th>
                   <th className="px-4 py-4 font-bold">Jenis Mitra</th>
                   <th className="px-4 py-4 font-bold">Komisi Dasar</th>
@@ -1708,15 +1740,34 @@ export default function KelolaanMitraPage() {
               </thead>
 
               <tbody className="divide-y divide-gray-100 bg-white">
-                {filteredPartnerTypes.length === 0 ? (
+                {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                      Memuat data jenis mitra...
+                    </td>
+                  </tr>
+                ) : filteredPartnerTypes.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Jenis mitra tidak ditemukan.
                     </td>
                   </tr>
                 ) : (
                   filteredPartnerTypes.map((item) => (
-                    <tr key={item.id} className="transition-colors hover:bg-gray-50">
+                    <tr key={item.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerTypeIds.includes(item.id) ? "bg-red-50/50" : ""}`}>
+                      <td className="w-12 px-4 py-4 text-center align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedPartnerTypeIds.includes(item.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedPartnerTypeIds(prev =>
+                              checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
+                            );
+                          }}
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        />
+                      </td>
                       <td className="px-4 py-4 align-top font-medium text-gray-900">
                         {item.code}
                       </td>
@@ -1763,6 +1814,24 @@ export default function KelolaanMitraPage() {
             <table id="partners-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length > 0 &&
+                        selectedPartnerIds.length === (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length
+                      }
+                      onChange={(e) => {
+                        const targetList = tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
+                        if (e.target.checked) {
+                          setSelectedPartnerIds(targetList.map(p => p.id));
+                        } else {
+                          setSelectedPartnerIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Mitra</th>
                   <th className="px-4 py-4 font-bold">Type</th>
                   <th className="px-4 py-4 font-bold">Kontak</th>
@@ -1775,7 +1844,7 @@ export default function KelolaanMitraPage() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
                       Memuat data mitra...
                     </td>
                   </tr>
@@ -1784,7 +1853,7 @@ export default function KelolaanMitraPage() {
                     : inactivePartners
                   ).length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
                       Data mitra tidak ditemukan.
                     </td>
                   </tr>
@@ -1793,7 +1862,20 @@ export default function KelolaanMitraPage() {
                     ? activePartners
                     : inactivePartners
                   ).map((partner) => (
-                    <tr key={partner.id} className="transition-colors hover:bg-gray-50">
+                    <tr key={partner.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerIds.includes(partner.id) ? "bg-red-50/50" : ""}`}>
+                      <td className="w-12 px-4 py-4 text-center align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedPartnerIds.includes(partner.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedPartnerIds(prev =>
+                              checked ? [...prev, partner.id] : prev.filter(id => id !== partner.id)
+                            );
+                          }}
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        />
+                      </td>
                       <td className="px-4 py-4 align-top">
                         <p className="font-medium text-gray-900">{partner.name}</p>
                         <p className="mt-1 text-xs text-gray-400">{partner.code}</p>
@@ -1840,19 +1922,19 @@ export default function KelolaanMitraPage() {
                                 title="Edit Mitra"
                               />
 
-                              <DeleteActionButton
+                              <ToggleActiveActionButton
+                                active={true}
                                 onClick={() => void handleDeactivatePartner(partner)}
                                 disabled={saving}
-                                title="Nonaktifkan Mitra"
                               />
                             </>
                           ) : null}
 
                           {isAdmin && tableMode === "INACTIVE_PARTNERS" ? (
-                            <RestoreActionButton
+                            <ToggleActiveActionButton
+                              active={false}
                               onClick={() => void handleRestorePartner(partner)}
                               disabled={saving}
-                              title="Pulihkan Mitra"
                             />
                           ) : null}
                         </RowActionGroup>
@@ -2094,6 +2176,61 @@ export default function KelolaanMitraPage() {
                       }))
                     }
                     placeholder="Nomor rekening"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Provinsi
+                  </span>
+                  <input
+                    value={partnerForm.province}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        province: event.target.value,
+                      }))
+                    }
+                    placeholder="Provinsi"
+                    className={inputClass}
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Kabupaten/Kota
+                  </span>
+                  <input
+                    value={partnerForm.city}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                    placeholder="Kabupaten atau Kota"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Kecamatan
+                  </span>
+                  <input
+                    value={partnerForm.district}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        district: event.target.value,
+                      }))
+                    }
+                    placeholder="Kecamatan"
                     className={inputClass}
                   />
                 </label>

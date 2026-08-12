@@ -11,6 +11,8 @@ import { AnimatedListItem } from "@/app/components/motion/primitives";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import { useTrainingListQuery, useTrainingSalesListQuery } from "@/app/lib/queries/training";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import { Search } from "lucide-react";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
   ssr: false,
@@ -32,6 +34,7 @@ export default function TrainingPage() {
   const [salesFilter, setSalesFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const limit = 20;
   const isSales = currentRole.toUpperCase() === "SALES";
@@ -60,8 +63,9 @@ export default function TrainingPage() {
       sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
       scheduled_from: dateFrom || undefined,
       scheduled_to: dateTo || undefined,
+      q: search || undefined,
     }),
-    [page, statusFilter, typeFilter, salesFilter, dateFrom, dateTo, isSales]
+    [page, statusFilter, typeFilter, salesFilter, dateFrom, dateTo, search, isSales]
   );
 
   const { data: trainingData, isLoading } = useTrainingListQuery(trainingListParams);
@@ -272,8 +276,29 @@ export default function TrainingPage() {
             </div>
           </div>
 
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Cari training..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                />
+              </div>
+              <ColumnVisibilityControl tableId="training-table" storageKey="column-visibility:training-table" buttonLabel="Kolom" />
+            </div>
+          </div>
+
           <div className="w-full max-w-full overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+            <table id="training-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4">Jadwal Training</th>
