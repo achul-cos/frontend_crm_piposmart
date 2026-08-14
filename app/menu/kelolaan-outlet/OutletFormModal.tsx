@@ -125,40 +125,40 @@ export default function OutletFormModal({
   return (
     <ScreenPortal>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 md:p-6">
-        <div className="app-modal-panel flex max-w-full w-full rounded-[32px] shadow-2xl transition-all md:w-[640px]">
-          <div className="app-modal-header px-6 py-5">
-            <h3 className="text-xl font-black text-slate-950">
+        <div className="app-modal-panel flex flex-col max-w-lg w-full rounded-2xl shadow-2xl transition-all">
+          <div className="app-modal-header px-5 py-4">
+            <h3 className="text-lg font-black text-slate-950">
               {mode === "edit" ? "Edit Data Outlet" : "Tambah Outlet Baru"}
             </h3>
-            <p className="mt-1 text-xs font-medium text-slate-500">
+            <p className="mt-1 text-[11px] font-medium text-slate-500">
               {mode === "edit"
                 ? "Perbarui informasi detail lokasi usaha outlet."
                 : "Pendaftaran outlet baru. Kode outlet opsional dan akan terisi otomatis jika dikosongkan."}
             </p>
           </div>
 
-          <div className="app-modal-body flex-1 space-y-4 p-6">
+          <div className="app-modal-body flex-1 space-y-3 p-5">
             {error && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
                 {error}
               </div>
             )}
 
-            <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
                 Data Outlet
               </p>
 
-              <div className="mt-4 space-y-4">
-                <label className="block space-y-2">
+              <div className="mt-3 space-y-3">
+                <label className="block space-y-1.5">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                     Owner <span className="text-[#C92C1E]">*</span>
                   </span>
                   <OwnerSearchPicker value={owner} onChange={setOwner} disabled={mode === "edit"} />
                 </label>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="space-y-2">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="space-y-1.5">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Nama Outlet <span className="text-[#C92C1E]">*</span>
                     </span>
@@ -172,7 +172,7 @@ export default function OutletFormModal({
                       disabled={isSaving}
                     />
                   </label>
-                  <label className="space-y-2">
+                  <label className="space-y-1.5">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Kode Outlet (Opsional)
                     </span>
@@ -187,8 +187,8 @@ export default function OutletFormModal({
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="space-y-2 md:col-span-2">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="space-y-1.5 md:col-span-2">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Nomor Telepon Outlet
                     </span>
@@ -202,7 +202,7 @@ export default function OutletFormModal({
                     />
                   </label>
 
-                  <label className="space-y-2">
+                  <label className="space-y-1.5">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Provinsi Outlet
                     </span>
@@ -227,7 +227,7 @@ export default function OutletFormModal({
                     </select>
                   </label>
 
-                  <label className="space-y-2">
+                  <label className="space-y-1.5">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Kota/Kabupaten Outlet
                     </span>
@@ -251,7 +251,7 @@ export default function OutletFormModal({
                     </select>
                   </label>
 
-                  <label className="space-y-2">
+                  <label className="space-y-1.5">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Kecamatan Outlet
                     </span>
@@ -274,7 +274,7 @@ export default function OutletFormModal({
                     </select>
                   </label>
 
-                  <label className="space-y-2">
+                  <label className="space-y-1.5">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Kelurahan/Desa Outlet
                     </span>
@@ -294,7 +294,7 @@ export default function OutletFormModal({
                   </label>
                 </div>
 
-                <label className="block space-y-2">
+                <label className="block space-y-1.5">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                     Alamat Lengkap Outlet
                   </span>
@@ -311,12 +311,12 @@ export default function OutletFormModal({
             </div>
           </div>
 
-          <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+          <div className="flex-shrink-0 flex justify-end gap-2.5 border-t border-slate-100 bg-slate-50/80 px-5 py-3">
             <button
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-50"
             >
               Batal
             </button>
@@ -324,7 +324,7 @@ export default function OutletFormModal({
               type="button"
               onClick={() => void handleSubmit()}
               disabled={isSaving}
-              className="rounded-2xl bg-[#C92C1E] px-6 py-3 text-xs font-black text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+              className="rounded-xl bg-[#C92C1E] px-5 py-2.5 text-xs font-black text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               {isSaving ? "Menyimpan..." : mode === "edit" ? "Simpan Perubahan" : "Simpan Outlet"}
             </button>

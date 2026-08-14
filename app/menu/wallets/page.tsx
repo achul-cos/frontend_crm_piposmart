@@ -13,8 +13,10 @@ import {
   authFetchJson,
   type TransferItem,
   type TransferMatchSuggestion,
+  type BackendOwner,
 } from "@/app/lib/api";
 import { useTopUpDataQuery, useTransferDataQuery } from "@/app/lib/queries/wallets";
+import OwnerSearchPicker from "@/app/components/OwnerSearchPicker";
 
 import { RowActionGroup, ViewActionButton } from "@/app/components/table/RowActionButton";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
@@ -378,6 +380,34 @@ export default function WalletsPage() {
   const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
+  const [isDraggingPayments, setIsDraggingPayments] = useState(false);
+  const [dragActionPayments, setDragActionPayments] = useState(false);
+
+  useEffect(() => {
+    const handleMouseUp = () => setIsDraggingPayments(false);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleRowMouseDown = (id: number) => {
+    const willSelect = !selectedPaymentIds.includes(id);
+    setIsDraggingPayments(true);
+    setDragActionPayments(willSelect);
+    setSelectedPaymentIds((prev) =>
+      willSelect && !prev.includes(id) ? [...prev, id] : !willSelect ? prev.filter((pid) => pid !== id) : prev
+    );
+  };
+
+  const handleRowMouseEnter = (id: number) => {
+    if (isDraggingPayments) {
+      setSelectedPaymentIds((prev) => {
+        if (dragActionPayments && !prev.includes(id)) return [...prev, id];
+        if (!dragActionPayments && prev.includes(id)) return prev.filter((pid) => pid !== id);
+        return prev;
+      });
+    }
+  };
+
   const topUpFilters = useMemo(
     () => ({ debouncedSearch, channelFilter, paidFrom, paidTo }),
     [debouncedSearch, channelFilter, paidFrom, paidTo],
@@ -431,6 +461,67 @@ export default function WalletsPage() {
     proofUrl: "",
     note: "",
   });
+  const [selectedOwner, setSelectedOwner] = useState<BackendOwner | null>(null);
+  const [selectedTransferOwner, setSelectedTransferOwner] = useState<BackendOwner | null>(null);
+  const [selectedTransferFilterOwner, setSelectedTransferFilterOwner] = useState<BackendOwner | null>(null);
+
+  useEffect(() => {
+    if (transferOwnerId) {
+      const found = owners.find((o) => o.id === Number(transferOwnerId));
+      if (found && found.id) {
+        setSelectedTransferFilterOwner({
+          id: found.id,
+          code: found.code || "",
+          name: found.name || "",
+          phone: "",
+          brand_name: "",
+          status: "ACTIVE",
+        });
+        return;
+      }
+    }
+    setSelectedTransferFilterOwner(null);
+  }, [transferOwnerId, owners]);
+
+  useEffect(() => {
+    if (isWalletActionOpen) {
+      if (walletActionForm.ownerId) {
+        const found = owners.find((o) => o.id === Number(walletActionForm.ownerId));
+        if (found && found.id) {
+          setSelectedOwner({
+            id: found.id,
+            code: found.code || found.kode_owner || "",
+            name: found.name || found.nama_owner || "",
+            phone: "",
+            brand_name: "",
+            status: "ACTIVE",
+          });
+          return;
+        }
+      }
+      setSelectedOwner(null);
+    }
+  }, [isWalletActionOpen, walletActionForm.ownerId, owners]);
+
+  useEffect(() => {
+    if (isCreateTransferOpen) {
+      if (createTransferForm.ownerId) {
+        const found = owners.find((o) => o.id === Number(createTransferForm.ownerId));
+        if (found && found.id) {
+          setSelectedTransferOwner({
+            id: found.id,
+            code: found.code || found.kode_owner || "",
+            name: found.name || found.nama_owner || "",
+            phone: "",
+            brand_name: "",
+            status: "ACTIVE",
+          });
+          return;
+        }
+      }
+      setSelectedTransferOwner(null);
+    }
+  }, [isCreateTransferOpen, createTransferForm.ownerId, owners]);
   const [creatingTransfer, setCreatingTransfer] = useState(false);
   const [createTransferError, setCreateTransferError] = useState("");
   const [matchActionLoadingId, setMatchActionLoadingId] = useState<number | null>(null);
@@ -483,7 +574,7 @@ export default function WalletsPage() {
   const [transferActionError, setTransferError] = useState("");
   const transferError = transferActionError || (transferData.errorMessage ?? "");
   const loadTransferData = () => void transferQuery.refetch();
-  const transferPageSize = 10;
+  const [transferPageSize, setTransferPageSize] = useState(10);
 
   const transferStatusOptions = useMemo(
     () =>
@@ -575,7 +666,7 @@ export default function WalletsPage() {
   const paginatedTransferItems = useMemo(() => {
     const start = (transferPage - 1) * transferPageSize;
     return filteredTransferItems.slice(start, start + transferPageSize);
-  }, [filteredTransferItems, transferPage]);
+  }, [filteredTransferItems, transferPage, transferPageSize]);
 
   const transferPageStart =
     transferTotalItems === 0 ? 0 : (transferPage - 1) * transferPageSize + 1;
@@ -717,19 +808,19 @@ export default function WalletsPage() {
     };
   }, [payments, wallets, ledgers]);
 
-  const paymentPageSize = 20;
+  const [paymentPageSize, setPaymentPageSize] = useState(10);
   const paymentTotalPages = Math.max(1, Math.ceil(payments.length / paymentPageSize));
   const paginatedPayments = useMemo(() => {
     const start = (paymentPage - 1) * paymentPageSize;
     return payments.slice(start, start + paymentPageSize);
-  }, [payments, paymentPage]);
+  }, [payments, paymentPage, paymentPageSize]);
 
-  const walletPageSize = 20;
+  const [walletPageSize, setWalletPageSize] = useState(10);
   const walletTotalPages = Math.max(1, Math.ceil(wallets.length / walletPageSize));
   const paginatedWallets = useMemo(() => {
     const start = (walletPage - 1) * walletPageSize;
     return wallets.slice(start, start + walletPageSize);
-  }, [wallets, walletPage]);
+  }, [wallets, walletPage, walletPageSize]);
 
   const channelOptions = useMemo(() => {
     const channels = payments
@@ -1161,9 +1252,37 @@ export default function WalletsPage() {
                         label="Export Top Up"
                         loadingLabel="Menyiapkan Export..."
                         successMessage="File top up sedang diunduh."
-                        className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                       />
                     </div>
+                  )}
+
+                  {activeTab === "payments" && selectedPaymentIds.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm">
+                        <span className="flex items-center text-[#C92C1E]">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                        </span>
+                        {selectedPaymentIds.length} terpilih
+                      </div>
+                      <button
+                        onClick={() => {
+                          alert("Fitur hapus massal belum tersedia");
+                          setSelectedPaymentIds([]);
+                        }}
+                        className="flex items-center gap-1.5 rounded-xl bg-red-100 px-4 py-2.5 text-sm font-bold text-red-700 shadow-sm transition hover:bg-red-200"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        Pindahkan ke Sampah
+                      </button>
+                      <button
+                        onClick={() => setSelectedPaymentIds([])}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50 hover:text-gray-700"
+                        title="Batal"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </>
                   )}
 
                   {/* 3-DOTS MORE MENU */}
@@ -1335,25 +1454,19 @@ export default function WalletsPage() {
                     paginatedPayments.map((payment) => (
                       <tr
                         key={payment.id}
-                        className={`transition-colors hover:bg-gray-50 ${selectedPaymentIds.includes(payment.id) ? "bg-red-50/50" : ""}`}
+                        className={`transition-colors hover:bg-gray-50 cursor-pointer select-none ${selectedPaymentIds.includes(payment.id) ? "bg-red-50/50" : ""}`}
+                        onMouseDown={() => handleRowMouseDown(payment.id)}
+                        onMouseEnter={() => handleRowMouseEnter(payment.id)}
                       >
                         <td className="w-12 px-4 py-4 text-center align-top">
                           <input
                             type="checkbox"
+                            readOnly
                             checked={selectedPaymentIds.includes(payment.id)}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              setSelectedPaymentIds(prev =>
-                                checked ? [...prev, payment.id] : prev.filter(id => id !== payment.id)
-                              );
-                            }}
-                            className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                            className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                           />
                         </td>
-                        <td 
-                          className="px-4 py-4 align-top cursor-pointer"
-                          onClick={() => handleOpenPaymentDetail(payment)}
-                        >
+                        <td className="px-4 py-4 align-top">
                           <Link
                             href={`/menu/wallets/payments/${payment.id}`}
                             onClick={(event) => event.stopPropagation()}
@@ -1479,10 +1592,26 @@ export default function WalletsPage() {
               </div>
           {paymentTotalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
-              <div className="text-xs font-medium text-gray-500">
-                Menampilkan <span className="font-bold text-gray-900">{(paymentPage - 1) * paymentPageSize + 1}</span> hingga{" "}
-                <span className="font-bold text-gray-900">{Math.min(paymentPage * paymentPageSize, payments.length)}</span> dari{" "}
-                <span className="font-bold text-gray-900">{payments.length}</span> data
+              <div className="flex items-center gap-4">
+                <div className="text-xs font-medium text-gray-500">
+                  Menampilkan <span className="font-bold text-gray-900">{(paymentPage - 1) * paymentPageSize + 1}</span> hingga{" "}
+                  <span className="font-bold text-gray-900">{Math.min(paymentPage * paymentPageSize, payments.length)}</span> dari{" "}
+                  <span className="font-bold text-gray-900">{payments.length}</span> data
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                  <select
+                    value={paymentPageSize}
+                    onChange={(e) => {
+                      setPaymentPageSize(Number(e.target.value));
+                      setPaymentPage(1);
+                    }}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                  >
+                    {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -1644,6 +1773,48 @@ export default function WalletsPage() {
                 </tbody>
               </table>
               </div>
+              {walletTotalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+                  <div className="flex items-center gap-4">
+                    <div className="text-xs font-medium text-gray-500">
+                      Menampilkan <span className="font-bold text-gray-900">{(walletPage - 1) * walletPageSize + 1}</span> hingga{" "}
+                      <span className="font-bold text-gray-900">{Math.min(walletPage * walletPageSize, wallets.length)}</span> dari{" "}
+                      <span className="font-bold text-gray-900">{wallets.length}</span> data
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                      <select
+                        value={walletPageSize}
+                        onChange={(e) => {
+                          setWalletPageSize(Number(e.target.value));
+                          setWalletPage(1);
+                        }}
+                        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                      >
+                        {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setWalletPage((p) => Math.max(1, p - 1))}
+                      disabled={walletPage === 1}
+                      className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Sebelumnya
+                    </button>
+                    <span className="text-xs font-bold text-gray-700">Halaman {walletPage} / {walletTotalPages}</span>
+                    <button
+                      onClick={() => setWalletPage((p) => Math.min(walletTotalPages, p + 1))}
+                      disabled={walletPage === walletTotalPages}
+                      className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             </div>
           )}
@@ -1740,20 +1911,15 @@ export default function WalletsPage() {
 
                     <div className="border-b border-gray-50 px-6 py-4">
                       <div className="flex flex-wrap items-start gap-4">
-                        <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                        <div className="flex flex-col gap-1.5 w-full md:w-64">
                           <span className="text-xs font-semibold text-black">Owner</span>
-                          <select
-                            value={transferOwnerId}
-                            onChange={(event) => setTransferOwnerId(event.target.value)}
-                            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
-                          >
-                            <option value="">Semua owner</option>
-                            {owners.map((owner) => (
-                              <option key={owner.id} value={owner.id}>
-                                {getOwnerName(owner)} ({getOwnerCode(owner)})
-                              </option>
-                            ))}
-                          </select>
+                          <OwnerSearchPicker
+                            value={selectedTransferFilterOwner}
+                            onChange={(owner) => {
+                              setSelectedTransferFilterOwner(owner);
+                              setTransferOwnerId(owner ? String(owner.id) : "");
+                            }}
+                          />
                         </div>
 
                         <div className="flex flex-col gap-1.5 w-full md:w-auto">
@@ -1921,14 +2087,30 @@ export default function WalletsPage() {
                     </div>
 
                     <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="text-xs font-medium text-gray-500">
-                        Menampilkan{" "}
-                        <span className="font-bold text-gray-900">{transferPageStart}</span>{" "}
-                        hingga{" "}
-                        <span className="font-bold text-gray-900">{transferPageEnd}</span>{" "}
-                        dari{" "}
-                        <span className="font-bold text-gray-900">{transferTotalItems}</span>{" "}
-                        transfer
+                      <div className="flex items-center gap-4">
+                        <div className="text-xs font-medium text-gray-500">
+                          Menampilkan{" "}
+                          <span className="font-bold text-gray-900">{transferPageStart}</span>{" "}
+                          hingga{" "}
+                          <span className="font-bold text-gray-900">{transferPageEnd}</span>{" "}
+                          dari{" "}
+                          <span className="font-bold text-gray-900">{transferTotalItems}</span>{" "}
+                          data
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                          <select
+                            value={transferPageSize}
+                            onChange={(e) => {
+                              setTransferPageSize(Number(e.target.value));
+                              setTransferPage(1);
+                            }}
+                            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                          >
+                            {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -1980,24 +2162,16 @@ export default function WalletsPage() {
             <label className="mb-1 block text-[11px] font-black uppercase tracking-wider text-gray-500">
               Owner
             </label>
-            <select
-              value={createTransferForm.ownerId}
-              onChange={(event) =>
+            <OwnerSearchPicker
+              value={selectedTransferOwner}
+              onChange={(owner) => {
+                setSelectedTransferOwner(owner);
                 setCreateTransferForm((current) => ({
                   ...current,
-                  ownerId: event.target.value,
-                }))
-              }
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#C92C1E]/20"
-              required
-            >
-              <option value="">Pilih owner</option>
-              {owners.map((owner) => (
-                <option key={owner.id} value={owner.id}>
-                  {getOwnerName(owner)} ({getOwnerCode(owner)})
-                </option>
-              ))}
-            </select>
+                  ownerId: owner ? String(owner.id) : "",
+                }));
+              }}
+            />
           </div>
 
           <div>
@@ -2112,26 +2286,29 @@ export default function WalletsPage() {
                   Pilih Owner
                 </span>
 
-                <select
-                  value={walletActionForm.ownerId}
-                  onChange={(event) =>
+                <OwnerSearchPicker
+                  value={selectedOwner}
+                  onChange={(owner) => {
+                    setSelectedOwner(owner);
                     setWalletActionForm((prev) => ({
                       ...prev,
-                      ownerId: event.target.value,
-                    }))
-                  }
-                  className={selectClass}
-                >
-                  <option value="">Pilih Owner</option>
-
-                  {ownerOptions.map((owner) => (
-                    <option key={owner.ownerId} value={owner.ownerId}>
-                      {owner.ownerCode} — {owner.ownerName} — saldo{" "}
-                      {formatRupiah(owner.balance)}
-                    </option>
-                  ))}
-                </select>
+                      ownerId: owner ? String(owner.id) : "",
+                    }));
+                  }}
+                />
               </label>
+
+              {selectedOwner && (() => {
+                const matchedOwnerOption = ownerOptions.find(o => o.ownerId === selectedOwner.id);
+                if (matchedOwnerOption) {
+                  return (
+                    <p className="mt-2.5 text-xs font-bold text-slate-600">
+                      Saldo Saat Ini: <span className="text-[#C92C1E]">{formatRupiah(matchedOwnerOption.balance)}</span>
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
 

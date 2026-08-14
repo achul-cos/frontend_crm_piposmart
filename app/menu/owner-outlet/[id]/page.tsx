@@ -617,7 +617,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                       <th className="px-6 py-4">Kontak</th>
                       <th className="px-6 py-4">Lokasi</th>
                       <th className="px-6 py-4">Alamat Lengkap</th>
-                      <th className="px-6 py-4">Tgl. Dibuat</th>
+                      <th className="px-6 py-4">Tanggal Registrasi</th>
                       <th className="px-6 py-4 text-center">Status</th>
                       <th className="px-6 py-4 text-center">Aksi</th>
                     </tr>

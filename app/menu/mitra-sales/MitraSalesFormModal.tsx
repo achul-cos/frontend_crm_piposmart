@@ -16,7 +16,7 @@ export type PartnerFormState = {
   subDistrict: string;
   address: string;
   bankAccount: string;
-  status: "ACTIVE" | "INACTIVE";
+  status: "ACTIVE" | "INACTIVE" | "DELETED";
   // Sprint 15a — Sales bisa langsung jadi PIC mitra yang dia buat sendiri
   // (TUPOKSI referral lead & aktivitas mitra ada di Sales). Hanya relevan
   // saat create; partner yang di-edit sudah punya PIC-nya sendiri.
@@ -51,7 +51,7 @@ function ModalShell({
     <ScreenPortal>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
         <div
-          className="app-modal-panel w-full max-w-3xl rounded-[32px] shadow-2xl transition-all xl:max-w-4xl"
+          className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl transition-all"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="app-modal-header px-5 py-4 md:px-6">

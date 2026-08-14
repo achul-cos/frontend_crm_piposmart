@@ -61,6 +61,8 @@ export default function OwnerTrashPage() {
   });
   const [selectedOwnerIds, setSelectedOwnerIds] = useState<number[]>([]);
 
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
+
   const loadOwners = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -442,7 +444,7 @@ export default function OwnerTrashPage() {
                     <SortableHeader sortKey="phone" label="Kontak" sort={sort} setSort={setSort} />
                     <SortableHeader sortKey="city" label="Lokasi" sort={sort} setSort={setSort} />
                     <th className="px-4 py-4 font-bold text-left">Saldo Aplikasi</th>
-                    <SortableHeader sortKey="created_at" label="Tgl. Dibuat" sort={sort} setSort={setSort} />
+                    <SortableHeader sortKey="created_at" label="Tanggal Registrasi" sort={sort} setSort={setSort} />
                     <SortableHeader sortKey="status" label="Status" sort={sort} setSort={setSort} />
                     <SortableHeader sortKey="outlet_count" label="Outlet" sort={sort} setSort={setSort} />
                     <th className="px-4 py-4 text-center font-bold">Aksi</th>
@@ -575,7 +577,7 @@ export default function OwnerTrashPage() {
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                   </select>
-                  <span className="text-xs font-medium text-gray-500">baris</span>
+                  
                 </div>
               </div>
 
@@ -588,7 +590,7 @@ export default function OwnerTrashPage() {
                   Sebelumnya
                 </button>
 
-                <span className="text-xs font-bold text-gray-700">Halaman {pagination.page}</span>
+                <span className="text-xs font-bold text-gray-700">Halaman {pagination.page} / {totalPages}</span>
 
                 <button
                   disabled={owners.length < pagination.limit}

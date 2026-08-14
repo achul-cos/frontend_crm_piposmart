@@ -1,5 +1,7 @@
 "use client";
 
+import { Trash2, X } from "lucide-react";
+
 import Link from "next/link";
 import {
   useEffect,
@@ -132,7 +134,7 @@ type PartnerFormState = {
   district: string;
   sub_district: string;
   bankAccount: string;
-  status: "ACTIVE" | "INACTIVE";
+  status: "ACTIVE" | "INACTIVE" | "DELETED";
 };
 
 type TypeFormState = {
@@ -162,7 +164,7 @@ type RuleTierFormState = {
 
 type AutoCommissionCategory = "REFERRAL" | "PARTNERSHIP" | "STRATEGIC";
 
-const PAGE_SIZE = 20;
+
 
 const inputClass =
   "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
@@ -427,6 +429,24 @@ export default function KelolaanMitraPage() {
   const [selectedPartnerTypeIds, setSelectedPartnerTypeIds] = useState<number[]>([]);
   const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+
+  const [isDraggingTypes, setIsDraggingTypes] = useState(false);
+  const [dragActionTypes, setDragActionTypes] = useState<"select" | "deselect" | null>(null);
+
+  const [isDraggingPartners, setIsDraggingPartners] = useState(false);
+  const [dragActionPartners, setDragActionPartners] = useState<"select" | "deselect" | null>(null);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsDraggingTypes(false);
+      setDragActionTypes(null);
+      setIsDraggingPartners(false);
+      setDragActionPartners(null);
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
 
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showTypeModal, setShowTypeModal] = useState(false);
@@ -652,8 +672,8 @@ export default function KelolaanMitraPage() {
       try {
         const result = await listPartners({
           search: appliedSearch,
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
+          limit: limit,
+          offset: (page - 1) * limit,
         });
 
         if (cancelled) return;
@@ -674,7 +694,7 @@ export default function KelolaanMitraPage() {
     return () => {
       cancelled = true;
     };
-  }, [appliedSearch, page]);
+  }, [appliedSearch, page, limit]);
 
   const uniqueMitraNames = useMemo(
     () => Array.from(new Set(partners.map((p) => p.name || p.code).filter(Boolean))),
@@ -947,8 +967,8 @@ export default function KelolaanMitraPage() {
   const refreshPartners = async () => {
     const result = await listPartners({
       search: appliedSearch,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
+      limit: limit,
+      offset: (page - 1) * limit,
     });
 
     setPartners(result.items || []);
@@ -1556,12 +1576,12 @@ export default function KelolaanMitraPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full">
+          <div className="flex overflow-x-auto flex-nowrap items-center gap-3 w-full sm:w-auto mt-4 md:mt-0 pb-2">
             {tableMode === "PARTNER_TYPES" && canManageTypes && (
               <button
                 type="button"
                 onClick={openCreateTypeModal}
-                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
+                className="flex shrink-0 items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -1575,13 +1595,69 @@ export default function KelolaanMitraPage() {
                 type="button"
                 onClick={openCreatePartnerModal}
                 disabled={partnerTypes.length === 0}
-                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                className="flex shrink-0 items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
                 Tambah Mitra
               </button>
+            )}
+
+            {tableMode === "PARTNER_TYPES" && selectedPartnerTypeIds.length > 0 && (
+              <>
+                <div className="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
+                  <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  {selectedPartnerTypeIds.length} terpilih
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert("Fitur hapus massal belum tersedia");
+                    setSelectedPartnerTypeIds([]);
+                  }}
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Pindahkan ke Sampah
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPartnerTypeIds([])}
+                  className="flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white h-10 w-10 text-gray-500 shadow-sm transition-all hover:bg-gray-100 hover:text-gray-900"
+                  title="Batalkan Pilihan"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            {(tableMode === "ACTIVE_PARTNERS" || tableMode === "INACTIVE_PARTNERS") && selectedPartnerIds.length > 0 && (
+              <>
+                <div className="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
+                  <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  {selectedPartnerIds.length} terpilih
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert("Fitur hapus massal belum tersedia");
+                    setSelectedPartnerIds([]);
+                  }}
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Pindahkan ke Sampah
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPartnerIds([])}
+                  className="flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white h-10 w-10 text-gray-500 shadow-sm transition-all hover:bg-gray-100 hover:text-gray-900"
+                  title="Batalkan Pilihan"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -1754,18 +1830,34 @@ export default function KelolaanMitraPage() {
                   </tr>
                 ) : (
                   filteredPartnerTypes.map((item) => (
-                    <tr key={item.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerTypeIds.includes(item.id) ? "bg-red-50/50" : ""}`}>
+                    <tr
+                      key={item.id}
+                      onMouseDown={(e) => {
+                        if ((e.target as HTMLElement).closest("button, a, [role='button']")) return;
+                        const isSelected = selectedPartnerTypeIds.includes(item.id);
+                        setIsDraggingTypes(true);
+                        setDragActionTypes(isSelected ? "deselect" : "select");
+                        setSelectedPartnerTypeIds((prev) =>
+                          isSelected ? prev.filter((id) => id !== item.id) : [...prev, item.id]
+                        );
+                      }}
+                      onMouseEnter={() => {
+                        if (isDraggingTypes && dragActionTypes) {
+                          setSelectedPartnerTypeIds((prev) => {
+                            if (dragActionTypes === "select" && !prev.includes(item.id)) return [...prev, item.id];
+                            if (dragActionTypes === "deselect" && prev.includes(item.id)) return prev.filter((id) => id !== item.id);
+                            return prev;
+                          });
+                        }
+                      }}
+                      className={`transition-colors hover:bg-gray-50 cursor-pointer select-none ${selectedPartnerTypeIds.includes(item.id) ? "bg-red-50/50" : ""}`}
+                    >
                       <td className="w-12 px-4 py-4 text-center align-top">
                         <input
                           type="checkbox"
                           checked={selectedPartnerTypeIds.includes(item.id)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setSelectedPartnerTypeIds(prev =>
-                              checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
-                            );
-                          }}
-                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                          readOnly
+                          className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                         />
                       </td>
                       <td className="px-4 py-4 align-top font-medium text-gray-900">
@@ -1862,18 +1954,34 @@ export default function KelolaanMitraPage() {
                     ? activePartners
                     : inactivePartners
                   ).map((partner) => (
-                    <tr key={partner.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerIds.includes(partner.id) ? "bg-red-50/50" : ""}`}>
+                    <tr
+                      key={partner.id}
+                      onMouseDown={(e) => {
+                        if ((e.target as HTMLElement).closest("button, a, [role='button']")) return;
+                        const isSelected = selectedPartnerIds.includes(partner.id);
+                        setIsDraggingPartners(true);
+                        setDragActionPartners(isSelected ? "deselect" : "select");
+                        setSelectedPartnerIds((prev) =>
+                          isSelected ? prev.filter((id) => id !== partner.id) : [...prev, partner.id]
+                        );
+                      }}
+                      onMouseEnter={() => {
+                        if (isDraggingPartners && dragActionPartners) {
+                          setSelectedPartnerIds((prev) => {
+                            if (dragActionPartners === "select" && !prev.includes(partner.id)) return [...prev, partner.id];
+                            if (dragActionPartners === "deselect" && prev.includes(partner.id)) return prev.filter((id) => id !== partner.id);
+                            return prev;
+                          });
+                        }
+                      }}
+                      className={`transition-colors hover:bg-gray-50 cursor-pointer select-none ${selectedPartnerIds.includes(partner.id) ? "bg-red-50/50" : ""}`}
+                    >
                       <td className="w-12 px-4 py-4 text-center align-top">
                         <input
                           type="checkbox"
                           checked={selectedPartnerIds.includes(partner.id)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setSelectedPartnerIds(prev =>
-                              checked ? [...prev, partner.id] : prev.filter(id => id !== partner.id)
-                            );
-                          }}
-                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                          readOnly
+                          className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                         />
                       </td>
                       <td className="px-4 py-4 align-top">
@@ -1949,7 +2057,25 @@ export default function KelolaanMitraPage() {
 
         {tableMode !== "PARTNER_TYPES" ? (
           <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
-            <span className="text-xs text-gray-500">Halaman {page}</span>
+            <div className="flex items-center gap-4">
+              <span className="text-xs font-medium text-gray-500">
+                Menampilkan {(page - 1) * limit + 1} hingga {(page - 1) * limit + partners.length} data
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                <select
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                >
+                  {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                
+              </div>
+            </div>
 
             <div className="flex items-center gap-2">
               <button
@@ -1961,7 +2087,7 @@ export default function KelolaanMitraPage() {
               </button>
 
               <button
-                disabled={partners.length < PAGE_SIZE}
+                disabled={partners.length < limit}
                 onClick={() => setPage((prev) => prev + 1)}
                 className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
               >

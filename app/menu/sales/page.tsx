@@ -204,13 +204,13 @@ export default function SalesPage() {
     });
   }, [sales, search]);
 
-  const salesPageSize = 20;
+  const [salesPageSize, setSalesPageSize] = useState(10);
   const salesTotalItems = filteredSales.length;
   const salesTotalPages = Math.max(1, Math.ceil(salesTotalItems / salesPageSize));
   const paginatedSales = useMemo(() => {
     const start = (salesPage - 1) * salesPageSize;
     return filteredSales.slice(start, start + salesPageSize);
-  }, [filteredSales, salesPage]);
+  }, [filteredSales, salesPage, salesPageSize]);
 
   useEffect(() => { setSalesPage(1); }, [search]);
 
@@ -635,52 +635,46 @@ export default function SalesPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-gray-100 bg-[#f9fafb] px-6 py-4">
-              <span className="text-sm text-gray-500">
-                Menampilkan <span className="font-bold text-gray-900">{salesTotalItems === 0 ? 0 : (salesPage - 1) * salesPageSize + 1}</span> hingga{" "}
-                <span className="font-bold text-gray-900">{Math.min(salesPage * salesPageSize, salesTotalItems)}</span> dari{" "}
-                <span className="font-bold text-gray-900">{salesTotalItems}</span> entri
-              </span>
+            <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
+              <div className="flex items-center gap-4">
+                <span className="text-xs font-medium text-gray-500">
+                  Menampilkan {salesTotalItems === 0 ? 0 : (salesPage - 1) * salesPageSize + 1}–{Math.min(salesPage * salesPageSize, salesTotalItems)} dari {salesTotalItems} data
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                  <select
+                    value={salesPageSize}
+                    onChange={(e) => {
+                      setSalesPageSize(Number(e.target.value));
+                      setSalesPage(1);
+                    }}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  >
+                    {[10, 25, 50, 100].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setSalesPage((p) => Math.max(1, p - 1))}
-                  disabled={salesPage === 1}
-                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+                  disabled={salesPage <= 1}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                  Prev
+                  Sebelumnya
                 </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: salesTotalPages }, (_, i) => i + 1)
-                    .filter((p) => p === 1 || p === salesTotalPages || Math.abs(p - salesPage) <= 1)
-                    .map((p, i, arr) => (
-                      <div key={p} className="flex items-center">
-                        {i > 0 && p - arr[i - 1] > 1 && (
-                          <span className="px-2 text-gray-400">...</span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setSalesPage(p)}
-                          className={`h-9 min-w-[36px] rounded-xl border px-3 text-sm font-bold shadow-sm transition ${
-                            salesPage === p
-                              ? "border-[#C92C1E] bg-[#C92C1E] text-white"
-                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      </div>
-                    ))}
-                </div>
+                <span className="text-xs font-bold text-gray-700">Halaman {salesPage} / {salesTotalPages}</span>
                 <button
                   type="button"
                   onClick={() => setSalesPage((p) => Math.min(salesTotalPages, p + 1))}
-                  disabled={salesPage === salesTotalPages || salesTotalPages === 0}
-                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+                  disabled={salesPage >= salesTotalPages || salesTotalPages === 0}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
                 >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
+                  Selanjutnya
                 </button>
               </div>
             </div>

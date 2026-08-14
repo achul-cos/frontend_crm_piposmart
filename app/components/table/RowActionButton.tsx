@@ -62,7 +62,7 @@ export function RowActionButton({
   disabled,
   className = "",
 }: RowActionButtonProps) {
-  const classes = `row-action-btn row-action-btn--${tone} rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${TONE_CLASSES[tone]} ${className}`;
+  const classes = `inline-flex items-center justify-center row-action-btn row-action-btn--${tone} w-9 h-9 rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${TONE_CLASSES[tone]} ${className}`;
 
   if (href) {
     return (
@@ -74,7 +74,7 @@ export function RowActionButton({
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.94 }}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-5 w-5" strokeWidth={2.25} />
       </MotionLink>
     );
   }
@@ -90,7 +90,7 @@ export function RowActionButton({
       whileHover={disabled ? undefined : { scale: 1.08 }}
       whileTap={disabled ? undefined : { scale: 0.94 }}
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="h-5 w-5" strokeWidth={2.25} />
     </motion.button>
   );
 }

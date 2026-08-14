@@ -36,7 +36,7 @@ export default function TrainingPage() {
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const [limit, setLimit] = useState(10);
   const isSales = currentRole.toUpperCase() === "SALES";
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export default function TrainingPage() {
       scheduled_to: dateTo || undefined,
       q: search || undefined,
     }),
-    [page, statusFilter, typeFilter, salesFilter, dateFrom, dateTo, search, isSales]
+    [page, limit, statusFilter, typeFilter, salesFilter, dateFrom, dateTo, search, isSales]
   );
 
   const { data: trainingData, isLoading } = useTrainingListQuery(trainingListParams);
@@ -423,10 +423,26 @@ export default function TrainingPage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
-              <div className="text-xs font-medium text-gray-500">
-                Menampilkan <span className="font-bold text-gray-900">{(page - 1) * limit + 1}</span> hingga{" "}
-                <span className="font-bold text-gray-900">{Math.min(page * limit, totalItems)}</span> dari{" "}
-                <span className="font-bold text-gray-900">{totalItems}</span> riwayat
+              <div className="flex items-center gap-4">
+                <div className="text-xs font-medium text-gray-500">
+                  Menampilkan <span className="font-bold text-gray-900">{(page - 1) * limit + 1}</span> hingga{" "}
+                  <span className="font-bold text-gray-900">{Math.min(page * limit, totalItems)}</span> dari{" "}
+                  <span className="font-bold text-gray-900">{totalItems}</span> riwayat
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                  <select
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                  >
+                    {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <button

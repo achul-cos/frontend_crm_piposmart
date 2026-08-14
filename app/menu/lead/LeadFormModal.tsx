@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import OwnerSearchPicker from "@/app/components/OwnerSearchPicker";
 import {
   createOwner,
@@ -507,8 +508,9 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditI
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="app-modal-panel relative w-full max-w-lg rounded-2xl shadow-xl">
+    <ScreenPortal>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="app-modal-panel relative w-full max-w-2xl rounded-[32px] shadow-2xl transition-all">
         <div className="app-modal-header p-6">
           <div className="mx-auto font-sans text-[#1C1C1E]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -790,9 +792,10 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditI
               : "Simpan Lead & Assignment (Sprint 5)"}
           </button>
         </div>
-      </form>
+          </form>
         </div>
       </div>
-    </div>
+      </div>
+    </ScreenPortal>
   );
 }

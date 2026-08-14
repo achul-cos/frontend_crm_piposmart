@@ -26,7 +26,9 @@ import {
   authFetchJson,
   getEligiblePromotions,
   type CatalogPromotion,
+  type BackendOwner,
 } from "@/app/lib/api";
+import OwnerSearchPicker from "@/app/components/OwnerSearchPicker";
 import {
   useSubscriptionPageQuery,
   useSubscriptionReferenceDataQuery,
@@ -500,7 +502,7 @@ export default function SubscriptionPage() {
   const [purchasedFrom, setPurchasedFrom] = useState("");
   const [purchasedTo, setPurchasedTo] = useState("");
   const [page, setPage] = useState(1);
-  const limit = 10;
+  const [limit, setLimit] = useState(10);
 
   const subscriptionListFilters = useMemo(
     () => ({ debouncedSearch, statusFilter, orderTypeFilter, purchasedFrom, purchasedTo }),
@@ -540,6 +542,28 @@ export default function SubscriptionPage() {
   const [isReconcileOpen, setIsReconcileOpen] = useState(false);
   const [createForm, setCreateForm] =
     useState<CreateOrderForm>(emptyCreateOrderForm);
+  const [selectedOwner, setSelectedOwner] = useState<BackendOwner | null>(null);
+
+  useEffect(() => {
+    if (isCreateOpen) {
+      if (createForm.ownerId) {
+        const found = owners.find((o) => o.id === Number(createForm.ownerId));
+        if (found && found.id) {
+          setSelectedOwner({
+            id: found.id,
+            code: found.code || found.kode_owner || "",
+            name: found.name || found.nama_owner || "",
+            phone: "",
+            brand_name: "",
+            status: "ACTIVE",
+          });
+          return;
+        }
+      }
+      setSelectedOwner(null);
+    }
+  }, [isCreateOpen, createForm.ownerId, owners]);
+
   const [reconcileForm, setReconcileForm] =
     useState<ReconcileForm>(emptyReconcileForm);
 
@@ -1817,14 +1841,30 @@ export default function SubscriptionPage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
-              <div className="text-xs font-medium text-gray-500">
-                Menampilkan{" "}
-                <span className="font-bold text-gray-900">{pageStart}</span>{" "}
-                hingga{" "}
-                <span className="font-bold text-gray-900">{pageEnd}</span>{" "}
-                dari{" "}
-                <span className="font-bold text-gray-900">{totalItems}</span>{" "}
-                data
+              <div className="flex items-center gap-4">
+                <div className="text-xs font-medium text-gray-500">
+                  Menampilkan{" "}
+                  <span className="font-bold text-gray-900">{pageStart}</span>{" "}
+                  hingga{" "}
+                  <span className="font-bold text-gray-900">{pageEnd}</span>{" "}
+                  dari{" "}
+                  <span className="font-bold text-gray-900">{totalItems}</span>{" "}
+                  data
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                  <select
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                  >
+                    {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  
+                </div>
               </div>
 
               <div className="flex items-center gap-1">
@@ -2271,25 +2311,29 @@ export default function SubscriptionPage() {
                   Pilih Owner
                 </span>
 
-                <select
-                  value={createForm.ownerId}
-                  onChange={(event) =>
+                <OwnerSearchPicker
+                  value={selectedOwner}
+                  onChange={(owner) => {
+                    setSelectedOwner(owner);
                     setCreateForm((prev) => ({
                       ...prev,
-                      ownerId: event.target.value,
-                    }))
-                  }
-                  className={selectClass}
-                >
-                  <option value="">Pilih Owner</option>
-                  {ownerOptions.map((owner) => (
-                    <option key={owner.ownerId} value={owner.ownerId}>
-                      {owner.ownerCode} â€” {owner.ownerName} â€” saldo{" "}
-                      {formatRupiah(owner.balance)}
-                    </option>
-                  ))}
-                </select>
+                      ownerId: owner ? String(owner.id) : "",
+                    }));
+                  }}
+                />
               </label>
+
+              {selectedOwner && (() => {
+                const matchedOwnerOption = ownerOptions.find(o => o.ownerId === selectedOwner.id);
+                if (matchedOwnerOption) {
+                  return (
+                    <p className="mt-2.5 text-xs font-bold text-slate-600">
+                      Saldo Saat Ini: <span className="text-[#C92C1E]">{formatRupiah(matchedOwnerOption.balance)}</span>
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
 

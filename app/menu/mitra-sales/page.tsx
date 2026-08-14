@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Eye, UserRoundCog, Search } from "lucide-react";
+import { Eye, UserRoundCog, Search, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import { formatPhoneDisplay } from "@/app/lib/phone";
 import {
@@ -18,10 +18,13 @@ import {
   usePartnerTypesQuery,
   usePartnersQuery,
   useUpdatePartner,
+  useRestorePartner,
+  usePermanentDeletePartner,
 } from "@/app/lib/queries/mitraSales";
 import MitraSalesFormModal, {
   type PartnerFormState,
 } from "./MitraSalesFormModal";
+import PartnerTypeModal from "./PartnerTypeModal";
 import AnalyticsTab from "./AnalyticsTab";
 import { PartnerActivityBadge } from "@/app/components/PartnerActivityBadge";
 import { PartnerPICLabel } from "@/app/components/PartnerPICLabel";
@@ -33,6 +36,7 @@ type TableMode =
   | "PARTNER_TYPES"
   | "ACTIVE_PARTNERS"
   | "INACTIVE_PARTNERS"
+  | "TRASH_PARTNERS"
   | "ANALYTICS";
 
 const PAGE_SIZE = 20;
@@ -198,6 +202,9 @@ export default function MitraSalesPage() {
     [appliedSearch, page],
   );
 
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [editingType, setEditingType] = useState<PartnerTypeItem | null>(null);
+
   const {
     data: partnerTypesData,
     isLoading: loadingMaster,
@@ -212,12 +219,20 @@ export default function MitraSalesPage() {
   } = usePartnersQuery(partnersParams);
   const partners: PartnerItem[] = partnersData?.items || [];
 
+  const {
+    data: trashPartnersData,
+    isLoading: loadingTrash,
+  } = usePartnersQuery({ trash: true, search: appliedSearch });
+  const trashPartners: PartnerItem[] = trashPartnersData?.items || [];
+
   const loadError = partnerTypesError || partnersError;
   const effectivePageError = pageError || (loadError ? getErrorMessage(loadError) : "");
 
   const createPartnerMutation = useCreatePartner();
   const updatePartnerMutation = useUpdatePartner();
   const deactivatePartnerMutation = useDeactivatePartner();
+  const restorePartnerMutation = useRestorePartner();
+  const permanentDeletePartnerMutation = usePermanentDeletePartner();
 
   const filteredPartners = useMemo(() => {
     return partners.filter((partner) =>
@@ -233,19 +248,28 @@ export default function MitraSalesPage() {
     return filteredPartners.filter((partner) => partner.status === "INACTIVE");
   }, [filteredPartners]);
 
+  const filteredTrashPartners = useMemo(() => {
+    return trashPartners.filter((partner) =>
+      typeFilter === "ALL" ? true : partner.partner_type?.code === typeFilter,
+    );
+  }, [trashPartners, typeFilter]);
+
   const visiblePartners = useMemo(() => {
-    return tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
-  }, [activePartners, inactivePartners, tableMode]);
+    if (tableMode === "ACTIVE_PARTNERS") return activePartners;
+    if (tableMode === "INACTIVE_PARTNERS") return inactivePartners;
+    if (tableMode === "TRASH_PARTNERS") return filteredTrashPartners;
+    return activePartners;
+  }, [activePartners, inactivePartners, filteredTrashPartners, tableMode]);
 
   useEffect(() => { setMitraPage(1); }, [appliedSearch, tableMode, typeFilter]);
 
-  const mitraPageSize = 20;
+  const [mitraPageSize, setMitraPageSize] = useState(10);
   const mitraTotalItems = visiblePartners.length;
   const mitraTotalPages = Math.max(1, Math.ceil(mitraTotalItems / mitraPageSize));
   const paginatedMitra = useMemo(() => {
     const start = (mitraPage - 1) * mitraPageSize;
     return visiblePartners.slice(start, start + mitraPageSize);
-  }, [visiblePartners, mitraPage]);
+  }, [visiblePartners, mitraPage, mitraPageSize]);
 
   const filteredPartnerTypes = useMemo(() => {
     const keyword = typeSearch.trim().toLowerCase();
@@ -265,6 +289,78 @@ export default function MitraSalesPage() {
         .includes(keyword),
     );
   }, [partnerTypes, typeSearch]);
+
+  const openCreateTypeModal = () => {
+    setEditingType(null);
+    setShowTypeModal(true);
+  };
+
+  const openEditTypeModal = (typeItem: PartnerTypeItem) => {
+    setEditingType(typeItem);
+    setShowTypeModal(true);
+  };
+
+  const handleSoftDeletePartner = async (partner: PartnerItem) => {
+    const isConfirmed = await confirm({
+      title: "Pindahkan ke Tempat Sampah",
+      message: `Apakah Anda yakin ingin memindahkan mitra "${partner.name}" ke Tempat Sampah? Data masih dapat dipulihkan kembali dari Tempat Sampah.`,
+      confirmLabel: "Pindahkan ke Sampah",
+      cancelLabel: "Batal",
+      danger: true,
+    });
+    if (!isConfirmed) return;
+
+    try {
+      await withLoading(
+        () => deactivatePartnerMutation.mutateAsync(partner.id),
+        { label: "Memindahkan mitra ke Tempat Sampah..." },
+      );
+      setPageSuccess(`Mitra "${partner.name}" berhasil dipindahkan ke Tempat Sampah.`);
+    } catch (err: any) {
+      setPageError(getErrorMessage(err));
+    }
+  };
+
+  const handleRestorePartnerAction = async (partner: PartnerItem) => {
+    const isConfirmed = await confirm({
+      title: "Pulihkan Data Mitra",
+      message: `Apakah Anda yakin ingin memulihkan mitra "${partner.name}" kembali ke daftar mitra aktif?`,
+      confirmLabel: "Pulihkan Mitra",
+      cancelLabel: "Batal",
+    });
+    if (!isConfirmed) return;
+
+    try {
+      await withLoading(
+        () => restorePartnerMutation.mutateAsync(partner.id),
+        { label: "Memulihkan mitra..." },
+      );
+      setPageSuccess(`Mitra "${partner.name}" berhasil dipulihkan kembali.`);
+    } catch (err: any) {
+      setPageError(getErrorMessage(err));
+    }
+  };
+
+  const handlePermanentDeletePartnerAction = async (partner: PartnerItem) => {
+    const isConfirmed = await confirm({
+      title: "Hapus Permanen Mitra",
+      message: `PERINGATAN: Apakah Anda yakin ingin MENGHAPUS PERMANEN mitra "${partner.name}"? Data yang dihapus permanen TIDAK DAPAT DIPULIHKAN LAGI.`,
+      confirmLabel: "Hapus Permanen",
+      cancelLabel: "Batal",
+      danger: true,
+    });
+    if (!isConfirmed) return;
+
+    try {
+      await withLoading(
+        () => permanentDeletePartnerMutation.mutateAsync(partner.id),
+        { label: "Menghapus mitra secara permanen..." },
+      );
+      setPageSuccess(`Mitra "${partner.name}" berhasil dihapus secara permanen.`);
+    } catch (err: any) {
+      setPageError(getErrorMessage(err));
+    }
+  };
 
   const openCreatePartnerModal = () => {
     setEditingPartner(null);
@@ -437,6 +533,7 @@ export default function MitraSalesPage() {
     { key: "PARTNER_TYPES", label: "Jenis Mitra" },
     { key: "ACTIVE_PARTNERS", label: "Mitra Aktif" },
     { key: "INACTIVE_PARTNERS", label: "Mitra Non Aktif" },
+    { key: "TRASH_PARTNERS", label: "Tempat Sampah" },
     { key: "ANALYTICS", label: "Analitik" },
   ];
 
@@ -558,11 +655,23 @@ export default function MitraSalesPage() {
           <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
             <div>
               <h2 className="text-xl font-bold text-gray-900">
-                Referensi Jenis Mitra
+                Referensi & Pengelolaan Jenis Mitra
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Jenis mitra tampil sebagai referensi untuk Sales.
+                Kelola jenis mitra, komisi dasar, dan deskripsi mitra.
               </p>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={openCreateTypeModal}
+                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Jenis Mitra
+              </button>
             </div>
           </div>
 
@@ -662,6 +771,10 @@ export default function MitraSalesPage() {
                             href={`/menu/mitra-sales/jenis-mitra/${item.id}`}
                             title="Detail"
                           />
+                          <EditActionButton
+                            onClick={() => openEditTypeModal(item)}
+                            title="Edit Jenis Mitra"
+                          />
                         </RowActionGroup>
                       </td>
                     </tr>
@@ -671,10 +784,26 @@ export default function MitraSalesPage() {
                 </table>
           {mitraTotalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
-              <div className="text-xs font-medium text-gray-500">
-                Menampilkan <span className="font-bold text-gray-900">{(mitraPage - 1) * mitraPageSize + 1}</span> hingga{" "}
-                <span className="font-bold text-gray-900">{Math.min(mitraPage * mitraPageSize, mitraTotalItems)}</span> dari{" "}
-                <span className="font-bold text-gray-900">{mitraTotalItems}</span> data
+              <div className="flex items-center gap-4">
+                <div className="text-xs font-medium text-gray-500">
+                  Menampilkan <span className="font-bold text-gray-900">{mitraTotalItems === 0 ? 0 : (mitraPage - 1) * mitraPageSize + 1}</span> hingga{" "}
+                  <span className="font-bold text-gray-900">{Math.min(mitraPage * mitraPageSize, mitraTotalItems)}</span> dari{" "}
+                  <span className="font-bold text-gray-900">{mitraTotalItems}</span> data
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                  <select
+                    value={mitraPageSize}
+                    onChange={(e) => {
+                      setMitraPageSize(Number(e.target.value));
+                      setMitraPage(1);
+                    }}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                  >
+                    {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -706,22 +835,31 @@ export default function MitraSalesPage() {
                 <h2 className="text-xl font-bold text-gray-900">
                   {tableMode === "ACTIVE_PARTNERS"
                     ? "Daftar Mitra Aktif"
-                    : "Daftar Mitra Non Aktif"}
+                    : tableMode === "INACTIVE_PARTNERS"
+                    ? "Daftar Mitra Non Aktif"
+                    : "Tempat Sampah Data Mitra"}
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Data mitra yang dikelola dari halaman Mitra Sales.
+                  {tableMode === "TRASH_PARTNERS"
+                    ? "Data mitra di tempat sampah akan otomatis dihapus permanen setelah 30 hari."
+                    : "Data mitra yang dikelola dari halaman Mitra Sales."}
                 </p>
               </div>
-              <div className="flex w-full flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={openCreatePartnerModal}
-                  disabled={partnerTypes.length === 0 || loadingMaster}
-                  className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  + Tambah Mitra
-                </button>
-              </div>
+              {tableMode !== "TRASH_PARTNERS" && (
+                <div className="flex w-full flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={openCreatePartnerModal}
+                    disabled={partnerTypes.length === 0 || loadingMaster}
+                    className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Tambah Mitra
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="border-b border-gray-50 px-6 py-4">
@@ -779,13 +917,12 @@ export default function MitraSalesPage() {
                     <input
                       type="checkbox"
                       checked={
-                        (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length > 0 &&
-                        selectedPartnerIds.length === (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length
+                        visiblePartners.length > 0 &&
+                        selectedPartnerIds.length === visiblePartners.length
                       }
                       onChange={(e) => {
-                        const targetList = tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
                         if (e.target.checked) {
-                          setSelectedPartnerIds(targetList.map(p => p.id));
+                          setSelectedPartnerIds(visiblePartners.map(p => p.id));
                         } else {
                           setSelectedPartnerIds([]);
                         }
@@ -804,7 +941,7 @@ export default function MitraSalesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
-                {loading ? (
+                {(tableMode === "TRASH_PARTNERS" ? loadingTrash : loading) ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
                       Memuat data mitra...
@@ -813,7 +950,9 @@ export default function MitraSalesPage() {
                 ) : paginatedMitra.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
-                      Data mitra tidak ditemukan.
+                      {tableMode === "TRASH_PARTNERS"
+                        ? "Tidak ada data di tempat sampah."
+                        : "Data mitra tidak ditemukan."}
                     </td>
                   </tr>
                 ) : (
@@ -872,7 +1011,23 @@ export default function MitraSalesPage() {
                         {formatFlatCommission(partner.partner_type)}
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <PartnerActivityBadge partnerId={partner.id} />
+                        {tableMode === "TRASH_PARTNERS" ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700 border border-red-200">
+                              Dihapus (Sampah)
+                            </span>
+                            {partner.deleted_at && (() => {
+                              const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - new Date(partner.deleted_at).getTime()) / (1000 * 60 * 60 * 24)));
+                              return (
+                                <span className="text-[11px] font-semibold text-amber-600">
+                                  ⏳ Hapus permanen dlm {daysLeft} hari
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          <PartnerActivityBadge partnerId={partner.id} />
+                        )}
                       </td>
                       <td className="px-4 py-4 align-top max-w-[200px]">
                         <p className="truncate whitespace-normal text-xs leading-relaxed text-gray-600">
@@ -881,14 +1036,31 @@ export default function MitraSalesPage() {
                       </td>
                       <td className="px-4 py-4 align-top">
                         <RowActionGroup>
-                          <RowActionButton
-                            icon={Eye}
-                            tone="view"
-                            title="Detail & PIC"
-                            href={`/menu/mitra-sales/detail?id=${partner.id}`}
-                          />
-                          {tableMode === "ACTIVE_PARTNERS" ? (
+                          {tableMode === "TRASH_PARTNERS" ? (
                             <>
+                              <RowActionButton
+                                icon={RefreshCw}
+                                tone="restore"
+                                title="Pulihkan Data Mitra"
+                                onClick={() => void handleRestorePartnerAction(partner)}
+                                disabled={saving}
+                              />
+                              <RowActionButton
+                                icon={Trash2}
+                                tone="delete"
+                                title="Hapus Permanen"
+                                onClick={() => void handlePermanentDeletePartnerAction(partner)}
+                                disabled={saving}
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <RowActionButton
+                                icon={Eye}
+                                tone="view"
+                                title="Detail & PIC"
+                                href={`/menu/mitra-sales/detail?id=${partner.id}`}
+                              />
                               <RowActionButton
                                 icon={UserRoundCog}
                                 tone="view"
@@ -898,18 +1070,14 @@ export default function MitraSalesPage() {
                               <EditActionButton
                                 onClick={() => openEditPartnerModal(partner)}
                               />
-                              <ToggleActiveActionButton
-                                active={true}
-                                onClick={() => void handleDeactivatePartner(partner)}
+                              <RowActionButton
+                                icon={Trash2}
+                                tone="delete"
+                                title="Pindahkan ke Tempat Sampah"
+                                onClick={() => void handleSoftDeletePartner(partner)}
                                 disabled={saving}
                               />
                             </>
-                          ) : (
-                            <ToggleActiveActionButton
-                              active={false}
-                              onClick={() => void handleRestorePartner(partner)}
-                              disabled={saving}
-                            />
                           )}
                         </RowActionGroup>
                       </td>
@@ -923,26 +1091,45 @@ export default function MitraSalesPage() {
         </div>
       </div>
 
-          {mitraTotalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
-              <div className="text-xs font-medium text-gray-500">
-                Menampilkan <span className="font-bold text-gray-900">{(mitraPage - 1) * mitraPageSize + 1}</span> hingga{" "}
-                <span className="font-bold text-gray-900">{Math.min(mitraPage * mitraPageSize, mitraTotalItems)}</span> dari{" "}
-                <span className="font-bold text-gray-900">{mitraTotalItems}</span> data
+          {mitraTotalPages > 0 && (
+            <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
+              <div className="flex items-center gap-4">
+                <span className="text-xs font-medium text-gray-500">
+                  Menampilkan {mitraTotalItems === 0 ? 0 : (mitraPage - 1) * mitraPageSize + 1}–{Math.min(mitraPage * mitraPageSize, mitraTotalItems)} dari {mitraTotalItems} data
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                  <select
+                    value={mitraPageSize}
+                    onChange={(e) => {
+                      setMitraPageSize(Number(e.target.value));
+                      setMitraPage(1);
+                    }}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  >
+                    {[10, 25, 50, 100].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setMitraPage((p) => Math.max(1, p - 1))}
-                  disabled={mitraPage === 1}
-                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={mitraPage <= 1}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
                 >
                   Sebelumnya
                 </button>
                 <span className="text-xs font-bold text-gray-700">Halaman {mitraPage} / {mitraTotalPages}</span>
                 <button
+                  type="button"
                   onClick={() => setMitraPage((p) => Math.min(mitraTotalPages, p + 1))}
-                  disabled={mitraPage === mitraTotalPages}
-                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={mitraPage >= mitraTotalPages}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
                 >
                   Selanjutnya
                 </button>
@@ -962,6 +1149,12 @@ export default function MitraSalesPage() {
         setForm={setPartnerForm}
         onClose={closePartnerModal}
         onSubmit={handlePartnerSubmit}
+      />
+
+      <PartnerTypeModal
+        open={showTypeModal}
+        editingType={editingType}
+        onClose={() => setShowTypeModal(false)}
       />
     </div>
   );
