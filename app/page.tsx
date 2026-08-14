@@ -1,16 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
-  authFetchJson,
-  fetchClosings,
-  fetchCustomerInteractions,
-  fetchOwners,
-  fetchTrainings,
-  getLeadsWithTotal,
-  getProfile,
   getRoleLabel,
   isAdminRole,
   isSalesRole,
@@ -20,8 +13,17 @@ import {
   type ClosingItem,
   type InteractionItem,
   type TrainingItem,
-  type UserResponse,
 } from "@/app/lib/api";
+import { AnimatedListItem, AnimatedSection } from "@/app/components/motion/primitives";
+import {
+  getCardVal,
+  useDashboardCountsQuery,
+  useDashboardReportCardsQuery,
+  useKpiRankingQuery,
+  useProfileQuery,
+  useSalesTeamQuery,
+  useSupervisorTeamQuery,
+} from "@/app/lib/queries/dashboard";
 
 // ─── SVG Icons ──────────────────────────────────────────────────────────────
 
@@ -318,11 +320,7 @@ function SectionCard({
 export default function DashboardOverviewPage() {
   usePageTitle("Dashboard");
 
-  const [profile, setProfile] = useState<UserResponse | null>(null);
   const [session, setSession] = useState(readStoredUserSession());
-  const [dashboard, setDashboard] = useState<DashboardState>(EMPTY_DASHBOARD);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
   const [activeTabRole, setActiveTabRole] = useState<"ADMIN" | "SUPERVISOR" | "SALES">("ADMIN");
   const [showAllRankings, setShowAllRankings] = useState(false);
 
@@ -333,6 +331,22 @@ export default function DashboardOverviewPage() {
   useEffect(() => {
     setSession(readStoredUserSession());
   }, []);
+
+  const profileQuery = useProfileQuery();
+  const countsQuery = useDashboardCountsQuery();
+  const salesTeamQuery = useSalesTeamQuery();
+  const supervisorTeamQuery = useSupervisorTeamQuery();
+  const rankingQuery = useKpiRankingQuery(currentYear, currentMonth);
+  const reportCardsQuery = useDashboardReportCardsQuery();
+
+  const profile = profileQuery.data ?? null;
+  const isLoading = countsQuery.isLoading;
+  const errorMessage =
+    countsQuery.error instanceof Error
+      ? countsQuery.error.message
+      : countsQuery.error
+      ? "Dashboard gagal dimuat dari backend."
+      : "";
 
   // Compute normalized effective role cleanly so it never defaults to UNKNOWN for logged in users
   const effectiveRole = useMemo(() => {
@@ -346,142 +360,50 @@ export default function DashboardOverviewPage() {
 
   const roleLabel = useMemo(() => getRoleLabel(effectiveRole), [effectiveRole]);
 
-  const loadDashboard = useCallback(async (showLoading = true, isInitial = false) => {
-    if (showLoading) setIsLoading(true);
-    setErrorMessage("");
+  // Recombine the focused query results into the same DashboardState shape the JSX below
+  // already expects, keeping the merge/fallback logic byte-for-byte equivalent to the old
+  // hand-rolled loadDashboard().
+  const dashboard: DashboardState = useMemo(() => {
+    const counts = countsQuery.data;
+    const reportCards = reportCardsQuery.data || [];
 
-    try {
-      const [
-        me,
-        ownerResponse,
-        leadResponse,
-        closingResponse,
-        interactionResponse,
-        trainingResponse,
-      ] = await Promise.all([
-        getProfile(),
-        fetchOwners({ page: 1, limit: 1 }),
-        getLeadsWithTotal({ page: 1, limit: 1 }),
-        fetchClosings({ page: 1, limit: 10, sort: "-closed_at" }),
-        fetchCustomerInteractions({ page: 1, limit: 10, sort: "-interaction_at" }),
-        fetchTrainings({ page: 1, limit: 10, sort: "-scheduled_at" }),
-      ]);
-
-      setProfile(me);
-
-      let fetchedSales: TeamMemberItem[] = [];
-      let fetchedSupervisors: TeamMemberItem[] = [];
-      let fetchedRankings: KpiRankingItem[] = [];
-
-      try {
-        const salesRes = await authFetchJson<{ data?: TeamMemberItem[] | { items?: TeamMemberItem[] } }>("/sales");
-        fetchedSales = Array.isArray(salesRes.data) ? salesRes.data : salesRes.data?.items || [];
-      } catch {
-        try {
-          const userRes = await authFetchJson<{ data?: TeamMemberItem[] | { items?: TeamMemberItem[] } }>("/users?role=SALES");
-          fetchedSales = Array.isArray(userRes.data) ? userRes.data : userRes.data?.items || [];
-        } catch {
-          fetchedSales = [];
-        }
-      }
-
-      try {
-        const spvRes = await authFetchJson<{ data?: TeamMemberItem[] | { items?: TeamMemberItem[] } }>("/supervisors");
-        fetchedSupervisors = Array.isArray(spvRes.data) ? spvRes.data : spvRes.data?.items || [];
-      } catch {
-        try {
-          const userRes = await authFetchJson<{ data?: TeamMemberItem[] | { items?: TeamMemberItem[] } }>("/users?role=SUPERVISOR");
-          fetchedSupervisors = Array.isArray(userRes.data) ? userRes.data : userRes.data?.items || [];
-        } catch {
-          fetchedSupervisors = [];
-        }
-      }
-
-      try {
-        const rankRes = await authFetchJson<{ data?: KpiRankingItem[] | { items?: KpiRankingItem[] } }>(
-          `/kpi/ranking?period_year=${currentYear}&period_month=${currentMonth}`
-        );
-        fetchedRankings = Array.isArray(rankRes.data) ? rankRes.data : rankRes.data?.items || [];
-        
-        // Memaksa peringkat menjadi berurutan 1, 2, 3, dst di frontend
-        // Mengabaikan hasil seri (tie) dari backend
-        fetchedRankings = fetchedRankings.map((r, idx) => ({
-          ...r,
-          rank_position: idx + 1
-        }));
-      } catch {
-        fetchedRankings = [];
-      }
-
-      // Peringkat kini hanya mengandalkan data real dari API backend.
-      // Jika kosong, berarti proses KPI belum dijalankan untuk periode ini.
-
-
-      let reportCards: Array<{ key: string; label: string; value: string; description: string }> = [];
-      try {
-        const reportRes = await authFetchJson<{ data?: { cards?: Array<{ key: string; label: string; value: string; description: string }> } }>("/reports/dashboard");
-        reportCards = reportRes?.data?.cards || [];
-      } catch {
-        reportCards = [];
-      }
-
-      const getCardVal = (key: string) => reportCards.find(c => c.key === key)?.value || "0";
-
-      setDashboard({
-        ownerTotal: Number(getCardVal("owners_total")) || ownerResponse.data.pagination.total || 0,
-        outletTotal: Number(getCardVal("outlets_total")) || 0,
-        activeSubscriptions: Number(getCardVal("subscriptions_active")) || 0,
-        topupRevenue: getCardVal("topup_revenue"),
-        closingAmount: getCardVal("confirmed_closing_amount"),
-        leadTotal: leadResponse.total || 0,
-        closingTotal: Number(getCardVal("confirmed_closing_count")) || closingResponse.pagination?.total || 0,
-        interactionTotal: interactionResponse.pagination?.total || 0,
-        trainingTotal: trainingResponse.pagination?.total || 0,
-        closings: closingResponse.items || [],
-        interactions: interactionResponse.items || [],
-        trainings: trainingResponse.items || [],
-        salesMembers: fetchedSales,
-        supervisorMembers: fetchedSupervisors,
-        rankings: fetchedRankings,
-      });
-
-      if (isInitial) {
-        const userRoleNormalized = normalizeAppRole(me.role || readStoredUserSession().role);
-        if (isAdminRole(userRoleNormalized)) {
-          setActiveTabRole("ADMIN");
-        } else if (isSupervisorRole(userRoleNormalized)) {
-          setActiveTabRole("SUPERVISOR");
-        } else {
-          setActiveTabRole("SALES");
-        }
-      }
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Dashboard gagal dimuat dari backend."
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentYear, currentMonth]);
-
-  useEffect(() => {
-    // Initial fetch
-    const timer = window.setTimeout(() => {
-      void loadDashboard(true, true);
-    }, 0);
-
-    // Auto-refresh every 15 seconds for realtime dashboard
-    const intervalId = window.setInterval(() => {
-      void loadDashboard(false);
-    }, 15000);
-
-    return () => {
-      window.clearTimeout(timer);
-      window.clearInterval(intervalId);
+    return {
+      ownerTotal: Number(getCardVal(reportCards, "owners_total")) || counts?.ownerTotal || 0,
+      outletTotal: Number(getCardVal(reportCards, "outlets_total")) || 0,
+      activeSubscriptions: Number(getCardVal(reportCards, "subscriptions_active")) || 0,
+      topupRevenue: getCardVal(reportCards, "topup_revenue"),
+      closingAmount: getCardVal(reportCards, "confirmed_closing_amount"),
+      leadTotal: counts?.leadTotal || 0,
+      closingTotal: Number(getCardVal(reportCards, "confirmed_closing_count")) || counts?.closingTotal || 0,
+      interactionTotal: counts?.interactionTotal || 0,
+      trainingTotal: counts?.trainingTotal || 0,
+      closings: counts?.closings || [],
+      interactions: counts?.interactions || [],
+      trainings: counts?.trainings || [],
+      salesMembers: salesTeamQuery.data || [],
+      supervisorMembers: supervisorTeamQuery.data || [],
+      rankings: rankingQuery.data || [],
     };
-  }, [loadDashboard]);
+  }, [countsQuery.data, reportCardsQuery.data, salesTeamQuery.data, supervisorTeamQuery.data, rankingQuery.data]);
+
+  // Set the active tab from the resolved role exactly once, the first time the profile loads —
+  // mirrors the old `isInitial` guard so the 15s auto-refresh never yanks the user back to a
+  // different tab after they've manually switched.
+  const hasSetInitialTabRef = useRef(false);
+  useEffect(() => {
+    if (hasSetInitialTabRef.current) return;
+    if (!profileQuery.data) return;
+    hasSetInitialTabRef.current = true;
+
+    const userRoleNormalized = normalizeAppRole(profileQuery.data.role || readStoredUserSession().role);
+    if (isAdminRole(userRoleNormalized)) {
+      setActiveTabRole("ADMIN");
+    } else if (isSupervisorRole(userRoleNormalized)) {
+      setActiveTabRole("SUPERVISOR");
+    } else {
+      setActiveTabRole("SALES");
+    }
+  }, [profileQuery.data]);
 
   // Personal metrics for Sales user
   const personalClosings = useMemo(() => {
@@ -527,28 +449,35 @@ export default function DashboardOverviewPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F8F8] px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="w-full space-y-6">
         
         {/* Banner Section */}
-        <section className="relative overflow-hidden rounded-[36px] bg-gradient-to-br from-[#C92C1E] via-[#B2271A] to-[#8F1D13] px-6 py-8 text-white shadow-xl">
+        <AnimatedSection
+          as="section"
+          index={0}
+          className="app-accent-surface relative overflow-hidden rounded-[36px] px-6 py-8 shadow-xl"
+        >
           <div className="absolute -right-10 -top-10 h-64 w-64 rounded-full bg-white/5 blur-2xl" />
           <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="mt-3 text-3xl font-black sm:text-4xl tracking-tight">
                 Halo, {profile?.name || session.name || "Tim Piposmart"}
               </h1>
-              <p className="mt-2 max-w-2xl text-sm font-medium text-red-100/90 sm:text-base leading-relaxed">
+              <p className="app-accent-copy mt-2 max-w-2xl text-sm font-medium sm:text-base leading-relaxed">
                 Ringkasan metrik operasional dan performa tim yang telah terintegrasi secara otomatis berdasarkan role Anda.
               </p>
             </div>
 
           </div>
-        </section>
+        </AnimatedSection>
 
         {errorMessage ? (
-          <div className="rounded-[28px] border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
+          <AnimatedSection
+            index={1}
+            className="rounded-[28px] border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700"
+          >
             ⚠️ {errorMessage}
-          </div>
+          </AnimatedSection>
         ) : null}
 
 
@@ -556,10 +485,10 @@ export default function DashboardOverviewPage() {
         {/* ROLE 1: ADMIN DASHBOARD */}
         {/* ========================================================================= */}
         {activeTabRole === "ADMIN" && (
-          <div className="space-y-6">
+          <AnimatedSection index={2} className="space-y-6">
             
             {/* Summary Cards Grid */}
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <AnimatedSection index={0} as="section" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <SummaryCard
                 title="Total Owner"
                 value={isLoading ? "..." : dashboard.ownerTotal}
@@ -591,10 +520,10 @@ export default function DashboardOverviewPage() {
                 icon={<IconUsers />}
                 badgeText="Sales + SPV"
               />
-            </section>
+            </AnimatedSection>
 
             {/* Main Content Grid: Leaderboard & Team Status */}
-            <div className="grid gap-6 lg:grid-cols-12">
+            <AnimatedSection index={1} className="grid gap-6 lg:grid-cols-12">
               
               {/* Leaderboard Sales Section (Top 5 + Hide/Expand) */}
               <div className="lg:col-span-7">
@@ -780,10 +709,10 @@ export default function DashboardOverviewPage() {
                 </SectionCard>
               </div>
 
-            </div>
+            </AnimatedSection>
 
             {/* Closing & Interaksi Feed */}
-            <div className="grid gap-6 xl:grid-cols-2">
+            <AnimatedSection index={2} className="grid gap-6 xl:grid-cols-2">
               
               {/* Closing Terbaru */}
               <SectionCard
@@ -871,18 +800,18 @@ export default function DashboardOverviewPage() {
                 </div>
               </SectionCard>
 
-            </div>
-          </div>
+            </AnimatedSection>
+          </AnimatedSection>
         )}
 
         {/* ========================================================================= */}
         {/* ROLE 2: SUPERVISOR DASHBOARD */}
         {/* ========================================================================= */}
         {activeTabRole === "SUPERVISOR" && (
-          <div className="space-y-6">
+          <AnimatedSection index={2} className="space-y-6">
             
             {/* Supervisor Summary Cards */}
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <AnimatedSection index={0} as="section" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryCard
                 title="Tim Sales Berkelola"
                 value={isLoading ? "..." : spvSalesList.length}
@@ -907,10 +836,10 @@ export default function DashboardOverviewPage() {
                 hint="Pencapaian closing tim"
                 icon={<IconWallet />}
               />
-            </section>
+            </AnimatedSection>
 
             {/* Monitoring Keaktifan Sales Tim & Peringkat Tim */}
-            <div className="grid gap-6 lg:grid-cols-12">
+            <AnimatedSection index={1} className="grid gap-6 lg:grid-cols-12">
               
               {/* Monitoring Keaktifan Sales */}
               <div className="lg:col-span-7">
@@ -1013,18 +942,21 @@ export default function DashboardOverviewPage() {
                 </SectionCard>
               </div>
 
-            </div>
-          </div>
+            </AnimatedSection>
+          </AnimatedSection>
         )}
 
         {/* ========================================================================= */}
         {/* ROLE 3: SALES DASHBOARD (PERSONAL TARGET PER USER & RANK POSITION) */}
         {/* ========================================================================= */}
         {activeTabRole === "SALES" && (
-          <div className="space-y-6">
+          <AnimatedSection index={2} className="space-y-6">
             
             {/* Target & Rank Header Badge */}
-            <div className="rounded-[32px] border border-red-200 bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 p-6 shadow-sm">
+            <AnimatedSection
+              index={0}
+              className="rounded-[32px] border border-red-200 bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 p-6 shadow-sm"
+            >
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-[#C92C1E] px-3 py-1 text-[11px] font-black text-white">
@@ -1058,10 +990,10 @@ export default function DashboardOverviewPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </AnimatedSection>
 
             {/* Personal Summary Cards */}
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <AnimatedSection index={1} as="section" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryCard
                 title="Total Closing Saya"
                 value={personalClosings.length}
@@ -1086,7 +1018,7 @@ export default function DashboardOverviewPage() {
                 hint="Skor performa stabil terkumpul"
                 icon={<IconTrophy />}
               />
-            </section>
+            </AnimatedSection>
 
             {/* Target Progress Bar Cards */}
             <SectionCard
@@ -1291,7 +1223,7 @@ export default function DashboardOverviewPage() {
 
             </div>
 
-          </div>
+          </AnimatedSection>
         )}
 
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getOwnerOverview, type OwnerOverview } from "@/app/lib/api";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 
 function formatRupiah(value?: string): string {
   const amount = Number(value || 0);
@@ -71,24 +72,37 @@ export default function OwnerOverviewCard({ ownerId }: { ownerId: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">Saldo Berjalan</p>
-          <h3 className="text-2xl font-black">{formatRupiah(balance.wallet.balance)}</h3>
-        </div>
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Total Transfer</p>
-          <h3 className="text-xl font-black text-gray-900">{formatRupiah(balance.total_transferred)}</h3>
-        </div>
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Total Top Up</p>
-          <h3 className="text-xl font-black text-gray-900">{formatRupiah(balance.total_topup)}</h3>
-        </div>
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Total Terpakai</p>
-          <h3 className="text-xl font-black text-gray-900">{formatRupiah(balance.total_spent)}</h3>
-        </div>
-      </div>
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Saldo Berjalan"
+          value={formatRupiah(balance.wallet.balance)}
+          description="Saldo wallet aktif milik owner ini."
+          tone="accent"
+          silhouette="building"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Total Transfer"
+          value={formatRupiah(balance.total_transferred)}
+          description="Akumulasi transfer yang pernah tercatat."
+          tone="sky"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Total Top Up"
+          value={formatRupiah(balance.total_topup)}
+          description="Akumulasi top up wallet owner."
+          tone="emerald"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Total Terpakai"
+          value={formatRupiah(balance.total_spent)}
+          description="Total saldo yang sudah digunakan."
+          tone="rose"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200/60 bg-white p-4 shadow-sm">
         <span

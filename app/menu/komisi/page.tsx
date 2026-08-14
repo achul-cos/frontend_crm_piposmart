@@ -1,99 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AnalyticsTab from './AnalyticsTab';
-import { authFetchJson } from '@/app/lib/api';
-
-type ApiListResponse<T> = {
-  data?:
-    | T[]
-    | {
-        items?: T[];
-        pagination?: {
-          page?: number;
-          limit?: number;
-          total?: number;
-        };
-      };
-};
-
-type ApiSingleResponse<T> = {
-  data?: T;
-};
-
-type PartnerType = {
-  id?: number;
-  code?: string;
-  name?: string;
-  commission_mode?: string;
-  commission_value?: string;
-};
-
-type Partner = {
-  id: number;
-  code?: string;
-  name?: string;
-  status?: string;
-  phone?: string;
-  partner_type?: PartnerType;
-  partner_type_id?: number;
-};
-
-type PartnerCommission = {
-  id: number;
-  code?: string;
-  partner_id?: number;
-  partner_code?: string;
-  referral_id?: number;
-  closing_id?: number;
-  closing_code?: string;
-  commission_mode?: "PERCENTAGE" | "FIXED" | "TIER" | string;
-  commission_value?: string;
-  base_amount?: string;
-  commission_amount?: string;
-  currency?: string;
-  status?: "PENDING" | "APPROVED" | "PAID" | "CANCELLED" | string;
-  commission_rule_id?: number | null;
-  tier_ordinal?: number | null;
-  approved_at?: string | null;
-  paid_at?: string | null;
-  cancelled_at?: string | null;
-  note?: string;
-  approved_by?: {
-    id?: number;
-    name?: string;
-  };
-  paid_by?: {
-    id?: number;
-    name?: string;
-  };
-};
-
-type SyncCommissionResponse = {
-  created?: number;
-  items?: PartnerCommission[];
-};
-
-type PartnerPayout = {
-  id: number;
-  code?: string;
-  partner_id?: number;
-  total_amount?: string;
-  currency?: string;
-  status?: "PENDING" | "PAID" | "CANCELLED" | string;
-  paid_at?: string | null;
-  cancelled_at?: string | null;
-  created_at?: string;
-};
+import { useFeedback } from '@/app/components/feedback/FeedbackContext';
+import { AnimatedListItem } from '@/app/components/motion/primitives';
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import {
+  type Partner,
+  type PartnerCommission,
+  type PartnerPayout,
+  usePartnersQuery,
+  usePartnerCommissionsQuery,
+  usePartnerPayoutsQuery,
+  useSyncPartnerCommissions,
+  useApproveCommission,
+  usePayCommission,
+  useCancelCommission,
+  useCreatePayout,
+  usePayPayout,
+  useCancelPayout,
+} from '@/app/lib/queries/komisi';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   return "Terjadi kesalahan yang tidak diketahui.";
-}
-
-function getListItems<T>(response: ApiListResponse<T>): T[] {
-  if (Array.isArray(response.data)) return response.data;
-  return response.data?.items || [];
 }
 
 function formatRupiah(value?: string | number | null) {
@@ -143,144 +73,64 @@ function getStatusDotClass(status?: string) {
   return "bg-slate-400";
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  return authFetchJson<T>(path, options);
-}
-
-async function listPartners() {
-  const response = await apiFetch<ApiListResponse<Partner>>(
-    "/partners?page=1&limit=100",
-  );
-
-  return getListItems(response);
-}
-
-async function listCommissions(partnerId: number) {
-  const response = await apiFetch<ApiListResponse<PartnerCommission>>(
-    `/partners/${partnerId}/commissions?page=1&limit=100`,
-  );
-
-  return getListItems(response);
-}
-
-async function syncPartnerCommissions(partnerId: number) {
-  const response = await apiFetch<ApiSingleResponse<SyncCommissionResponse>>(
-    `/partners/${partnerId}/commissions/sync`,
-    {
-      method: "POST",
-    },
-  );
-
-  return (
-    response.data || {
-      created: 0,
-      items: [],
-    }
-  );
-}
-
-async function approveCommission(partnerId: number, commissionId: number) {
-  const response = await apiFetch<ApiSingleResponse<PartnerCommission>>(
-    `/partners/${partnerId}/commissions/${commissionId}/approve`,
-    {
-      method: "PATCH",
-    },
-  );
-
-  return response.data;
-}
-
-async function payCommission(partnerId: number, commissionId: number) {
-  const response = await apiFetch<ApiSingleResponse<PartnerCommission>>(
-    `/partners/${partnerId}/commissions/${commissionId}/pay`,
-    {
-      method: "PATCH",
-    },
-  );
-
-  return response.data;
-}
-
-async function cancelCommission(
-  partnerId: number,
-  commissionId: number,
-  note: string,
-) {
-  const response = await apiFetch<ApiSingleResponse<PartnerCommission>>(
-    `/partners/${partnerId}/commissions/${commissionId}/cancel`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({
-        note,
-      }),
-    },
-  );
-
-  return response.data;
-}
-
-async function listPayouts(partnerId: number) {
-  try {
-    const response = await apiFetch<ApiListResponse<PartnerPayout>>(
-      `/partners/${partnerId}/payouts?page=1&limit=50`,
-    );
-
-    return getListItems(response);
-  } catch {
-    return [];
-  }
-}
-
-async function createPayout(partnerId: number) {
-  const response = await apiFetch<ApiSingleResponse<PartnerPayout>>(
-    `/partners/${partnerId}/payouts`,
-    {
-      method: "POST",
-    },
-  );
-
-  return response.data;
-}
-
-async function payPayout(partnerId: number, payoutId: number) {
-  const response = await apiFetch<ApiSingleResponse<PartnerPayout>>(
-    `/partners/${partnerId}/payouts/${payoutId}/pay`,
-    {
-      method: "PATCH",
-    },
-  );
-
-  return response.data;
-}
-
-async function cancelPayout(partnerId: number, payoutId: number) {
-  const response = await apiFetch<ApiSingleResponse<PartnerPayout>>(
-    `/partners/${partnerId}/payouts/${payoutId}/cancel`,
-    {
-      method: "PATCH",
-    },
-  );
-
-  return response.data;
-}
-
 export default function KomisiPage() {
+  const { confirm, withLoading, showSuccess, showError } = useFeedback();
   const [activeTab, setActiveTab] = useState<"OPERATIONS" | "ANALYTICS">("OPERATIONS");
-  const [partners, setPartners] = useState<Partner[]>([]);
+  const [komisiPage, setKomisiPage] = useState(1);
   const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(
     null,
   );
 
-  const [commissions, setCommissions] = useState<PartnerCommission[]>([]);
-  const [payouts, setPayouts] = useState<PartnerPayout[]>([]);
-
-  const [loadingPartners, setLoadingPartners] = useState(true);
-  const [loadingDetail, setLoadingDetail] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
-  const [pageError, setPageError] = useState("");
-  const [pageSuccess, setPageSuccess] = useState("");
   const [selectedCommission, setSelectedCommission] =
     useState<PartnerCommission | null>(null);
+
+  const {
+    data: partners = [],
+    isLoading: loadingPartners,
+    error: partnersError,
+  } = usePartnersQuery();
+
+  // First partner is auto-selected once the list resolves, if nothing is picked yet.
+  useEffect(() => {
+    if (!selectedPartnerId && partners.length > 0) {
+      setSelectedPartnerId(partners[0].id);
+    }
+  }, [partners, selectedPartnerId]);
+
+  const {
+    data: commissions = [],
+    isLoading: loadingCommissions,
+    isFetching: fetchingCommissions,
+    error: commissionsError,
+    refetch: refetchCommissions,
+  } = usePartnerCommissionsQuery(selectedPartnerId);
+  const {
+    data: payouts = [],
+    error: payoutsError,
+    refetch: refetchPayouts,
+  } = usePartnerPayoutsQuery(selectedPartnerId);
+
+  const loadPartnerDetail = (_partnerId: number) => {
+    void refetchCommissions();
+    void refetchPayouts();
+  };
+
+  const loadingDetail = loadingCommissions || fetchingCommissions;
+  const detailError = commissionsError || payoutsError;
+  const pageError = partnersError
+    ? getErrorMessage(partnersError)
+    : detailError
+      ? getErrorMessage(detailError)
+      : "";
+
+  const syncMutation = useSyncPartnerCommissions(selectedPartnerId);
+  const approveMutation = useApproveCommission(selectedPartnerId);
+  const payMutation = usePayCommission(selectedPartnerId);
+  const cancelMutation = useCancelCommission(selectedPartnerId);
+  const createPayoutMutation = useCreatePayout(selectedPartnerId);
+  const payPayoutMutation = usePayPayout(selectedPartnerId);
+  const cancelPayoutMutation = useCancelPayout(selectedPartnerId);
 
   const selectedPartner = useMemo(
     () => partners.find((item) => item.id === selectedPartnerId) || null,
@@ -325,81 +175,30 @@ export default function KomisiPage() {
     };
   }, [commissions]);
 
-  const loadPartners = useCallback(async () => {
-    setLoadingPartners(true);
-    setPageError("");
-
-    try {
-      const items = await listPartners();
-      setPartners(items);
-
-      if (!selectedPartnerId && items.length > 0) {
-        setSelectedPartnerId(items[0].id);
-      }
-    } catch (error) {
-      setPageError(getErrorMessage(error));
-      setPartners([]);
-    } finally {
-      setLoadingPartners(false);
-    }
-  }, [selectedPartnerId]);
-
-  const loadPartnerDetail = useCallback(async (partnerId: number) => {
-    setLoadingDetail(true);
-    setPageError("");
-
-    try {
-      const [commissionItems, payoutItems] = await Promise.all([
-        listCommissions(partnerId),
-        listPayouts(partnerId),
-      ]);
-
-      setCommissions(commissionItems);
-      setPayouts(payoutItems);
-    } catch (error) {
-      setPageError(getErrorMessage(error));
-      setCommissions([]);
-      setPayouts([]);
-    } finally {
-      setLoadingDetail(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadPartners();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadPartners]);
-
-  useEffect(() => {
-    if (!selectedPartnerId) return;
-
-    const timer = window.setTimeout(() => {
-      void loadPartnerDetail(selectedPartnerId);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadPartnerDetail, selectedPartnerId]);
-
   const handleSync = async () => {
     if (!selectedPartnerId) return;
 
     setActionLoading("sync");
-    setPageError("");
-    setPageSuccess("");
 
     try {
-      const result = await syncPartnerCommissions(selectedPartnerId);
-
-      setPageSuccess(
-        `Sync komisi berhasil. Komisi baru dibuat: ${result.created || 0}.`,
+      const result = await withLoading(
+        () => syncMutation.mutateAsync(),
+        { label: "Sinkronisasi komisi..." },
       );
 
-      await loadPartnerDetail(selectedPartnerId);
+      showSuccess({
+        title: "Sync komisi berhasil",
+        message: `Komisi baru dibuat: ${result.created || 0}.`,
+      });
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError({
+        title: "Sync komisi gagal",
+        message: "Sistem gagal menarik data closing confirmed menjadi komisi.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau data referral yang belum lengkap.",
+        solution: "Periksa koneksi Anda dan coba lagi. Jika masalah berlanjut, hubungi tim support.",
+        technicalDetails: getErrorMessage(error),
+        onRetry: () => void handleSync(),
+      });
     } finally {
       setActionLoading("");
     }
@@ -409,15 +208,24 @@ export default function KomisiPage() {
     if (!selectedPartnerId) return;
 
     setActionLoading(`approve-${commission.id}`);
-    setPageError("");
-    setPageSuccess("");
 
     try {
-      await approveCommission(selectedPartnerId, commission.id);
-      setPageSuccess("Komisi berhasil di-approve.");
-      await loadPartnerDetail(selectedPartnerId);
+      await withLoading(() => approveMutation.mutateAsync(commission.id), {
+        label: "Menyetujui komisi...",
+      });
+      showSuccess({
+        title: "Komisi disetujui",
+        message: `Komisi ${commission.code || `#${commission.id}`} berhasil di-approve.`,
+      });
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError({
+        title: "Approve komisi gagal",
+        message: "Sistem gagal menyetujui komisi ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau status komisi sudah berubah.",
+        solution: "Muat ulang data komisi lalu coba lagi.",
+        technicalDetails: getErrorMessage(error),
+        onRetry: () => void handleApprove(commission),
+      });
     } finally {
       setActionLoading("");
     }
@@ -426,24 +234,35 @@ export default function KomisiPage() {
   const handlePay = async (commission: PartnerCommission) => {
     if (!selectedPartnerId) return;
 
-    const confirmPay = window.confirm(
-      `Bayar komisi ${commission.code || `#${commission.id}`} sebesar ${formatRupiah(
+    const confirmed = await confirm({
+      title: "Bayar Komisi",
+      message: `Bayar komisi ${commission.code || `#${commission.id}`} sebesar ${formatRupiah(
         commission.commission_amount,
       )}?`,
-    );
+      confirmLabel: "Bayar",
+    });
 
-    if (!confirmPay) return;
+    if (!confirmed) return;
 
     setActionLoading(`pay-${commission.id}`);
-    setPageError("");
-    setPageSuccess("");
 
     try {
-      await payCommission(selectedPartnerId, commission.id);
-      setPageSuccess("Komisi berhasil dibayar.");
-      await loadPartnerDetail(selectedPartnerId);
+      await withLoading(() => payMutation.mutateAsync(commission.id), {
+        label: "Memproses pembayaran...",
+      });
+      showSuccess({
+        title: "Komisi dibayar",
+        message: `Komisi ${commission.code || `#${commission.id}`} berhasil dibayar.`,
+      });
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError({
+        title: "Pembayaran komisi gagal",
+        message: "Sistem gagal memproses pembayaran komisi ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau status komisi sudah berubah sejak halaman dimuat.",
+        solution: "Muat ulang data komisi lalu coba lagi.",
+        technicalDetails: getErrorMessage(error),
+        onRetry: () => void handlePay(commission),
+      });
     } finally {
       setActionLoading("");
     }
@@ -461,57 +280,85 @@ export default function KomisiPage() {
     if (note === null) return;
 
     if (!note.trim()) {
-      setPageError("Alasan cancel wajib diisi.");
+      showError({
+        title: "Alasan cancel wajib diisi",
+        message: "Komisi tidak dapat dibatalkan tanpa alasan.",
+        solution: "Ulangi proses cancel dan isi alasan pembatalan.",
+      });
       return;
     }
 
     setActionLoading(`cancel-${commission.id}`);
-    setPageError("");
-    setPageSuccess("");
 
     try {
-      await cancelCommission(selectedPartnerId, commission.id, note.trim());
-      setPageSuccess("Komisi berhasil dibatalkan.");
-      await loadPartnerDetail(selectedPartnerId);
+      await withLoading(
+        () => cancelMutation.mutateAsync({ commissionId: commission.id, note: note.trim() }),
+        { label: "Membatalkan komisi..." },
+      );
+      showSuccess({
+        title: "Komisi dibatalkan",
+        message: `Komisi ${commission.code || `#${commission.id}`} berhasil dibatalkan.`,
+      });
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError({
+        title: "Pembatalan komisi gagal",
+        message: "Sistem gagal membatalkan komisi ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau status komisi sudah berubah.",
+        solution: "Muat ulang data komisi lalu coba lagi.",
+        technicalDetails: getErrorMessage(error),
+        onRetry: () => void handleCancel(commission),
+      });
     } finally {
       setActionLoading("");
     }
   };
 
   const handleCreatePayout = async () => {
-    setPageError("");
-    setPageSuccess("");
-
     if (!selectedPartnerId) {
-      setPageError("Pilih partner terlebih dahulu sebelum membuat payout.");
+      showError({
+        title: "Partner belum dipilih",
+        message: "Pilih partner terlebih dahulu sebelum membuat payout.",
+      });
       return;
     }
 
     if (summary.approved === 0) {
-      setPageError(
-        "Belum ada komisi APPROVED. Approve komisi terlebih dahulu sebelum membuat payout.",
-      );
+      showError({
+        title: "Belum ada komisi APPROVED",
+        message: "Approve komisi terlebih dahulu sebelum membuat payout.",
+      });
       return;
     }
 
-    const confirmCreate = window.confirm(
-      `Buat payout untuk ${summary.approved} komisi APPROVED milik ${
+    const confirmed = await confirm({
+      title: "Buat Payout",
+      message: `Buat payout untuk ${summary.approved} komisi APPROVED milik ${
         selectedPartner?.name || "partner ini"
       } dengan estimasi total ${formatRupiah(summary.payableAmount)}?`,
-    );
+      confirmLabel: "Buat Payout",
+    });
 
-    if (!confirmCreate) return;
+    if (!confirmed) return;
 
     setActionLoading("create-payout");
 
     try {
-      await createPayout(selectedPartnerId);
-      setPageSuccess("Payout berhasil dibuat.");
-      await loadPartnerDetail(selectedPartnerId);
+      await withLoading(() => createPayoutMutation.mutateAsync(), {
+        label: "Membuat payout...",
+      });
+      showSuccess({
+        title: "Payout dibuat",
+        message: "Payout berhasil dibuat dari komisi yang sudah approved.",
+      });
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError({
+        title: "Pembuatan payout gagal",
+        message: "Sistem gagal membuat payout untuk partner ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau tidak ada komisi approved yang tersisa.",
+        solution: "Muat ulang data komisi lalu coba lagi.",
+        technicalDetails: getErrorMessage(error),
+        onRetry: () => void handleCreatePayout(),
+      });
     } finally {
       setActionLoading("");
     }
@@ -520,24 +367,35 @@ export default function KomisiPage() {
   const handlePayPayout = async (payout: PartnerPayout) => {
     if (!selectedPartnerId) return;
 
-    const confirmPay = window.confirm(
-      `Bayar payout ${payout.code || `#${payout.id}`} sebesar ${formatRupiah(
+    const confirmed = await confirm({
+      title: "Bayar Payout",
+      message: `Bayar payout ${payout.code || `#${payout.id}`} sebesar ${formatRupiah(
         payout.total_amount,
       )}?`,
-    );
+      confirmLabel: "Bayar",
+    });
 
-    if (!confirmPay) return;
+    if (!confirmed) return;
 
     setActionLoading(`pay-payout-${payout.id}`);
-    setPageError("");
-    setPageSuccess("");
 
     try {
-      await payPayout(selectedPartnerId, payout.id);
-      setPageSuccess("Payout berhasil dibayar.");
-      await loadPartnerDetail(selectedPartnerId);
+      await withLoading(() => payPayoutMutation.mutateAsync(payout.id), {
+        label: "Memproses pembayaran payout...",
+      });
+      showSuccess({
+        title: "Payout dibayar",
+        message: `Payout ${payout.code || `#${payout.id}`} berhasil dibayar.`,
+      });
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError({
+        title: "Pembayaran payout gagal",
+        message: "Sistem gagal memproses pembayaran payout ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau status payout sudah berubah.",
+        solution: "Muat ulang data payout lalu coba lagi.",
+        technicalDetails: getErrorMessage(error),
+        onRetry: () => void handlePayPayout(payout),
+      });
     } finally {
       setActionLoading("");
     }
@@ -546,26 +404,46 @@ export default function KomisiPage() {
   const handleCancelPayout = async (payout: PartnerPayout) => {
     if (!selectedPartnerId) return;
 
-    const confirmCancel = window.confirm(
-      `Batalkan payout ${payout.code || `#${payout.id}`}?`,
-    );
+    const confirmed = await confirm({
+      title: "Batalkan Payout",
+      message: `Batalkan payout ${payout.code || `#${payout.id}`}?`,
+      confirmLabel: "Batalkan",
+      danger: true,
+    });
 
-    if (!confirmCancel) return;
+    if (!confirmed) return;
 
     setActionLoading(`cancel-payout-${payout.id}`);
-    setPageError("");
-    setPageSuccess("");
 
     try {
-      await cancelPayout(selectedPartnerId, payout.id);
-      setPageSuccess("Payout berhasil dibatalkan.");
-      await loadPartnerDetail(selectedPartnerId);
+      await withLoading(() => cancelPayoutMutation.mutateAsync(payout.id), {
+        label: "Membatalkan payout...",
+      });
+      showSuccess({
+        title: "Payout dibatalkan",
+        message: `Payout ${payout.code || `#${payout.id}`} berhasil dibatalkan.`,
+      });
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError({
+        title: "Pembatalan payout gagal",
+        message: "Sistem gagal membatalkan payout ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau status payout sudah berubah.",
+        solution: "Muat ulang data payout lalu coba lagi.",
+        technicalDetails: getErrorMessage(error),
+        onRetry: () => void handleCancelPayout(payout),
+      });
     } finally {
       setActionLoading("");
     }
   };
+
+  const komisiPageSize = 20;
+  const komisiTotalItems = commissions.length;
+  const komisiTotalPages = Math.max(1, Math.ceil(komisiTotalItems / komisiPageSize));
+  const paginatedKomisi = useMemo(() => {
+    const start = (komisiPage - 1) * komisiPageSize;
+    return commissions.slice(start, start + komisiPageSize);
+  }, [commissions, komisiPage]);
 
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
@@ -599,63 +477,61 @@ export default function KomisiPage() {
               mulai dari sync, approve, payment, cancel, hingga payout batch.
             </p>
           </div>
-
-          <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto">
-            <button
-              type="button"
-              onClick={handleSync}
-              disabled={!selectedPartnerId || actionLoading === "sync"}
-              className="w-full rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-black text-white shadow-sm shadow-red-200 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-            >
-              {actionLoading === "sync" ? "Sync..." : "Sync Komisi"}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCreatePayout}
-              disabled={!selectedPartnerId || actionLoading === "create-payout"}
-              title={
-                !selectedPartnerId
-                  ? "Pilih partner terlebih dahulu."
-                  : summary.approved === 0
-                    ? "Approve komisi terlebih dahulu sebelum membuat payout."
-                    : "Buat payout dari komisi approved."
-              }
-              className="w-full rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-[#C92C1E] transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {actionLoading === "create-payout"
-                ? "Membuat..."
-                : summary.approved === 0
-                  ? "Approve Komisi Dulu"
-                  : "Buat Payout"}
-            </button>
-          </div>
         </div>
+      </div>
 
-        {/* Sub Menu / Tab Selection */}
-        <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-100 p-4">
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Komisi"
+          value={summary.total}
+          description="Total ledger komisi partner yang tercatat."
+          tone="accent"
+          silhouette="percent"
+        />
+        <QuickInfoCard
+          label="Pending"
+          value={summary.pending}
+          description="Komisi yang belum disetujui atau dibayarkan."
+          tone="amber"
+        />
+        <QuickInfoCard
+          label="Approved"
+          value={summary.approved}
+          description={formatRupiah(summary.payableAmount)}
+          tone="sky"
+        />
+        <QuickInfoCard
+          label="Paid"
+          value={summary.paid}
+          description={formatRupiah(summary.paidAmount)}
+          tone="emerald"
+        />
+      </QuickInfoCardGrid>
+
+      <div className="flex w-max max-w-full overflow-x-auto rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
           <button
             type="button"
             onClick={() => setActiveTab("OPERATIONS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+            className={`rounded-lg px-5 py-2.5 transition-all ${
               activeTab === "OPERATIONS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
             }`}
           >
-            <span>Daftar Komisi & Payout</span>
+            Daftar Komisi & Payout
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("ANALYTICS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+            className={`rounded-lg px-5 py-2.5 transition-all ${
               activeTab === "ANALYTICS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
             }`}
           >
-            <span>Analitik & Health Komisi</span>
+            Analitik & Health Komisi
           </button>
         </div>
       </div>
@@ -670,57 +546,11 @@ export default function KomisiPage() {
             </div>
           ) : null}
 
-          {pageSuccess ? (
-            <div className="min-w-0 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-              {pageSuccess}
-            </div>
-          ) : null}
-
-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-            Total Komisi
-          </p>
-          <h2 className="text-3xl font-black">{summary.total}</h2>
-        </div>
-
-        <div className="min-w-0 rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Pending
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {summary.pending}
-          </h2>
-        </div>
-
-        <div className="min-w-0 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Approved
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {summary.approved}
-          </h2>
-          <p className="mt-1 break-words text-xs font-bold text-blue-600">
-            {formatRupiah(summary.payableAmount)}
-          </p>
-        </div>
-
-        <div className="min-w-0 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Paid
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{summary.paid}</h2>
-          <p className="mt-1 break-words text-xs font-bold text-emerald-600">
-            {formatRupiah(summary.paidAmount)}
-          </p>
-        </div>
-      </div>
-
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex min-w-0 flex-col gap-3 border-b border-gray-100 bg-gray-50/50 p-4 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-black text-gray-900">Ledger Komisi</p>
-            <p className="mt-1 break-words text-xs font-medium text-gray-400">
+      <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Ledger Komisi</h2>
+            <p className="mt-1 text-sm text-gray-500">
               {selectedPartner
                 ? `${selectedPartner.name || "-"} · ${
                     selectedPartner.code || `ID #${selectedPartner.id}`
@@ -728,17 +558,48 @@ export default function KomisiPage() {
                 : "Pilih partner terlebih dahulu."}
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              selectedPartnerId && void loadPartnerDetail(selectedPartnerId)
-            }
-            disabled={!selectedPartnerId || loadingDetail}
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            {loadingDetail ? "Refresh..." : "Refresh"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3 w-full">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSync}
+                disabled={!selectedPartnerId || actionLoading === "sync"}
+                className="w-full sm:w-auto rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-black text-white shadow-sm shadow-red-200 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {actionLoading === "sync" ? "Sync..." : "Sync Komisi"}
+              </button>
+  
+              <button
+                type="button"
+                onClick={handleCreatePayout}
+                disabled={!selectedPartnerId || actionLoading === "create-payout"}
+                title={
+                  !selectedPartnerId
+                    ? "Pilih partner terlebih dahulu."
+                    : summary.approved === 0
+                      ? "Approve komisi terlebih dahulu sebelum membuat payout."
+                      : "Buat payout dari komisi approved."
+                }
+                className="w-full sm:w-auto rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-[#C92C1E] transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionLoading === "create-payout"
+                  ? "Membuat..."
+                  : summary.approved === 0
+                    ? "Approve Komisi Dulu"
+                    : "Buat Payout"}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                selectedPartnerId && void loadPartnerDetail(selectedPartnerId)
+              }
+              disabled={!selectedPartnerId || loadingDetail}
+              className="rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loadingDetail ? "Refresh..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         <div className="min-w-0 p-4">
@@ -836,41 +697,50 @@ export default function KomisiPage() {
                       {status === "PENDING" ? (
                         <button
                           type="button"
+                          title="Approve"
                           onClick={() => void handleApprove(commission)}
-                          disabled={
-                            actionLoading === `approve-${commission.id}`
-                          }
-                          className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={actionLoading === `approve-${commission.id}`}
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {actionLoading === `approve-${commission.id}`
-                            ? "Approve..."
-                            : "Approve"}
+                          {actionLoading === `approve-${commission.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          )}
                         </button>
                       ) : null}
 
                       {status === "APPROVED" ? (
                         <button
                           type="button"
+                          title="Pay"
                           onClick={() => void handlePay(commission)}
                           disabled={actionLoading === `pay-${commission.id}`}
-                          className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {actionLoading === `pay-${commission.id}`
-                            ? "Pay..."
-                            : "Pay"}
+                          {actionLoading === `pay-${commission.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          )}
                         </button>
                       ) : null}
 
                       {status === "PENDING" || status === "APPROVED" ? (
                         <button
                           type="button"
+                          title="Cancel"
                           onClick={() => void handleCancel(commission)}
                           disabled={
                             actionLoading === `cancel-${commission.id}`
                           }
-                          className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Cancel
+                          {actionLoading === `cancel-${commission.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          )}
                         </button>
                       ) : null}
 
@@ -888,13 +758,15 @@ export default function KomisiPage() {
         </div>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-          <p className="text-sm font-black text-gray-900">Payout Batch</p>
-          <p className="mt-1 break-words text-xs font-medium text-gray-400">
-            Payout akan membatch commission berstatus APPROVED untuk partner
-            terpilih.
-          </p>
+      <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Payout Batch</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Payout akan membatch commission berstatus APPROVED untuk partner
+              terpilih.
+            </p>
+          </div>
         </div>
 
         <div className="min-w-0 p-4">
@@ -969,24 +841,34 @@ export default function KomisiPage() {
                       <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 sm:flex sm:justify-end">
                         <button
                           type="button"
+                          title="Pay"
                           onClick={() => void handlePayPayout(payout)}
                           disabled={
                             actionLoading === `pay-payout-${payout.id}`
                           }
-                          className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Pay
+                          {actionLoading === `pay-payout-${payout.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          )}
                         </button>
 
                         <button
                           type="button"
+                          title="Cancel"
                           onClick={() => void handleCancelPayout(payout)}
                           disabled={
                             actionLoading === `cancel-payout-${payout.id}`
                           }
-                          className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Cancel
+                          {actionLoading === `cancel-payout-${payout.id}` ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          )}
                         </button>
                       </div>
                     ) : null}
@@ -998,12 +880,14 @@ export default function KomisiPage() {
         </div>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
-        <div className="border-b border-gray-100 bg-gray-50/70 p-4">
-          <p className="text-sm font-black text-gray-900">Daftar Partner</p>
-          <p className="mt-1 break-words text-xs font-medium text-gray-400">
-            Pilih partner untuk melihat ledger komisi.
-          </p>
+      <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+        <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Daftar Partner</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Pilih partner untuk melihat ledger komisi.
+            </p>
+          </div>
         </div>
 
         <div className="min-w-0 p-4">
@@ -1071,10 +955,10 @@ export default function KomisiPage() {
         >
           <div className="flex min-h-full w-full max-w-full items-center justify-center overflow-x-hidden p-4 md:p-6">
             <div
-              className="w-full max-w-3xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+              className="app-modal-panel w-full max-w-3xl rounded-[32px] shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+              <div className="app-modal-header px-5 py-4 md:px-6">
                 <div className="flex min-w-0 items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -1092,14 +976,14 @@ export default function KomisiPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedCommission(null)}
-                    className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                    className="app-modal-close shrink-0 rounded-2xl px-4 py-2 text-xs font-black transition"
                   >
                     Tutup
                   </button>
                 </div>
               </div>
 
-              <div className="grid min-w-0 grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
+              <div className="app-modal-body grid min-w-0 grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                 {[
                   ["Kode Komisi", selectedCommission.code || "-"],
                   ["Status", selectedCommission.status || "-"],

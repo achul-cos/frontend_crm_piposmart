@@ -1,23 +1,33 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Eye, UserRoundCog, Search } from "lucide-react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { formatPhoneDisplay } from "@/app/lib/phone";
 import {
-  createPartner,
-  deactivatePartner,
-  listPartners,
-  listPartnerTypes,
-  updatePartner,
-  type PartnerItem,
-  type PartnerTypeItem,
-} from "@/app/lib/api";
+  RowActionButton,
+  RowActionGroup,
+  ViewActionButton,
+  EditActionButton,
+  ToggleActiveActionButton,
+} from "@/app/components/table/RowActionButton";
+import type { PartnerItem, PartnerTypeItem } from "@/app/lib/api";
+import {
+  useCreatePartner,
+  useDeactivatePartner,
+  usePartnerTypesQuery,
+  usePartnersQuery,
+  useUpdatePartner,
+} from "@/app/lib/queries/mitraSales";
 import MitraSalesFormModal, {
   type PartnerFormState,
 } from "./MitraSalesFormModal";
 import AnalyticsTab from "./AnalyticsTab";
 import { PartnerActivityBadge } from "@/app/components/PartnerActivityBadge";
 import { PartnerPICLabel } from "@/app/components/PartnerPICLabel";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
 
 type TableMode =
   | "PARTNER_TYPES"
@@ -33,6 +43,10 @@ const EMPTY_PARTNER_FORM: PartnerFormState = {
   name: "",
   phone: "",
   email: "",
+  province: "",
+  city: "",
+  district: "",
+  subDistrict: "",
   address: "",
   bankAccount: "",
   status: "ACTIVE",
@@ -101,12 +115,10 @@ function getStatusBadgeClass(status?: string) {
 export default function MitraSalesPage() {
   usePageTitle("Mitra Sales");
 
+  const { confirm, withLoading } = useFeedback();
   const [tableMode, setTableMode] = useState<TableMode>("PARTNER_TYPES");
-  const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
-  const [partners, setPartners] = useState<PartnerItem[]>([]);
+  const [mitraPage, setMitraPage] = useState(1);
 
-  const [loading, setLoading] = useState(true);
-  const [loadingMaster, setLoadingMaster] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [pageError, setPageError] = useState("");
@@ -116,6 +128,57 @@ export default function MitraSalesPage() {
   const [appliedSearch, setAppliedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [typeSearch, setTypeSearch] = useState("");
+  const [selectedPartnerTypeIds, setSelectedPartnerTypeIds] = useState<number[]>([]);
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
+  const hasMoved = useRef(false);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      hasMoved.current = false;
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleToggleSelectRow = useCallback((id: number) => {
+    setSelectedPartnerIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
+    setIsDragging(true);
+    hasMoved.current = false;
+    const mode = currentlySelected ? "deselect" : "select";
+    setDragMode(mode);
+
+    setSelectedPartnerIds((prev) => {
+      if (mode === "select" && !prev.includes(id)) return [...prev, id];
+      if (mode === "deselect" && prev.includes(id)) {
+        return prev.filter((selectedId) => selectedId !== id);
+      }
+      return prev;
+    });
+  };
+
+  const handleRowMouseEnter = (id: number) => {
+    if (!isDragging) return;
+
+    if (hasMoved.current) {
+      setSelectedPartnerIds((prev) => {
+        if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
+        if (dragMode === "deselect" && prev.includes(id)) {
+          return prev.filter((selectedId) => selectedId !== id);
+        }
+        return prev;
+      });
+    }
+    hasMoved.current = true;
+  };
+
   const [page, setPage] = useState(1);
 
   const [showPartnerModal, setShowPartnerModal] = useState(false);
@@ -126,69 +189,35 @@ export default function MitraSalesPage() {
     useState<PartnerFormState>(EMPTY_PARTNER_FORM);
   const [partnerFormError, setPartnerFormError] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
+  const partnersParams = useMemo(
+    () => ({
+      search: appliedSearch,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
+    [appliedSearch, page],
+  );
 
-    const loadMaster = async () => {
-      setLoadingMaster(true);
-      setPageError("");
+  const {
+    data: partnerTypesData,
+    isLoading: loadingMaster,
+    error: partnerTypesError,
+  } = usePartnerTypesQuery();
+  const partnerTypes: PartnerTypeItem[] = partnerTypesData?.items || [];
 
-      try {
-        const result = await listPartnerTypes();
+  const {
+    data: partnersData,
+    isLoading: loading,
+    error: partnersError,
+  } = usePartnersQuery(partnersParams);
+  const partners: PartnerItem[] = partnersData?.items || [];
 
-        if (cancelled) return;
+  const loadError = partnerTypesError || partnersError;
+  const effectivePageError = pageError || (loadError ? getErrorMessage(loadError) : "");
 
-        setPartnerTypes(result.items || []);
-      } catch (error) {
-        if (!cancelled) {
-          setPageError(getErrorMessage(error));
-          setPartnerTypes([]);
-        }
-      } finally {
-        if (!cancelled) setLoadingMaster(false);
-      }
-    };
-
-    void loadMaster();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadData = async () => {
-      setLoading(true);
-      setPageError("");
-
-      try {
-        const result = await listPartners({
-          search: appliedSearch,
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
-        });
-
-        if (cancelled) return;
-
-        setPartners(result.items || []);
-      } catch (error) {
-        if (!cancelled) {
-          setPageError(getErrorMessage(error));
-          setPartners([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [appliedSearch, page]);
+  const createPartnerMutation = useCreatePartner();
+  const updatePartnerMutation = useUpdatePartner();
+  const deactivatePartnerMutation = useDeactivatePartner();
 
   const filteredPartners = useMemo(() => {
     return partners.filter((partner) =>
@@ -207,6 +236,16 @@ export default function MitraSalesPage() {
   const visiblePartners = useMemo(() => {
     return tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
   }, [activePartners, inactivePartners, tableMode]);
+
+  useEffect(() => { setMitraPage(1); }, [appliedSearch, tableMode, typeFilter]);
+
+  const mitraPageSize = 20;
+  const mitraTotalItems = visiblePartners.length;
+  const mitraTotalPages = Math.max(1, Math.ceil(mitraTotalItems / mitraPageSize));
+  const paginatedMitra = useMemo(() => {
+    const start = (mitraPage - 1) * mitraPageSize;
+    return visiblePartners.slice(start, start + mitraPageSize);
+  }, [visiblePartners, mitraPage]);
 
   const filteredPartnerTypes = useMemo(() => {
     const keyword = typeSearch.trim().toLowerCase();
@@ -227,16 +266,6 @@ export default function MitraSalesPage() {
     );
   }, [partnerTypes, typeSearch]);
 
-  const refreshPartners = async () => {
-    const result = await listPartners({
-      search: appliedSearch,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
-    });
-
-    setPartners(result.items || []);
-  };
-
   const openCreatePartnerModal = () => {
     setEditingPartner(null);
     setPartnerForm(EMPTY_PARTNER_FORM);
@@ -254,6 +283,10 @@ export default function MitraSalesPage() {
       name: partner.name || "",
       phone: partner.phone || "",
       email: partner.email || "",
+      province: partner.province || "",
+      city: partner.city || "",
+      district: partner.district || "",
+      subDistrict: partner.sub_district || "",
       address: partner.address || "",
       bankAccount: "",
       status: partner.status || "ACTIVE",
@@ -303,18 +336,25 @@ export default function MitraSalesPage() {
 
     try {
       if (editingPartner) {
-        await updatePartner(editingPartner.id, {
-          name: partnerForm.name.trim(),
-          phone: partnerForm.phone.trim() || undefined,
-          email: partnerForm.email.trim() || undefined,
-          address: partnerForm.address.trim() || undefined,
-          bank_account: partnerForm.bankAccount.trim() || undefined,
-          status: partnerForm.status,
+        await updatePartnerMutation.mutateAsync({
+          id: editingPartner.id,
+          payload: {
+            name: partnerForm.name.trim(),
+            phone: partnerForm.phone.trim() || undefined,
+            email: partnerForm.email.trim() || undefined,
+            province: partnerForm.province.trim() || undefined,
+            city: partnerForm.city.trim() || undefined,
+            district: partnerForm.district.trim() || undefined,
+            sub_district: partnerForm.subDistrict.trim() || undefined,
+            address: partnerForm.address.trim() || undefined,
+            bank_account: partnerForm.bankAccount.trim() || undefined,
+            status: partnerForm.status,
+          },
         });
 
         setPageSuccess("Mitra berhasil diperbarui.");
       } else {
-        await createPartner({
+        await createPartnerMutation.mutateAsync({
           partner_type_id: Number(partnerForm.partnerTypeId),
           code: partnerForm.code.trim().toUpperCase(),
           name: partnerForm.name.trim(),
@@ -330,7 +370,6 @@ export default function MitraSalesPage() {
       }
 
       closePartnerModal();
-      await refreshPartners();
     } catch (error) {
       setPartnerFormError(getErrorMessage(error));
     } finally {
@@ -339,16 +378,23 @@ export default function MitraSalesPage() {
   };
 
   const handleDeactivatePartner = async (partner: PartnerItem) => {
-    if (!window.confirm(`Nonaktifkan mitra ${partner.name}?`)) return;
+    const ok = await confirm({
+      title: "Nonaktifkan Mitra",
+      message: `Nonaktifkan mitra ${partner.name}? Mitra ini tidak akan bisa dipakai untuk referral baru sampai diaktifkan kembali.`,
+      confirmLabel: "Nonaktifkan",
+      danger: true,
+    });
+    if (!ok) return;
 
     setSaving(true);
     setPageError("");
     setPageSuccess("");
 
     try {
-      await deactivatePartner(partner.id);
+      await withLoading(() => deactivatePartnerMutation.mutateAsync(partner.id), {
+        label: "Menonaktifkan mitra...",
+      });
       setPageSuccess("Mitra berhasil dinonaktifkan.");
-      await refreshPartners();
     } catch (error) {
       setPageError(getErrorMessage(error));
     } finally {
@@ -357,16 +403,23 @@ export default function MitraSalesPage() {
   };
 
   const handleRestorePartner = async (partner: PartnerItem) => {
-    if (!window.confirm(`Pulihkan mitra ${partner.name}?`)) return;
+    const ok = await confirm({
+      title: "Pulihkan Mitra",
+      message: `Pulihkan mitra ${partner.name} menjadi aktif kembali?`,
+      confirmLabel: "Pulihkan",
+    });
+    if (!ok) return;
 
     setSaving(true);
     setPageError("");
     setPageSuccess("");
 
     try {
-      await updatePartner(partner.id, { status: "ACTIVE" });
+      await withLoading(
+        () => updatePartnerMutation.mutateAsync({ id: partner.id, payload: { status: "ACTIVE" } }),
+        { label: "Memulihkan mitra..." },
+      );
       setPageSuccess("Mitra berhasil dipulihkan.");
-      await refreshPartners();
     } catch (error) {
       setPageError(getErrorMessage(error));
     } finally {
@@ -415,19 +468,10 @@ export default function MitraSalesPage() {
             </h1>
 
             <p className="mt-1 break-words text-sm text-gray-500">
-              Kelola mitra milik Sales, lihat jenis mitra, dan pantau analitik
+              Kelola mitra lihat jenis mitra, dan pantau analitik
               performa mitra.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={openCreatePartnerModal}
-            disabled={partnerTypes.length === 0 || loadingMaster}
-            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-          >
-            + Tambah Mitra
-          </button>
         </div>
       </div>
 
@@ -443,62 +487,50 @@ export default function MitraSalesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-            Total Mitra
-          </p>
-          <h2 className="text-3xl font-black">{filteredPartners.length}</h2>
-        </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Total Mitra"
+          value={filteredPartners.length}
+          description="Data mitra yang masuk pada filter aktif."
+          tone="accent"
+          silhouette="people"
+        />
+        <QuickInfoCard
+          label="Mitra Aktif"
+          value={activePartners.length}
+          description="Mitra aktif yang bisa ditangani sales."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Mitra Nonaktif"
+          value={inactivePartners.length}
+          description="Mitra yang sedang nonaktif pada modul ini."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
 
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Mitra Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {activePartners.length}
-          </h2>
-        </div>
-
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Mitra Nonaktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">
-            {inactivePartners.length}
-          </h2>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Jenis Mitra
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {partnerTypes.length}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Referensi jenis mitra yang dapat dipakai untuk onboarding mitra baru.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Data Ditampilkan
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {tableMode === "PARTNER_TYPES"
+      <QuickInfoCardGrid columns={2}>
+        <QuickInfoCard
+          label="Jenis Mitra"
+          value={partnerTypes.length}
+          description="Referensi jenis mitra untuk onboarding."
+          tone="violet"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Data Ditampilkan"
+          value={
+            tableMode === "PARTNER_TYPES"
               ? filteredPartnerTypes.length
               : tableMode === "ANALYTICS"
                 ? partnerTypes.length + filteredPartners.length
-                : visiblePartners.length}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Sesuai tab dan filter yang sedang aktif.
-          </p>
-        </div>
-      </div>
+                : visiblePartners.length
+          }
+          description="Sesuai tab dan filter yang sedang aktif."
+          tone="sky"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+      </QuickInfoCardGrid>
 
       <div className="rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="grid grid-cols-2 gap-1 text-sm font-bold md:flex">
@@ -523,28 +555,54 @@ export default function MitraSalesPage() {
         <AnalyticsTab />
       ) : tableMode === "PARTNER_TYPES" ? (
         <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-col gap-4 border-b border-gray-100 bg-gray-50/50 p-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
             <div>
-              <p className="text-sm font-black text-gray-900">
+              <h2 className="text-xl font-bold text-gray-900">
                 Referensi Jenis Mitra
-              </p>
-              <p className="mt-1 text-xs font-medium text-gray-400">
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
                 Jenis mitra tampil sebagai referensi untuk Sales.
               </p>
             </div>
-
-            <input
-              value={typeSearch}
-              onChange={(event) => setTypeSearch(event.target.value)}
-              placeholder="Cari jenis mitra"
-              className="w-full rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100 md:max-w-sm"
-            />
           </div>
 
-          <div className="overflow-x-auto p-0">
-            <table className="w-full min-w-[800px] text-left text-sm text-gray-600">
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={typeSearch}
+                  onChange={(event) => setTypeSearch(event.target.value)}
+                  placeholder="Cari jenis mitra..."
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="relative w-full">
+            <div className="flex flex-col">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredPartnerTypes.length > 0 && selectedPartnerTypeIds.length === filteredPartnerTypes.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedPartnerTypeIds(filteredPartnerTypes.map(pt => pt.id));
+                        } else {
+                          setSelectedPartnerTypeIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Kode</th>
                   <th className="px-4 py-4 font-bold">Jenis Mitra</th>
                   <th className="px-4 py-4 font-bold">Komisi Dasar</th>
@@ -555,20 +613,33 @@ export default function MitraSalesPage() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loadingMaster ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Memuat jenis mitra...
                     </td>
                   </tr>
                 ) : filteredPartnerTypes.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Jenis mitra tidak ditemukan.
                     </td>
                   </tr>
                 ) : (
                   filteredPartnerTypes.map((item) => (
-                    <tr key={item.id} className="transition-colors hover:bg-gray-50">
-                      <td className="px-4 py-4 align-top font-bold text-gray-900">
+                    <tr key={item.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerTypeIds.includes(item.id) ? "bg-red-50/50" : ""}`}>
+                      <td className="w-12 px-4 py-4 text-center align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedPartnerTypeIds.includes(item.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedPartnerTypeIds(prev =>
+                              checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
+                            );
+                          }}
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        />
+                      </td>
+                      <td className="px-4 py-4 align-top font-medium text-gray-900">
                         {item.code}
                       </td>
                       <td className="px-4 py-4 align-top">
@@ -586,73 +657,142 @@ export default function MitraSalesPage() {
                         </p>
                       </td>
                       <td className="px-4 py-4 text-center align-top">
-                        <div className="flex items-center justify-center gap-2">
-                          <Link
+                        <RowActionGroup>
+                          <ViewActionButton
                             href={`/menu/mitra-sales/jenis-mitra/${item.id}`}
-                            className="rounded-lg bg-blue-50 px-3 py-2 text-[10px] font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                          >
-                            Detail
-                          </Link>
-                        </div>
+                            title="Detail"
+                          />
+                        </RowActionGroup>
                       </td>
                     </tr>
                   ))
                 )}
-              </tbody>
-            </table>
+                  </tbody>
+                </table>
+          {mitraTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+              <div className="text-xs font-medium text-gray-500">
+                Menampilkan <span className="font-bold text-gray-900">{(mitraPage - 1) * mitraPageSize + 1}</span> hingga{" "}
+                <span className="font-bold text-gray-900">{Math.min(mitraPage * mitraPageSize, mitraTotalItems)}</span> dari{" "}
+                <span className="font-bold text-gray-900">{mitraTotalItems}</span> data
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setMitraPage((p) => Math.max(1, p - 1))}
+                  disabled={mitraPage === 1}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <span className="text-xs font-bold text-gray-700">Halaman {mitraPage} / {mitraTotalPages}</span>
+                <button
+                  onClick={() => setMitraPage((p) => Math.min(mitraTotalPages, p + 1))}
+                  disabled={mitraPage === mitraTotalPages}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            </div>
+          )}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-col gap-4 border-b border-gray-100 bg-gray-50/50 p-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <p className="text-sm font-black text-gray-900">
-                {tableMode === "ACTIVE_PARTNERS"
-                  ? "Daftar Mitra Aktif"
-                  : "Daftar Mitra Non Aktif"}
-              </p>
-              <p className="mt-1 text-xs font-medium text-gray-400">
-                Data mitra yang dikelola dari halaman Mitra Sales.
-              </p>
+          <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {tableMode === "ACTIVE_PARTNERS"
+                    ? "Daftar Mitra Aktif"
+                    : "Daftar Mitra Non Aktif"}
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Data mitra yang dikelola dari halaman Mitra Sales.
+                </p>
+              </div>
+              <div className="flex w-full flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={openCreatePartnerModal}
+                  disabled={partnerTypes.length === 0 || loadingMaster}
+                  className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  + Tambah Mitra
+                </button>
+              </div>
             </div>
 
-            <form
-              onSubmit={handleSearch}
-              className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]"
-            >
-              <input
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder="Cari nama atau code mitra"
-                className="rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-              />
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-wrap items-start gap-4">
+                <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                  <span className="text-xs font-semibold text-black">Jenis Mitra</span>
+                  <select
+                    value={typeFilter}
+                    onChange={(event) => setTypeFilter(event.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                  >
+                    <option value="ALL">Semua Jenis</option>
+                    {partnerTypes.map((type) => (
+                      <option key={type.id} value={type.code}>
+                        {type.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
 
-              <select
-                value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value)}
-                className="rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-              >
-                <option value="ALL">Semua Type</option>
-                {partnerTypes.map((item) => (
-                  <option key={item.id} value={item.code}>
-                    {item.name || item.code}
-                  </option>
-                ))}
-              </select>
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <form onSubmit={handleSearch} className="relative flex-1 flex gap-3">
+                  <div className="relative flex-1">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                      <Search className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchDraft}
+                      onChange={(event) => setSearchDraft(event.target.value)}
+                      placeholder="Cari nama, PIC, atau email..."
+                      className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 shrink-0"
+                  >
+                    Cari
+                  </button>
+                </form>
+              </div>
+            </div>
 
-              <button
-                type="submit"
-                className="rounded-lg bg-[#C92C1E] px-4 py-2 text-sm font-black text-white transition-colors hover:bg-red-700"
-              >
-                Cari
-              </button>
-            </form>
-          </div>
-
-          <div className="overflow-x-auto p-0">
-            <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+          <div className="relative w-full">
+            <div className="flex flex-col">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[920px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length > 0 &&
+                        selectedPartnerIds.length === (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length
+                      }
+                      onChange={(e) => {
+                        const targetList = tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
+                        if (e.target.checked) {
+                          setSelectedPartnerIds(targetList.map(p => p.id));
+                        } else {
+                          setSelectedPartnerIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Mitra</th>
                   <th className="px-4 py-4 font-bold">PIC</th>
                   <th className="px-4 py-4 font-bold">Jenis Mitra</th>
@@ -666,19 +806,51 @@ export default function MitraSalesPage() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
                       Memuat data mitra...
                     </td>
                   </tr>
-                ) : visiblePartners.length === 0 ? (
+                ) : paginatedMitra.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
                       Data mitra tidak ditemukan.
                     </td>
                   </tr>
                 ) : (
-                  visiblePartners.map((partner) => (
-                    <tr key={partner.id} className="transition-colors hover:bg-gray-50">
+                  paginatedMitra.map((partner) => {
+                    const isSelected = selectedPartnerIds.includes(partner.id);
+                    return (
+                      <tr
+                        key={partner.id}
+                        className={`transition-colors cursor-pointer select-none ${
+                          isSelected
+                            ? "bg-red-50/50 hover:bg-red-50/70"
+                            : "hover:bg-gray-50"
+                        }`}
+                        onMouseDown={(e) => {
+                          if ((e.target as HTMLElement).closest('button, a')) return;
+                          if (e.button !== 0) return;
+                          handleRowMouseDown(partner.id, isSelected);
+                        }}
+                        onMouseEnter={() => {
+                          handleRowMouseEnter(partner.id);
+                        }}
+                      >
+                        <td
+                          className="w-12 px-4 py-4 text-center align-top cursor-pointer"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelectRow(partner.id);
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            readOnly
+                            className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
+                          />
+                        </td>
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-1">
                           <p className="font-bold text-gray-900">{partner.name || "-"}</p>
@@ -693,7 +865,7 @@ export default function MitraSalesPage() {
                         <p className="mt-1 text-xs text-gray-400">{partner.partner_type?.code || "-"}</p>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <p className="font-medium text-gray-900">{partner.phone || "-"}</p>
+                        <p className="font-medium text-gray-900">{partner.phone ? formatPhoneDisplay(partner.phone) : "-"}</p>
                         <p className="mt-1 text-xs text-gray-400">{partner.email || "-"}</p>
                       </td>
                       <td className="px-4 py-4 align-top font-medium text-gray-900">
@@ -704,83 +876,79 @@ export default function MitraSalesPage() {
                       </td>
                       <td className="px-4 py-4 align-top max-w-[200px]">
                         <p className="truncate whitespace-normal text-xs leading-relaxed text-gray-600">
-                          {partner.address || "-"}
+                          {[partner.address, partner.sub_district, partner.district, partner.city, partner.province].filter(Boolean).join(", ") || "-"}
                         </p>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <div className="flex flex-wrap items-center justify-center gap-2">
-                          <Link
+                        <RowActionGroup>
+                          <RowActionButton
+                            icon={Eye}
+                            tone="view"
+                            title="Detail & PIC"
                             href={`/menu/mitra-sales/detail?id=${partner.id}`}
-                            className="rounded-lg bg-blue-50 px-3 py-2 text-center text-[10px] font-black text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                          >
-                            Detail & PIC
-                          </Link>
+                          />
                           {tableMode === "ACTIVE_PARTNERS" ? (
                             <>
-                              <Link
+                              <RowActionButton
+                                icon={UserRoundCog}
+                                tone="view"
+                                title="Lead Afiliasi"
                                 href={`/menu/mitra-sales/detail?id=${partner.id}&tab=referral`}
-                                className="rounded-lg bg-red-50 px-3 py-2 text-center text-[10px] font-black text-[#C92C1E] transition-colors hover:bg-red-100"
-                              >
-                                + Lead Afiliasi
-                              </Link>
-                              <button
-                                type="button"
+                              />
+                              <EditActionButton
                                 onClick={() => openEditPartnerModal(partner)}
-                                className="rounded-lg bg-orange-50 px-3 py-2 text-[10px] font-black text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
+                              />
+                              <ToggleActiveActionButton
+                                active={true}
                                 onClick={() => void handleDeactivatePartner(partner)}
                                 disabled={saving}
-                                className="rounded-lg bg-gray-50 px-3 py-2 text-[10px] font-black text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                Nonaktif
-                              </button>
+                              />
                             </>
                           ) : (
-                            <button
-                              type="button"
+                            <ToggleActiveActionButton
+                              active={false}
                               onClick={() => void handleRestorePartner(partner)}
                               disabled={saving}
-                              className="rounded-lg bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Pulihkan
-                            </button>
+                            />
                           )}
-                        </div>
+                        </RowActionGroup>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
 
-          <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
-            <span className="text-xs font-bold text-gray-500">
-              Halaman {page}
-            </span>
-
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
-              >
-                Sebelumnya
-              </button>
-
-              <button
-                disabled={partners.length < PAGE_SIZE}
-                onClick={() => setPage((prev) => prev + 1)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
-              >
-                Selanjutnya
-              </button>
+          {mitraTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+              <div className="text-xs font-medium text-gray-500">
+                Menampilkan <span className="font-bold text-gray-900">{(mitraPage - 1) * mitraPageSize + 1}</span> hingga{" "}
+                <span className="font-bold text-gray-900">{Math.min(mitraPage * mitraPageSize, mitraTotalItems)}</span> dari{" "}
+                <span className="font-bold text-gray-900">{mitraTotalItems}</span> data
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setMitraPage((p) => Math.max(1, p - 1))}
+                  disabled={mitraPage === 1}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <span className="text-xs font-bold text-gray-700">Halaman {mitraPage} / {mitraTotalPages}</span>
+                <button
+                  onClick={() => setMitraPage((p) => Math.min(mitraTotalPages, p + 1))}
+                  disabled={mitraPage === mitraTotalPages}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Selanjutnya
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 

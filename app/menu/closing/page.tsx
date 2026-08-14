@@ -1,17 +1,27 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import Sprint14g1Board, {
-  type Sprint14g1Section,
-} from "@/app/components/analytics/Sprint14g1Board";
+import type { Sprint14g1Section } from "@/app/components/analytics/Sprint14g1Board";
+import { getProfile } from "@/app/lib/api";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
 import {
-  fetchClosings,
-  getSalesList,
-  getProfile,
-  type ClosingItem,
-  type UserResponse,
-} from "@/app/lib/api";
+  useClosingListQuery,
+  useClosingSalesListQuery,
+} from "@/app/lib/queries/closing";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+
+const Sprint14g1Board = dynamic(
+  () => import("@/app/components/analytics/Sprint14g1Board"),
+  {
+    ssr: false,
+    loading: () => <AnalyticsTabSkeleton sections={2} />,
+  },
+);
 
 type ClosingColumnKey =
   | "code"
@@ -93,9 +103,6 @@ export default function ClosingPage() {
   usePageTitle("Closing | CRM Piposmart");
 
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
-  const [closings, setClosings] = useState<ClosingItem[]>([]);
-  const [salesList, setSalesList] = useState<UserResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [currentRole, setCurrentRole] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("piposmart_user_role") || ""
@@ -107,7 +114,13 @@ export default function ClosingPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const [debouncedFilters, setDebouncedFilters] = useState({
+    searchQuery: "",
+    statusFilter: "",
+    salesFilter: "",
+    dateFrom: "",
+    dateTo: "",
+  });
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<ClosingColumnKey[]>(() => [
     "date",
@@ -171,49 +184,45 @@ export default function ClosingPage() {
     localStorage.setItem(closingColumnStorageKey, JSON.stringify(visibleColumns));
   }, [visibleColumns]);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [closingData, salesData] = await Promise.all([
-        fetchClosings({
-          page,
-          limit,
-          q: searchQuery || undefined,
-          status: statusFilter || undefined,
-          sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
-          closed_from: dateFrom || undefined,
-          closed_to: dateTo || undefined,
-        }),
-        isSales
-          ? Promise.resolve<UserResponse[]>([])
-          : getSalesList().catch((err) => {
-              console.warn("Failed to fetch sales list, user might not have permission:", err);
-              return [];
-            }),
-      ]);
-
-      setClosings(closingData.items || []);
-      setTotalItems(closingData.pagination?.total || 0);
-      setSalesList(salesData || []);
-    } catch (err) {
-      console.error("Failed to load closing data", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadData();
+      setDebouncedFilters({ searchQuery, statusFilter, salesFilter, dateFrom, dateTo });
     }, 300);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, searchQuery, statusFilter, salesFilter, dateFrom, dateTo, isSales]);
+  }, [searchQuery, statusFilter, salesFilter, dateFrom, dateTo]);
+
+  const closingListParams = useMemo(
+    () => ({
+      page,
+      limit,
+      q: debouncedFilters.searchQuery || undefined,
+      status: debouncedFilters.statusFilter || undefined,
+      sales_id: !isSales && debouncedFilters.salesFilter ? Number(debouncedFilters.salesFilter) : undefined,
+      closed_from: debouncedFilters.dateFrom || undefined,
+      closed_to: debouncedFilters.dateTo || undefined,
+    }),
+    [page, debouncedFilters, isSales]
+  );
+
+  const { data: closingData, isLoading } = useClosingListQuery(closingListParams);
+  const { data: salesListData } = useClosingSalesListQuery(!isSales);
+
+  const closings = closingData?.items || [];
+  const salesList = salesListData || [];
+  const totalItems = closingData?.pagination?.total || 0;
 
   const totalPages = Math.ceil(totalItems / limit) || 1;
   const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
   const visibleColumnCount = visibleColumns.length;
+  const statusFilterLabel =
+    statusFilter === "PENDING_RECONCILIATION"
+      ? "Pending Rekonsiliasi"
+      : statusFilter === "CONFIRMED"
+        ? "Confirmed"
+        : statusFilter === "REJECTED"
+          ? "Rejected"
+          : "Semua Status";
 
   const isColumnVisible = (key: ClosingColumnKey) => visibleColumns.includes(key);
 
@@ -266,7 +275,7 @@ export default function ClosingPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden space-y-6 font-sans text-[#1C1C1E]">
+    <div className="w-full space-y-6 font-sans text-[#1C1C1E]">
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
         <div className="border-b-2 border-[#C92C1E] p-5">
           <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
@@ -283,6 +292,38 @@ export default function ClosingPage() {
           </p>
         </div>
       </div>
+
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Closing"
+          value={totalItems}
+          description="Jumlah closing sesuai filter aktif."
+          tone="accent"
+          silhouette="closing"
+        />
+        <QuickInfoCard
+          label="Ditampilkan"
+          value={closings.length}
+          description="Baris closing pada halaman aktif saat ini."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Status Aktif"
+          value={statusFilterLabel}
+          description="Status filter yang sedang dipakai."
+          tone="amber"
+        />
+        <QuickInfoCard
+          label="Halaman"
+          value={
+            <>
+              {page} <span className="text-base font-bold opacity-70">/ {totalPages}</span>
+            </>
+          }
+          description="Posisi halaman aktif dari total closing."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       <div className="max-w-full overflow-x-auto">
         <div className="inline-flex min-w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
@@ -318,11 +359,107 @@ export default function ClosingPage() {
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
-            <div className="flex w-full flex-wrap items-center gap-3 lg:w-auto">
-              <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="pl-3 pr-2 text-gray-400">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Daftar Closing</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Daftar seluruh riwayat closing yang terdaftar dalam sistem.
+              </p>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <ReportExportButton
+                reportKey="closings"
+                filters={{
+                  q: debouncedFilters.searchQuery || undefined,
+                  status: debouncedFilters.statusFilter || undefined,
+                  sales_id: !isSales && debouncedFilters.salesFilter ? debouncedFilters.salesFilter : undefined,
+                  date_from: debouncedFilters.dateFrom || undefined,
+                  date_to: debouncedFilters.dateTo || undefined,
+                }}
+                label="Export Data"
+                loadingLabel="Menyiapkan Export..."
+                successMessage="File closing sedang diunduh."
+                className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-wrap items-start gap-4">
+              <label className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Tgl Closing Mulai</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setPage(1);
+                  }}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Tgl Closing Sampai</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setPage(1);
+                  }}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                />
+              </label>
+
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Status</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                >
+                  <option value="">Semua Status</option>
+                  <option value="PENDING_RECONCILIATION">Pending Rekonsiliasi</option>
+                  <option value="CONFIRMED">Berhasil (Confirmed)</option>
+                  <option value="REJECTED">Ditolak (Rejected)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">PIC Sales</span>
+                {visibleSalesFilter ? (
+                  <select
+                    value={salesFilter}
+                    onChange={(e) => {
+                      setSalesFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] h-9"
+                  >
+                    <option value="">Semua PIC Sales</option>
+                    {salesList.map((sales) => (
+                      <option key={sales.id} value={sales.id}>
+                        {sales.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 h-9 flex items-center">
+                    Data Anda
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-b border-gray-50 px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </div>
@@ -334,74 +471,15 @@ export default function ClosingPage() {
                     setSearchQuery(e.target.value);
                     setPage(1);
                   }}
-                  className="w-48 bg-transparent py-1.5 pr-3 text-xs font-bold text-gray-700 focus:outline-none"
+                  className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                 />
               </div>
-
-              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 shadow-sm">
-                <span className="text-gray-400">Tgl Closing:</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => {
-                    setDateFrom(e.target.value);
-                    setPage(1);
-                  }}
-                  className="cursor-pointer bg-transparent text-gray-700 focus:outline-none"
-                />
-                <span className="text-gray-300">s/d</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => {
-                    setDateTo(e.target.value);
-                    setPage(1);
-                  }}
-                  className="cursor-pointer bg-transparent text-gray-700 focus:outline-none"
-                />
-              </div>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
-              >
-                <option value="">Semua Status</option>
-                <option value="PENDING_RECONCILIATION">Pending Rekonsiliasi</option>
-                <option value="CONFIRMED">Berhasil (Confirmed)</option>
-                <option value="REJECTED">Ditolak (Rejected)</option>
-              </select>
-
-              {visibleSalesFilter ? (
-                <select
-                  value={salesFilter}
-                  onChange={(e) => {
-                    setSalesFilter(e.target.value);
-                    setPage(1);
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm focus:border-[#C92C1E] focus:outline-none"
-                >
-                  <option value="">Semua PIC Sales</option>
-                  {salesList.map((sales) => (
-                    <option key={sales.id} value={sales.id}>
-                      {sales.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm">
-                  Menampilkan riwayat closing milik Anda
-                </div>
-              )}
 
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setIsColumnMenuOpen((current) => !current)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm transition hover:bg-gray-50"
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-600 shadow-sm transition hover:bg-gray-50"
                 >
                   <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -483,24 +561,30 @@ export default function ClosingPage() {
                   {isColumnVisible("package") ? <th className="px-4 py-4">Paket Langganan</th> : null}
                   {isColumnVisible("pricing") ? <th className="px-4 py-4">Rincian Harga</th> : null}
                   {isColumnVisible("status") ? <th className="px-4 py-4 text-center">Status</th> : null}
+                  <th className="px-4 py-4 text-center font-bold">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={visibleColumnCount} className="p-8 text-center text-gray-400 italic">
+                    <td colSpan={visibleColumnCount + 1} className="p-8 text-center text-gray-400 italic">
                       Memuat data closing...
                     </td>
                   </tr>
                 ) : closings.length === 0 ? (
                   <tr>
-                    <td colSpan={visibleColumnCount} className="p-8 text-center text-gray-400 italic">
+                    <td colSpan={visibleColumnCount + 1} className="p-8 text-center text-gray-400 italic">
                       Tidak ada data closing yang sesuai dengan filter.
                     </td>
                   </tr>
                 ) : (
-                  closings.map((row) => (
-                    <tr key={row.id} className="transition-colors hover:bg-gray-50">
+                  closings.map((row, rowIndex) => (
+                    <AnimatedListItem
+                      as="tr"
+                      key={row.id}
+                      index={rowIndex}
+                      className="transition-colors hover:bg-gray-50"
+                    >
                       {isColumnVisible("code") ? (
                         <td className="whitespace-nowrap px-4 py-4">
                           <div className="font-bold text-[#C92C1E]">{row.code || "-"}</div>
@@ -570,7 +654,19 @@ export default function ClosingPage() {
                       {isColumnVisible("status") ? (
                         <td className="px-4 py-4 text-center">{getStatusBadge(row.status)}</td>
                       ) : null}
-                    </tr>
+                      <td className="px-4 py-4 text-center">
+                        <Link
+                          href={`/menu/closing/${row.id}`}
+                          className="inline-flex rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                          title="Detail"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </Link>
+                      </td>
+                    </AnimatedListItem>
                   ))
                 )}
               </tbody>

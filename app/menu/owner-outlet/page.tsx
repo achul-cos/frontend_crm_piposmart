@@ -1,41 +1,59 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
-  fetchOwners,
   type BackendOwner,
   createOwner,
   uploadImportFile,
   getImportBatch,
   commitImportBatch,
   getImportErrorRows,
-  getImportValidRows,
   type ImportBatchResponse,
   type ImportRowError,
   updateOwner,
-  restoreOwner,
   softDeleteOwner,
   bulkSoftDeleteOwners,
   bulkCreateOwnerOutlets,
-  getStoredAccessToken,
-  getProfile,
+  downloadOwnerExportFile,
 } from "@/app/lib/api";
+import { formatPhoneDisplay } from "@/app/lib/phone";
+import {
+  isDarkTheme,
+  readStoredThemeMode,
+  type ThemeMode,
+} from "@/app/lib/theme";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import * as XLSX from "xlsx";
-import AnalyticsTab from "./AnalyticsTab";
+import { useOwnersQuery } from "@/app/lib/queries/leads";
+import { SkeletonBlock } from "@/app/components/skeleton/Skeleton";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
+import {
+  RowActionGroup,
+  ViewActionButton,
+  EditActionButton,
+  DeleteActionButton,
+} from "@/app/components/table/RowActionButton";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 
 const modalInputClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+  "owner-modal-field w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:bg-slate-950 dark:disabled:bg-slate-800 dark:disabled:text-slate-500";
 
 const modalSelectClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+  "owner-modal-field w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950 dark:disabled:bg-slate-800 dark:disabled:text-slate-500";
 
 const modalTextareaClass =
-  "w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400";
+  "owner-modal-field w-full rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-bold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:ring-2 focus:ring-red-100 disabled:bg-gray-100 disabled:text-gray-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:bg-slate-950 dark:disabled:bg-slate-800 dark:disabled:text-slate-500";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -131,6 +149,7 @@ function ModalShell({
   open,
   title,
   subtitle,
+  isDarkMode = false,
   label = "Owner",
   maxWidth = "max-w-3xl",
   disabled = false,
@@ -140,6 +159,7 @@ function ModalShell({
   open: boolean;
   title: string;
   subtitle: string;
+  isDarkMode?: boolean;
   label?: string;
   maxWidth?: string;
   disabled?: boolean;
@@ -149,48 +169,47 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-950/70"
-      onClick={() => !disabled && onClose()}
-    >
-      <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
-        <div
-          className={`w-full ${maxWidth} overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl`}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
-                  {label}
-                </p>
-
-                <h2 className="mt-2 text-lg font-black text-slate-950 md:text-xl">
-                  {title}
-                </h2>
-
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  {subtitle}
-                </p>
+    <ScreenPortal>
+      <div
+        className={`owner-modal-scope ${isDarkMode ? "is-dark" : "is-light"} fixed inset-0 z-50 bg-slate-950/70`}
+        onClick={() => !disabled && onClose()}
+      >
+        <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
+          <div
+            className={`app-modal-panel w-full ${maxWidth} rounded-[32px] shadow-2xl`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-modal-header px-5 py-4 md:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
+                    {label}
+                  </p>
+                  <h2 className="app-modal-title mt-2 text-lg font-black text-gray-900 dark:text-slate-50 md:text-xl">
+                    {title}
+                  </h2>
+                  <p className="app-modal-subtitle mt-1 text-xs font-medium text-gray-500 dark:text-slate-300">
+                    {subtitle}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={disabled}
+                  className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Tutup
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={disabled}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Tutup
-              </button>
             </div>
-          </div>
 
-          <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 md:p-6">
-            {children}
+            <div className="app-modal-body p-5 md:p-6">
+              {children}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ScreenPortal>
   );
 }
 
@@ -234,31 +253,6 @@ function HistoryIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-function EyeIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  );
-}
-
-function EditIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-    </svg>
-  );
-}
-
-function RestoreIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  );
-}
-
 function SpinnerIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg
@@ -284,17 +278,15 @@ function SpinnerIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-export default function OwnerOutletPage() {
+export default function OwnerPage() {
   usePageTitle("Owner");
   const router = useRouter();
+  const { showSuccess, showError, confirm, withLoading } = useFeedback();
 
-  const [owners, setOwners] = useState<BackendOwner[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
-    total: 0,
   });
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("-created_at");
@@ -313,6 +305,10 @@ export default function OwnerOutletPage() {
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
 
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -320,10 +316,6 @@ export default function OwnerOutletPage() {
   const [isImportLoading, setIsImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importErrorRows, setImportErrorRows] = useState<ImportRowError[]>([]);
-  const [editedErrorRows, setEditedErrorRows] = useState<Record<number, Record<string, unknown>>>({});
-  const [, setIsApplyingCorrections] = useState(false);
-  const [, setCorrectionProgress] = useState(0);
-  const [, setCorrectionStatusText] = useState("");
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isAddOwnerModalOpen, setIsAddOwnerModalOpen] = useState(false);
@@ -395,6 +387,16 @@ export default function OwnerOutletPage() {
   const hasMoved = useRef(false);
 
   useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreActionsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
     const handleMouseUp = () => {
       setIsDragging(false);
       hasMoved.current = false;
@@ -413,58 +415,49 @@ export default function OwnerOutletPage() {
     if (isEditOwnerModalOpen && editOwnerForm.province && provinces.length > 0) {
       loadCitiesByProvinceName(editOwnerForm.province);
     }
-  }, [
-    isEditOwnerModalOpen,
-    editOwnerForm.province,
-    provinces,
-    loadCitiesByProvinceName,
-  ]);
+  }, [isEditOwnerModalOpen, editOwnerForm.province, provinces, loadCitiesByProvinceName]);
 
-  const loadOwners = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetchOwners({
-        page: pagination.page,
-        limit: pagination.limit,
-        q: search,
-        code: filters.code,
-        name: filters.name,
-        brand_name: filters.brand_name,
-        phone: filters.phone,
-        city: filters.city,
-        status: filters.status || undefined,
-        subscription_status: filters.status || undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        created_from: startDate || undefined,
-        created_to: endDate || undefined,
-        sort,
-      });
-      setOwners(res.data.items);
-      setPagination(res.data.pagination);
-    } catch (err) {
-      console.error("Gagal memuat data owner:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [pagination.page, pagination.limit, search, filters, startDate, endDate, sort]);
+  const ownersQueryParams = useMemo(
+    () => ({
+      page: pagination.page,
+      limit: pagination.limit,
+      q: search,
+      code: filters.code,
+      name: filters.name,
+      brand_name: filters.brand_name,
+      phone: filters.phone,
+      city: filters.city,
+      status: filters.status || undefined,
+      subscription_status: filters.status || undefined,
+      start_date: startDate || undefined,
+      end_date: endDate || undefined,
+      created_from: startDate || undefined,
+      created_to: endDate || undefined,
+      sort,
+    }),
+    [pagination.page, pagination.limit, search, filters, startDate, endDate, sort]
+  );
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadOwners();
-    }, 0);
+  const { data: ownersData, isLoading, refetch: refetchOwners } = useOwnersQuery(ownersQueryParams);
+  const owners = ownersData?.data.items ?? [];
+  const total = ownersData?.data.pagination?.total ?? 0;
 
-    return () => window.clearTimeout(timer);
-  }, [loadOwners]);
+  const loadOwners = useCallback(() => {
+    void refetchOwners();
+  }, [refetchOwners]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPagination((prev) => ({ ...prev, page: 1 }));
-    loadOwners();
   };
 
+  const handleToggleSelectRow = useCallback((id: number) => {
+    setSelectedOwnerIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  }, []);
+
   const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
-    if (selectedOwnerIds.length === 0) return;
     setIsDragging(true);
     hasMoved.current = false;
     const mode = currentlySelected ? "deselect" : "select";
@@ -480,7 +473,7 @@ export default function OwnerOutletPage() {
   };
 
   const handleRowMouseEnter = (id: number) => {
-    if (!isDragging || selectedOwnerIds.length === 0) return;
+    if (!isDragging) return;
 
     if (hasMoved.current) {
       setSelectedOwnerIds((prev) => {
@@ -494,65 +487,72 @@ export default function OwnerOutletPage() {
     hasMoved.current = true;
   };
 
-  const handleAddOwnerSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!addOwnerForm.code.trim() || !addOwnerForm.name.trim()) {
-      alert("Kode dan Nama Owner wajib diisi.");
-      return;
-    }
-
-    if (!addOwnerForm.outlet_name?.trim()) {
-      alert("Nama Outlet Pertama wajib diisi.");
-      return;
-    }
-
+  const submitAddOwner = async () => {
     setIsAddOwnerSubmitting(true);
 
     try {
-      const createdOwner = await createOwner(addOwnerForm);
+      await withLoading(async () => {
+        const createdOwner = await createOwner(addOwnerForm);
+        if (createdOwner.data && createdOwner.data.id) {
+          await bulkCreateOwnerOutlets(createdOwner.data.id, [
+            {
+              code: `${addOwnerForm.code}-1`,
+              name: addOwnerForm.outlet_name,
+              phone: addOwnerForm.outlet_phone || "",
+              province: addOwnerForm.outlet_province || "",
+              city: addOwnerForm.outlet_city || "",
+              district: addOwnerForm.outlet_district || "",
+              sub_district: addOwnerForm.outlet_sub_district || "",
+              address: addOwnerForm.outlet_address || "",
+            },
+          ]);
+        }
+      }, { label: "Menyimpan owner baru..." });
 
-      if (createdOwner.data && createdOwner.data.id) {
-        await bulkCreateOwnerOutlets(createdOwner.data.id, [
-          {
-            code: `${addOwnerForm.code}-1`,
-            name: addOwnerForm.outlet_name,
-            phone: addOwnerForm.outlet_phone || "",
-            province: addOwnerForm.outlet_province || "",
-            city: addOwnerForm.outlet_city || "",
-            district: addOwnerForm.outlet_district || "",
-            sub_district: addOwnerForm.outlet_sub_district || "",
-            address: addOwnerForm.outlet_address || "",
-          },
-        ]);
-      }
-
-      alert("Owner dan Outlet berhasil ditambahkan");
+      showSuccess({
+        title: "Owner berhasil ditambahkan",
+        message: "Owner dan outlet pertamanya berhasil disimpan.",
+      });
       setIsAddOwnerModalOpen(false);
       setAddOwnerForm({
-        code: "",
-        name: "",
-        brand_name: "",
-        phone: "",
-        province: "",
-        city: "",
-        district: "",
-        sub_district: "",
-        address: "",
-        outlet_name: "",
-        outlet_phone: "",
-        outlet_province: "",
-        outlet_city: "",
-        outlet_district: "",
-        outlet_sub_district: "",
-        outlet_address: "",
+        code: "", name: "", brand_name: "", phone: "", province: "", city: "", district: "",
+        sub_district: "", address: "", outlet_name: "", outlet_phone: "", outlet_province: "",
+        outlet_city: "", outlet_district: "", outlet_sub_district: "", outlet_address: "",
       });
       loadOwners();
     } catch (err: unknown) {
-      alert(getErrorMessage(err, "Gagal menambahkan owner"));
+      showError({
+        title: "Gagal menambahkan owner",
+        message: "Sistem gagal menyimpan data owner dan outlet baru.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau kode owner sudah dipakai.",
+        solution: "Periksa kembali kode owner dan koneksi Anda, lalu coba lagi.",
+        technicalDetails: getErrorMessage(err, "Gagal menambahkan owner"),
+        onRetry: () => void submitAddOwner(),
+      });
     } finally {
       setIsAddOwnerSubmitting(false);
     }
+  };
+
+  const handleAddOwnerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addOwnerForm.code.trim() || !addOwnerForm.name.trim()) {
+      showError({
+        title: "Data belum lengkap",
+        message: "Kode dan Nama Owner wajib diisi.",
+        solution: "Lengkapi kode dan nama owner terlebih dahulu.",
+      });
+      return;
+    }
+    if (!addOwnerForm.outlet_name?.trim()) {
+      showError({
+        title: "Data belum lengkap",
+        message: "Nama Outlet Pertama wajib diisi.",
+        solution: "Lengkapi nama outlet pertama terlebih dahulu.",
+      });
+      return;
+    }
+    void submitAddOwner();
   };
 
   const handleOpenEditOwner = (owner: BackendOwner) => {
@@ -569,149 +569,140 @@ export default function OwnerOutletPage() {
       address: owner.address || "",
       created_at: owner.created_at || "",
     });
-
     loadAllForEdit(owner.province, owner.city, owner.district);
-
     setIsEditOwnerModalOpen(true);
   };
 
-  const handleEditOwnerSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!editOwnerForm.code.trim() || !editOwnerForm.name.trim()) {
-      alert("Kode dan Nama Owner wajib diisi.");
-      return;
-    }
-
+  const submitEditOwner = async () => {
     setIsEditOwnerSubmitting(true);
-
     try {
-      await updateOwner(editOwnerForm.id, {
-        code: editOwnerForm.code,
-        name: editOwnerForm.name,
-        brand_name: editOwnerForm.brand_name,
-        phone: editOwnerForm.phone,
-        province: editOwnerForm.province,
-        city: editOwnerForm.city,
-        district: editOwnerForm.district,
-        sub_district: editOwnerForm.sub_district,
-        address: editOwnerForm.address,
-      });
+      await withLoading(
+        () => updateOwner(editOwnerForm.id, {
+            code: editOwnerForm.code, name: editOwnerForm.name, brand_name: editOwnerForm.brand_name,
+            phone: editOwnerForm.phone, province: editOwnerForm.province, city: editOwnerForm.city,
+            district: editOwnerForm.district, sub_district: editOwnerForm.sub_district, address: editOwnerForm.address,
+        }),
+        { label: "Menyimpan perubahan owner..." }
+      );
 
-      alert("Owner berhasil diupdate");
+      showSuccess({ title: "Owner berhasil diupdate", message: "Perubahan data owner berhasil disimpan." });
       setIsEditOwnerModalOpen(false);
       loadOwners();
     } catch (err: unknown) {
-      alert(getErrorMessage(err, "Gagal update owner"));
+      showError({
+        title: "Gagal update owner",
+        message: "Sistem gagal menyimpan perubahan data owner.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau kode owner sudah dipakai owner lain.",
+        solution: "Periksa kembali data dan koneksi Anda, lalu coba lagi.",
+        technicalDetails: getErrorMessage(err, "Gagal update owner"),
+        onRetry: () => void submitEditOwner(),
+      });
     } finally {
       setIsEditOwnerSubmitting(false);
     }
   };
 
+  const handleEditOwnerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editOwnerForm.code.trim() || !editOwnerForm.name.trim()) {
+      showError({
+        title: "Data belum lengkap",
+        message: "Kode dan Nama Owner wajib diisi.",
+        solution: "Lengkapi kode dan nama owner terlebih dahulu.",
+      });
+      return;
+    }
+    void submitEditOwner();
+  };
+
   const handleDeleteOwner = async (ownerId: number) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus owner ini?")) return;
+    const ok = await confirm({
+      title: "Hapus Owner",
+      message: "Apakah Anda yakin ingin menghapus owner ini? Data akan dipindahkan ke sampah dan bisa dipulihkan nanti.",
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
-      await softDeleteOwner(ownerId);
+      await withLoading(() => softDeleteOwner(ownerId), { label: "Menghapus owner..." });
       loadOwners();
     } catch (err: unknown) {
-      alert(getErrorMessage(err, "Gagal menghapus owner"));
+      showError({
+        title: "Gagal menghapus owner",
+        message: "Sistem gagal menghapus owner ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah.",
+        solution: "Periksa koneksi Anda dan coba lagi.",
+        technicalDetails: getErrorMessage(err, "Gagal menghapus owner"),
+        onRetry: () => void handleDeleteOwner(ownerId),
+      });
     }
   };
 
-  const handleRestoreOwner = async (ownerId: number) => {
-    if (!confirm("Apakah Anda yakin ingin merestore owner ini?")) return;
-
-    try {
-      await restoreOwner(ownerId);
-      loadOwners();
-    } catch (err: unknown) {
-      alert(getErrorMessage(err, "Gagal merestore owner"));
-    }
-  };
-
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [currentRole, setCurrentRole] = useState("");
+  const [ownerModalThemeMode, setOwnerModalThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "light";
+    return readStoredThemeMode();
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    getProfile()
-      .then((profile) => {
-        if (!cancelled) setCurrentRole(profile.role || "");
-      })
-      .catch(() => {
-        if (!cancelled) setCurrentRole("");
-      });
+    const syncTheme = () => setOwnerModalThemeMode(readStoredThemeMode());
+    syncTheme();
+    window.addEventListener("storage", syncTheme);
+    window.addEventListener("piposmart-theme-change", syncTheme as EventListener);
     return () => {
-      cancelled = true;
+      window.removeEventListener("storage", syncTheme);
+      window.removeEventListener("piposmart-theme-change", syncTheme as EventListener);
     };
   }, []);
 
-  // Backend: file-Excel exports (/owners/export/download*) are ADMIN-only —
-  // they stream the raw admin master file with no per-actor scoping possible.
-  const canExportOwnerExcel = currentRole === "ADMIN";
+  const isOwnerModalDark = isDarkTheme(ownerModalThemeMode);
 
-  // FIX: Menambahkan parameter tanggal (date_from & date_to) dari filter UI
   const handleDownloadExcel = async (type: "owner-outlet" | "owner") => {
     try {
       setIsExporting(true);
       setIsExportMenuOpen(false);
+      const { blob, disposition } = await withLoading(async () => {
+        return downloadOwnerExportFile(type, {
+          q: search || undefined,
+          code: filters.code || undefined,
+          name: filters.name || undefined,
+          phone: filters.phone || undefined,
+          brand_name: filters.brand_name || undefined,
+          city: filters.city || undefined,
+          status: filters.status || undefined,
+          subscription_status: filters.status || undefined,
+          sort: sort || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          created_from: startDate || undefined,
+          created_to: endDate || undefined,
+          date_from: startDate || undefined,
+          date_to: endDate || undefined,
+        });
+      }, { label: "Menyiapkan file ekspor..." });
 
-      let endpoint = type === "owner-outlet" 
-        ? "/api/v1/owners/export/download" 
-        : "/api/v1/owners/export/download-owner";
-      
-      const params = new URLSearchParams();
-      if (startDate) params.append("date_from", startDate);
-      if (endDate) params.append("date_to", endDate);
-
-      if (params.toString()) {
-        endpoint += `?${params.toString()}`;
-      }
-      
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const token = getStoredAccessToken();
-      
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        if (res.status === 403) {
-          throw new Error("Anda tidak memiliki izin untuk mengunduh data ini.");
-        }
-        const errText = await res.text();
-        throw new Error(errText || "Gagal mengunduh file");
-      }
-
-      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      
-      const disposition = res.headers.get("Content-Disposition");
       let filename = type === "owner-outlet" ? "Data_Owner_Outlet.xlsx" : "Data_Owner.xlsx";
       if (disposition) {
         const match = disposition.match(/filename="?([^"]+)"?/);
         if (match) filename = match[1];
       }
-      
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Gagal mengekspor data owner:", error);
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Terjadi kesalahan saat mengunduh data ekspor.",
-      );
+      showError({
+        title: "Gagal mengekspor data",
+        message: "Sistem gagal mengunduh file ekspor data owner.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau Anda tidak memiliki izin akses.",
+        solution: "Periksa koneksi dan izin akses Anda, lalu coba lagi.",
+        technicalDetails: error instanceof Error ? error.message : String(error),
+        onRetry: () => void handleDownloadExcel(type),
+      });
     } finally {
       setIsExporting(false);
     }
@@ -719,22 +710,30 @@ export default function OwnerOutletPage() {
 
   const handleBulkDelete = async () => {
     if (selectedOwnerIds.length === 0) return;
-
-    if (
-      !confirm(
-        `Apakah Anda yakin ingin menghapus ${selectedOwnerIds.length} owner terpilih?`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Hapus Owner Terpilih",
+      message: `Apakah Anda yakin ingin menghapus ${selectedOwnerIds.length} owner terpilih? Data akan dipindahkan ke sampah dan bisa dipulihkan nanti.`,
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
-      await bulkSoftDeleteOwners(selectedOwnerIds);
+      await withLoading(() => bulkSoftDeleteOwners(selectedOwnerIds), {
+        label: "Menghapus owner terpilih...",
+      });
       setSelectedOwnerIds([]);
       setPagination((prev) => ({ ...prev, page: 1 }));
       loadOwners();
     } catch (err: unknown) {
-      alert(getErrorMessage(err, "Gagal menghapus owner terpilih."));
+      showError({
+        title: "Gagal menghapus owner terpilih",
+        message: "Sistem gagal menghapus owner yang dipilih.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah.",
+        solution: "Periksa koneksi Anda dan coba lagi.",
+        technicalDetails: getErrorMessage(err, "Gagal menghapus owner terpilih."),
+        onRetry: () => void handleBulkDelete(),
+      });
     }
   };
 
@@ -747,10 +746,8 @@ export default function OwnerOutletPage() {
 
   const handleUploadClick = async () => {
     if (!importFile) return;
-
     setIsImportLoading(true);
     setImportError(null);
-
     try {
       const resp = await uploadImportFile(importFile, "OWNER_OUTLET");
       setImportBatch(resp);
@@ -766,53 +763,31 @@ export default function OwnerOutletPage() {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-
     try {
       const resp = await getImportBatch(batchId);
       setImportBatch(resp);
-
-      const isInProgress = ["UPLOADED", "VALIDATING", "COMMITTING"].includes(
-        resp.status,
-      );
+      const isInProgress = ["UPLOADED", "VALIDATING", "COMMITTING"].includes(resp.status);
 
       if (isInProgress) {
-        pollTimerRef.current = setTimeout(
-          () => pollImportStatus(batchId),
-          2500,
-        );
+        pollTimerRef.current = setTimeout(() => pollImportStatus(batchId), 2500);
       } else {
         pollTimerRef.current = null;
         setIsImportLoading(false);
-        setCorrectionProgress(100);
-        setCorrectionStatusText("Selesai!");
-
-        setTimeout(() => {
-          setCorrectionProgress(0);
-          setCorrectionStatusText("");
-        }, 2000);
 
         if (resp.status === "VALIDATED" && resp.invalid_rows > 0) {
           try {
             const errorResp = await getImportErrorRows(batchId);
             setImportErrorRows(errorResp.items);
-            setImportError(
-              `Masih terdapat ${resp.invalid_rows} baris dengan format yang tidak valid.`,
-            );
+            setImportError(`Masih terdapat ${resp.invalid_rows} baris dengan format yang tidak valid.`);
           } catch (error) {
             console.error("Gagal memuat detail error:", error);
           }
         } else if (resp.status === "VALIDATED") {
           setImportError(null);
         } else if (resp.status === "VALIDATION_FAILED") {
-          setImportError(
-            resp.error_message ||
-              "Validasi file gagal. Periksa format dan header file Excel Anda.",
-          );
+          setImportError(resp.error_message || "Validasi file gagal. Periksa format dan header file Excel Anda.");
         } else if (resp.status === "COMMIT_FAILED") {
-          setImportError(
-            resp.error_message ||
-              "Proses simpan data gagal. Silakan coba lagi.",
-          );
+          setImportError(resp.error_message || "Proses simpan data gagal. Silakan coba lagi.");
         }
       }
     } catch (err: unknown) {
@@ -824,9 +799,7 @@ export default function OwnerOutletPage() {
 
   const handleCommitImport = async () => {
     if (!importBatch) return;
-
     setIsImportLoading(true);
-
     try {
       const resp = await commitImportBatch(importBatch.id);
       setImportBatch(resp);
@@ -842,15 +815,11 @@ export default function OwnerOutletPage() {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-
     setImportFile(null);
     setImportBatch(null);
     setImportError(null);
     setIsImportLoading(false);
     setImportErrorRows([]);
-    setEditedErrorRows({});
-    setCorrectionProgress(0);
-    setCorrectionStatusText("");
   };
 
   const handleViewOutlets = (owner: BackendOwner) => {
@@ -910,55 +879,33 @@ export default function OwnerOutletPage() {
   };
 
   const statCards = (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <div className="relative overflow-hidden rounded-2xl bg-[#C92C1E] p-6 shadow-sm">
-        <div className="flex flex-col">
-          <p className="text-xs font-bold uppercase tracking-wider text-red-100">Total Owner</p>
-          <div className="mt-1">
-            <h2 className="text-3xl font-black text-white">{pagination.total}</h2>
-          </div>
-        </div>
-      </div>
-      
-      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-col">
-          <div className="flex justify-between items-start">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Berlangganan (Subscribe)</p>
-            <div className="h-3 w-3 rounded-full bg-emerald-400"></div>
-          </div>
-          <div className="mt-1">
-            <h2 className="text-3xl font-black text-gray-900">{subscribeCount}</h2>
-            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner yang berlangganan (Halaman Ini).</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-col">
-          <div className="flex justify-between items-start">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Trial</p>
-            <div className="h-3 w-3 rounded-full bg-blue-400"></div>
-          </div>
-          <div className="mt-1">
-            <h2 className="text-3xl font-black text-gray-900">{trialCount}</h2>
-            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner masa trial 14 hari.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-col">
-          <div className="flex justify-between items-start">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Belum Berlangganan</p>
-            <div className="h-3 w-3 rounded-full bg-red-500"></div>
-          </div>
-          <div className="mt-1">
-            <h2 className="text-3xl font-black text-gray-900">{notSubscribeCount}</h2>
-            <p className="mt-1 text-[10px] text-gray-400 font-medium">Owner yang belum berlangganan.</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <QuickInfoCardGrid>
+      <QuickInfoCard
+        label="Total Owner"
+        value={total}
+        description="Basis data owner terdaftar di CRM."
+        tone="accent"
+        silhouette="building"
+      />
+      <QuickInfoCard
+        label="Berlangganan"
+        value={subscribeCount}
+        description="Owner yang berlangganan pada halaman aktif."
+        tone="emerald"
+      />
+      <QuickInfoCard
+        label="Trial"
+        value={trialCount}
+        description="Owner yang sedang masa trial 14 hari."
+        tone="sky"
+      />
+      <QuickInfoCard
+        label="Belum Berlangganan"
+        value={notSubscribeCount}
+        description="Owner yang belum memiliki paket aktif."
+        tone="rose"
+      />
+    </QuickInfoCardGrid>
   );
 
   const tabButtons = (
@@ -987,49 +934,6 @@ export default function OwnerOutletPage() {
         </div>
       </div>
     </div>
-  );
-
-  const actionButtons = (
-    <>
-      {selectedOwnerIds.length > 0 && (
-        <button onClick={handleBulkDelete} className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"><TrashIcon className="h-4 w-4" /> Hapus Terpilih ({selectedOwnerIds.length})</button>
-      )}
-      <button onClick={() => setIsAddOwnerModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700"><PlusIcon className="h-4 w-4" /> Tambah Owner</button>
-      <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"><UploadIcon className="h-4 w-4" /> Import Data</button>
-      {canExportOwnerExcel && (
-      <div className="relative">
-        <button
-          onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-          disabled={isExporting}
-          className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:opacity-50"
-        >
-          <DownloadIcon className="h-4 w-4" /> 
-          {isExporting ? "Mengunduh..." : "Export Data"}
-          <svg className="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-        </button>
-        {isExportMenuOpen && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-            <button
-              onClick={() => handleDownloadExcel("owner-outlet")}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <DownloadIcon className="h-4 w-4 text-[#C92C1E]" />
-              Data Owner-Outlet
-            </button>
-            <button
-              onClick={() => handleDownloadExcel("owner")}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <DownloadIcon className="h-4 w-4 text-blue-600" />
-              Data Owner
-            </button>
-          </div>
-        )}
-      </div>
-      )}
-      <button onClick={() => setIsImportHistoryModalOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"><HistoryIcon className="h-4 w-4" /> Riwayat</button>
-      <button onClick={() => router.push("/menu/owner-outlet/trash")} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"><TrashIcon className="h-4 w-4" /> Hapus</button>
-    </>
   );
 
   const uniqueNames = Array.from(new Set(owners.map(o => o.name).filter(Boolean))) as string[];
@@ -1109,20 +1013,6 @@ export default function OwnerOutletPage() {
     </div>
   );
 
-  const searchBox = (
-    <div className="flex w-full items-center gap-3">
-      <form onSubmit={handleSearch} className="relative flex-1">
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-        <input type="text" placeholder="Cari kode owner, nama owner, email, telepon, outlet, wilayah, brand, dll..." value={search} onChange={(e) => { setSearch(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }} className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]" />
-      </form>
-      <ColumnVisibilityControl tableId="owner-table" storageKey="column-visibility:owner-table" buttonLabel="Kolom" />
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       
@@ -1163,8 +1053,100 @@ export default function OwnerOutletPage() {
                 <h2 className="text-xl font-bold text-gray-900">Daftar Owner</h2>
                 <p className="mt-1 text-sm text-gray-500">Daftar seluruh data owner yang terdaftar dalam sistem.</p>
               </div>
+
+              {/* ACTION BUTTONS (BERADA DI SEBELAH KIRI) */}
               <div className="flex flex-wrap items-center gap-3 w-full">
-                {actionButtons}
+                <button onClick={() => setIsAddOwnerModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700">
+                  <PlusIcon className="h-4 w-4" /> Tambah Owner
+                </button>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                    disabled={isExporting}
+                    className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <DownloadIcon className="h-4 w-4" /> 
+                    {isExporting ? "Mengunduh..." : "Export Data"}
+                    <svg className="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {isExportMenuOpen && (
+                    <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                      <button
+                        onClick={() => handleDownloadExcel("owner-outlet")}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <DownloadIcon className="h-4 w-4 text-[#C92C1E]" />
+                        Data Owner-Outlet
+                      </button>
+                      <button
+                        onClick={() => handleDownloadExcel("owner")}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <DownloadIcon className="h-4 w-4 text-blue-600" />
+                        Data Owner
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {selectedOwnerIds.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
+                      <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                      {selectedOwnerIds.length} terpilih
+                    </div>
+
+                    <button onClick={handleBulkDelete} className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100">
+                      <TrashIcon className="h-4 w-4" /> Hapus Terpilih ({selectedOwnerIds.length})
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedOwnerIds([])}
+                      className="flex items-center justify-center rounded-xl border border-gray-200 bg-white h-10 w-10 text-gray-500 shadow-sm transition-all hover:bg-gray-100 hover:text-gray-900"
+                      title="Batalkan Pilihan"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+
+                <div className="relative" ref={moreMenuRef}>
+                  <button
+                    onClick={() => setIsMoreActionsOpen(!isMoreActionsOpen)}
+                    className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+                    title="Lainnya"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+
+                  {isMoreActionsOpen && (
+                    <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                      <button
+                        onClick={() => { setIsMoreActionsOpen(false); setIsImportModalOpen(true); }}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <UploadIcon className="h-4 w-4" /> Import Data
+                      </button>
+                      <button
+                        onClick={() => { setIsMoreActionsOpen(false); setIsImportHistoryModalOpen(true); }}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <HistoryIcon className="h-4 w-4" /> Riwayat Import
+                      </button>
+                      <button
+                        onClick={() => { setIsMoreActionsOpen(false); router.push("/menu/owner-outlet/trash"); }}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+                      >
+                        <TrashIcon className="h-4 w-4" /> Owner Terhapus
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1175,13 +1157,22 @@ export default function OwnerOutletPage() {
             </div>
 
             <div className="border-b border-gray-50 px-6 py-4">
-              {searchBox}
+              <div className="flex w-full items-center gap-3">
+                <form onSubmit={handleSearch} className="relative flex-1">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input type="text" placeholder="Cari kode owner, nama owner, email, telepon, outlet, wilayah, brand, dll..." value={search} onChange={(e) => { setSearch(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }} className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]" />
+                </form>
+                <ColumnVisibilityControl tableId="owner-table" storageKey="column-visibility:owner-table" buttonLabel="Kolom" />
+              </div>
             </div>
 
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-
               <table id="owner-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
                 <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
@@ -1217,12 +1208,16 @@ export default function OwnerOutletPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-100 bg-white">
-                  {isLoading ? (
-                    <tr>
-                      <td colSpan={11} className="px-6 py-10 text-center text-gray-500">
-                        Memuat data...
-                      </td>
-                    </tr>
+                  {isLoading && owners.length === 0 ? (
+                    Array.from({ length: 8 }).map((_, rowIndex) => (
+                      <tr key={`skeleton-${rowIndex}`}>
+                        {Array.from({ length: 11 }).map((__, colIndex) => (
+                          <td key={colIndex} className="px-4 py-4">
+                            <SkeletonBlock className="h-4 w-full max-w-[120px]" />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
                   ) : owners.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="px-6 py-10 text-center text-gray-500">
@@ -1236,42 +1231,33 @@ export default function OwnerOutletPage() {
                       return (
                         <tr
                           key={owner.id}
-                          className={`transition-colors ${
-                            selectedOwnerIds.length > 0
-                              ? "cursor-pointer select-none"
-                              : ""
-                          } ${
+                          className={`transition-colors cursor-pointer select-none ${
                             isSelected
-                              ? "bg-red-50/40 hover:bg-red-50/60"
+                              ? "bg-red-50/60 hover:bg-red-50/80"
                               : "hover:bg-gray-50"
                           }`}
                           onMouseDown={(e) => {
-                            if (e.button !== 0 || selectedOwnerIds.length === 0) return;
+                            if ((e.target as HTMLElement).closest('button, a')) return;
+                            if (e.button !== 0) return;
                             handleRowMouseDown(owner.id, isSelected);
                           }}
                           onMouseEnter={() => {
-                            if (selectedOwnerIds.length > 0) handleRowMouseEnter(owner.id);
-                          }}
-                          onMouseMove={() => {
-                            if (isDragging && !hasMoved.current) hasMoved.current = true;
+                            handleRowMouseEnter(owner.id);
                           }}
                         >
                           <td
                             className="px-4 py-4 text-center cursor-pointer"
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedOwnerIds((prev) =>
-                                prev.includes(owner.id)
-                                  ? prev.filter((id) => id !== owner.id)
-                                  : [...prev, owner.id]
-                              );
+                              handleToggleSelectRow(owner.id);
                             }}
                           >
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => {}}
-                              className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] cursor-pointer"
+                              readOnly
+                              className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
                             />
                           </td>
 
@@ -1287,7 +1273,7 @@ export default function OwnerOutletPage() {
                           <td className="px-4 py-4 align-top">
                             {owner.brand_name || "-"}
                           </td>
-                          <td className="px-4 py-4 align-top">{owner.phone}</td>
+                          <td className="px-4 py-4 align-top">{owner.phone ? formatPhoneDisplay(owner.phone) : "-"}</td>
                           <td className="px-4 py-4 align-top">
                             {[owner.sub_district, owner.district, owner.city, owner.province].filter(Boolean).join(", ") || "-"}
                           </td>
@@ -1318,42 +1304,22 @@ export default function OwnerOutletPage() {
                           </td>
                           <td
                             className="px-4 py-4 text-center"
-                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleViewOutlets(owner);
-                                }}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
+                            <RowActionGroup>
+                              <ViewActionButton
+                                onClick={() => handleViewOutlets(owner)}
                                 title="Detail Outlet"
-                              >
-                                <EyeIcon className="h-4 w-4" />
-                              </button>
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenEditOwner(owner);
-                                }}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
+                              />
+                              <EditActionButton
+                                onClick={() => handleOpenEditOwner(owner)}
                                 title="Edit Owner"
-                              >
-                                <EditIcon className="h-4 w-4" />
-                              </button>
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteOwner(owner.id);
-                                }}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
+                              />
+                              <DeleteActionButton
+                                onClick={() => handleDeleteOwner(owner.id)}
                                 title="Hapus Owner"
-                              >
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                            </div>
+                              />
+                            </RowActionGroup>
                           </td>
                         </tr>
                       );
@@ -1366,7 +1332,7 @@ export default function OwnerOutletPage() {
             <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500">
-                  Menampilkan {(pagination.page - 1) * pagination.limit + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total} data
+                  Menampilkan {(pagination.page - 1) * pagination.limit + 1} - {Math.min(pagination.page * pagination.limit, total)} dari {total} data
                 </span>
 
                 <div className="flex items-center gap-2">
@@ -1447,18 +1413,19 @@ export default function OwnerOutletPage() {
         open={isAddOwnerModalOpen}
         title="Tambah Owner Baru"
         subtitle="Pendaftaran pemilik baru beserta outlet pertama."
+        isDarkMode={isOwnerModalDark}
         disabled={isAddOwnerSubmitting}
         onClose={() => setIsAddOwnerModalOpen(false)}
       >
         <form onSubmit={handleAddOwnerSubmit} className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+          <div className="owner-modal-card rounded-[28px] border border-gray-200 bg-gray-50/80 p-5 dark:border-slate-700 dark:bg-slate-800/90">
+            <p className="owner-modal-label text-[10px] font-black uppercase tracking-[0.24em] text-gray-400 dark:text-slate-200">
               Data Owner
             </p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kode Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1475,7 +1442,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nama Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1492,7 +1459,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nama Brand / Usaha
                 </span>
                 <input
@@ -1511,7 +1478,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nomor Kontak
                 </span>
                 <input
@@ -1527,7 +1494,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Provinsi
                 </span>
                 <select
@@ -1553,7 +1520,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kota/Kabupaten
                 </span>
                 <select
@@ -1584,7 +1551,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kecamatan
                 </span>
                 <select
@@ -1614,7 +1581,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
                   Kelurahan/Desa
                 </span>
                 <select
@@ -1642,7 +1609,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
                   Alamat Lengkap
                 </span>
                 <textarea
@@ -1662,14 +1629,14 @@ export default function OwnerOutletPage() {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+          <div className="owner-modal-card rounded-[28px] border border-gray-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
               Data Outlet Pertama
             </p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nama Outlet Pertama{" "}
                   <span className="text-[#C92C1E]">*</span>
                 </span>
@@ -1690,7 +1657,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nomor Telepon Outlet
                 </span>
                 <input
@@ -1709,7 +1676,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Provinsi Outlet
                 </span>
                 <select
@@ -1735,7 +1702,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kota/Kabupaten Outlet
                 </span>
                 <select
@@ -1766,7 +1733,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kecamatan Outlet
                 </span>
                 <select
@@ -1796,7 +1763,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kelurahan/Desa Outlet
                 </span>
                 <select
@@ -1824,7 +1791,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Alamat Lengkap Outlet
                 </span>
                 <textarea
@@ -1844,12 +1811,12 @@ export default function OwnerOutletPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setIsAddOwnerModalOpen(false)}
               disabled={isAddOwnerSubmitting}
-              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Batal
             </button>
@@ -1884,30 +1851,31 @@ export default function OwnerOutletPage() {
         open={isEditOwnerModalOpen}
         title="Edit Data Owner"
         subtitle="Perbarui informasi pemilik owner."
+        isDarkMode={isOwnerModalDark}
         disabled={isEditOwnerSubmitting}
         onClose={() => setIsEditOwnerModalOpen(false)}
       >
         <form onSubmit={handleEditOwnerSubmit} className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+          <div className="owner-modal-card rounded-[28px] border border-gray-200 bg-gray-50/80 p-5 dark:border-slate-700 dark:bg-slate-800/90">
+            <p className="owner-modal-label text-[10px] font-black uppercase tracking-[0.24em] text-slate-400 dark:text-slate-200">
               Data Owner
             </p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Tgl Dibuat
                 </span>
                 <input
                   type="text"
                   value={editOwnerForm.created_at ? new Date(editOwnerForm.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "-"}
-                  className={modalInputClass + " bg-slate-100 cursor-not-allowed text-gray-500"}
+                  className={modalInputClass + " bg-gray-100 cursor-not-allowed text-gray-500"}
                   disabled
                 />
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kode Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1927,7 +1895,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nama Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1947,7 +1915,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nama Brand / Usaha
                 </span>
                 <input
@@ -1966,7 +1934,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Nomor Kontak
                 </span>
                 <input
@@ -1985,7 +1953,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Provinsi
                 </span>
                 <select
@@ -2011,7 +1979,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
                   Kota/Kabupaten
                 </span>
                 <select
@@ -2042,7 +2010,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
                   Kecamatan
                 </span>
                 <select
@@ -2072,7 +2040,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
                   Kelurahan/Desa
                 </span>
                 <select
@@ -2100,7 +2068,7 @@ export default function OwnerOutletPage() {
               </label>
 
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
                   Alamat Lengkap
                 </span>
                 <textarea
@@ -2120,12 +2088,12 @@ export default function OwnerOutletPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setIsEditOwnerModalOpen(false)}
               disabled={isEditOwnerSubmitting}
-              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Batal
             </button>
@@ -2146,7 +2114,9 @@ export default function OwnerOutletPage() {
                 </>
               ) : (
                 <>
-                  <EditIcon />
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
                   Simpan Perubahan
                 </>
               )}
@@ -2159,6 +2129,7 @@ export default function OwnerOutletPage() {
         open={isImportModalOpen}
         title="Import Excel"
         subtitle="Unggah data owner dan outlet secara massal."
+        isDarkMode={isOwnerModalDark}
         label="Import Owner"
         maxWidth="max-w-4xl"
         disabled={isImportLoading}
@@ -2186,7 +2157,7 @@ export default function OwnerOutletPage() {
               </div>
             ) : (
               <>
-                <div className="mb-5 rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
+                <div className="mb-5 rounded-[28px] border border-gray-200 bg-gray-50/80 p-5">
                   <p className="text-sm text-gray-600">
                     Unggah file Excel (.xlsx) dengan format yang ditentukan.
                     Kolom wajib:{" "}

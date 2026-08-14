@@ -1,19 +1,43 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { Search } from "lucide-react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import Sprint14g1Board, {
-  type Sprint14g1Section,
-} from "@/app/components/analytics/Sprint14g1Board";
+import { frontendEnv } from "@/app/lib/env";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
+import type { Sprint14g1Section } from "@/app/components/analytics/Sprint14g1Board";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ReportExportButton from "@/app/components/export/ReportExportButton";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import {
   uploadImportFile,
   getImportBatch,
   commitImportBatch,
   downloadImportErrors,
-  authFetchJson,
   ImportBatchResponse,
 } from "@/app/lib/api";
+import {
+  getKpiJob,
+  useBulkSetTargetMutation,
+  useCheckKpiJobMutation,
+  useCreateKpiDefinitionMutation,
+  useDeactivateKpiDefinitionMutation,
+  useKpiDefinitionsQuery,
+  useKpiRankingQuery,
+  useSalesTargetsQuery,
+  useTriggerRecomputeMutation,
+  useOverrideTargetMutation,
+} from "@/app/lib/queries/target";
+
+const Sprint14g1Board = dynamic(
+  () => import("@/app/components/analytics/Sprint14g1Board"),
+  {
+    ssr: false,
+    loading: () => <AnalyticsTabSkeleton sections={2} />,
+  },
+);
 
 export type TargetFormMode =
   | "TARGET_BULK"
@@ -120,11 +144,11 @@ function TargetFormModal({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
       <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        className="app-modal-panel flex w-full max-w-3xl rounded-[32px] shadow-2xl transition-all xl:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+        <div className="app-modal-header px-5 py-4 md:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -153,7 +177,7 @@ function TargetFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
             >
               Tutup
             </button>
@@ -161,7 +185,7 @@ function TargetFormModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+        <div className="app-modal-body flex-1 space-y-4 p-5 md:p-6">
           {formError ? (
             <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-600">
               {formError}
@@ -271,7 +295,7 @@ function TargetFormModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-4 md:px-6 flex justify-end gap-3">
+        <div className="app-modal-footer flex flex-shrink-0 justify-end gap-3 px-5 py-4 md:px-6">
           <button
             type="button"
             onClick={onClose}
@@ -392,11 +416,11 @@ function SalesTargetImportModal({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
       <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
+        className="app-modal-panel flex w-full max-w-3xl rounded-[32px] shadow-2xl transition-all xl:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+        <div className="app-modal-header px-5 py-4 md:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -413,7 +437,7 @@ function SalesTargetImportModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
             >
               Tutup
             </button>
@@ -421,7 +445,7 @@ function SalesTargetImportModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+        <div className="app-modal-body flex-1 space-y-4 p-5 md:p-6">
             {error ? (
               <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-600">
                 {error}
@@ -585,12 +609,23 @@ function SalesTargetImportModal({
   );
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE_URL = frontendEnv.apiBaseUrl;
 
 const DEFAULT_PERIOD = {
   periodYear: new Date().getFullYear(),
   periodMonth: new Date().getMonth() + 1,
 };
+
+function buildMonthRange(periodYear: number, periodMonth: number) {
+  const start = new Date(periodYear, periodMonth - 1, 1);
+  const end = new Date(periodYear, periodMonth, 0);
+  const toYmd = (value: Date) => value.toISOString().slice(0, 10);
+
+  return {
+    dateFrom: toYmd(start),
+    dateTo: toYmd(end),
+  };
+}
 
 const EMPTY_FORM: TargetFormState = {
   mode: "TARGET_BULK",
@@ -607,135 +642,6 @@ const EMPTY_FORM: TargetFormState = {
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   return "Terjadi kesalahan yang tidak diketahui.";
-}
-
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  return authFetchJson<T>(path, options);
-}
-
-function unwrapList<T>(response: { data?: T[] | { items?: T[] } }) {
-  if (Array.isArray(response.data)) return response.data;
-  return response.data?.items || [];
-}
-
-async function getKpiRanking(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: KpiRankingItem[] | { items?: KpiRankingItem[] };
-  }>(`/kpi/ranking?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getKpiResults(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: KpiRankingItem[] | { items?: KpiRankingItem[] };
-  }>(`/kpi/results?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getSalesTargets(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: SalesTargetItem[] | { items?: SalesTargetItem[] };
-  }>(`/sales-targets?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getKpiDefinitions(periodYear: number, periodMonth: number) {
-  const response = await apiFetch<{
-    data?: KpiDefinitionItem[] | { items?: KpiDefinitionItem[] };
-  }>(`/kpi-definitions?period_year=${periodYear}&period_month=${periodMonth}`);
-
-  return unwrapList(response);
-}
-
-async function getKpiJob(jobId: number) {
-  const response = await apiFetch<{ data?: KpiJobItem }>(`/kpi/jobs/${jobId}`);
-  return response.data;
-}
-
-async function bulkSetTarget(payload: {
-  periodYear: number;
-  periodMonth: number;
-  metricCode: string;
-  targetValue: string;
-}) {
-  return apiFetch<{
-    data?: {
-      eligible_sales?: number;
-      created?: number;
-      skipped?: number;
-    };
-  }>("/sales-targets/bulk", {
-    method: "POST",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-      metric_code: payload.metricCode,
-      target_value: payload.targetValue,
-    }),
-  });
-}
-
-async function overrideTarget(salesId: number, payload: {
-  periodYear: number;
-  periodMonth: number;
-  metricCode: string;
-  targetValue: string;
-}) {
-  return apiFetch<{ data?: SalesTargetItem }>(`/sales-targets/${salesId}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-      metric_code: payload.metricCode,
-      target_value: payload.targetValue,
-    }),
-  });
-}
-
-async function createKpiDefinition(payload: {
-  periodYear: number;
-  periodMonth: number;
-  metricCode: string;
-  weight: string;
-  thresholdAchieved: string;
-  thresholdNear: string;
-}) {
-  return apiFetch<{ data?: KpiDefinitionItem }>("/kpi-definitions", {
-    method: "POST",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-      metric_code: payload.metricCode,
-      weight: payload.weight,
-      threshold_achieved: payload.thresholdAchieved,
-      threshold_near: payload.thresholdNear,
-    }),
-  });
-}
-
-async function deactivateKpiDefinition(id: number) {
-  return apiFetch<{ data?: KpiDefinitionItem }>(`/kpi-definitions/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      is_active: false,
-    }),
-  });
-}
-
-async function triggerRecompute(payload: {
-  periodYear: number;
-  periodMonth: number;
-}) {
-  return apiFetch<{ data?: KpiJobItem }>("/kpi/recompute", {
-    method: "POST",
-    body: JSON.stringify({
-      period_year: payload.periodYear,
-      period_month: payload.periodMonth,
-    }),
-  });
 }
 
 function getClassificationLabel(classification?: string) {
@@ -771,12 +677,32 @@ export default function TargetPage() {
   const [periodYear, setPeriodYear] = useState(DEFAULT_PERIOD.periodYear);
   const [periodMonth, setPeriodMonth] = useState(DEFAULT_PERIOD.periodMonth);
 
-  const [ranking, setRanking] = useState<KpiRankingItem[]>([]);
-  const [targets, setTargets] = useState<SalesTargetItem[]>([]);
-  const [definitions, setDefinitions] = useState<KpiDefinitionItem[]>([]);
-  const [lastJob, setLastJob] = useState<KpiJobItem | null>(null);
+  const rankingQuery = useKpiRankingQuery(periodYear, periodMonth);
+  const targetsQuery = useSalesTargetsQuery(periodYear, periodMonth);
+  const definitionsQuery = useKpiDefinitionsQuery(periodYear, periodMonth);
 
-  const [loading, setLoading] = useState(true);
+  const ranking = rankingQuery.data ?? [];
+  const targets = targetsQuery.data ?? [];
+  const definitions = definitionsQuery.data ?? [];
+  const [lastJob, setLastJob] = useState<KpiJobItem | null>(null);
+  const bulkSetTargetMutation = useBulkSetTargetMutation();
+  const overrideTargetMutation = useOverrideTargetMutation();
+  const createKpiDefinitionMutation = useCreateKpiDefinitionMutation();
+  const deactivateDefinitionMutation = useDeactivateKpiDefinitionMutation();
+  const triggerRecomputeMutation = useTriggerRecomputeMutation();
+  const checkJobMutation = useCheckKpiJobMutation();
+
+  const loading =
+    (rankingQuery.isLoading && !ranking.length) ||
+    (targetsQuery.isLoading && !targets.length) ||
+    (definitionsQuery.isLoading && !definitions.length);
+  const loadData = useCallback(async () => {
+    await Promise.all([
+      rankingQuery.refetch(),
+      targetsQuery.refetch(),
+      definitionsQuery.refetch(),
+    ]);
+  }, [rankingQuery, targetsQuery, definitionsQuery]);
   const [saving, setSaving] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -792,6 +718,10 @@ export default function TargetPage() {
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
 
   const [selectedRanking, setSelectedRanking] = useState<KpiRankingItem | null>(null);
+  const exportPeriod = useMemo(
+    () => buildMonthRange(periodYear, periodMonth),
+    [periodMonth, periodYear],
+  );
 
   const achievedCount = ranking.filter(
     (item) => item.classification === "ACHIEVED",
@@ -829,64 +759,6 @@ export default function TargetPage() {
       .filter((item) => item.is_active !== false)
       .reduce((total, item) => total + Number(item.weight || 0), 0);
   }, [definitions]);
-
-  const loadData = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true);
-    setPageError("");
-
-    try {
-      const [rankingResult, targetResult, definitionResult] =
-        await Promise.allSettled([
-          getKpiRanking(periodYear, periodMonth),
-          getSalesTargets(periodYear, periodMonth),
-          getKpiDefinitions(periodYear, periodMonth),
-        ]);
-
-      if (rankingResult.status === "fulfilled") {
-        setRanking(rankingResult.value);
-      } else {
-        const fallbackResults = await getKpiResults(periodYear, periodMonth);
-        setRanking(fallbackResults);
-      }
-
-      setTargets(
-        targetResult.status === "fulfilled" ? targetResult.value : [],
-      );
-
-      setDefinitions(
-        definitionResult.status === "fulfilled" ? definitionResult.value : [],
-      );
-    } catch (error) {
-      setPageError(getErrorMessage(error));
-      setRanking([]);
-      setTargets([]);
-      setDefinitions([]);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, [periodMonth, periodYear]);
-
-  useEffect(() => {
-    const initialTimer = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    const interval = window.setInterval(() => {
-      void loadData(false);
-    }, 10000);
-
-    const handleFocus = () => {
-      void loadData(false);
-    };
-
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [loadData]);
 
   const openModal = (mode: TargetFormMode) => {
     setFormMode(mode);
@@ -956,7 +828,7 @@ export default function TargetPage() {
 
     try {
       if (formMode === "TARGET_BULK") {
-        const response = await bulkSetTarget({
+        const response = await bulkSetTargetMutation.mutateAsync({
           periodYear: Number(form.periodYear),
           periodMonth: Number(form.periodMonth),
           metricCode: form.metricCode.trim(),
@@ -971,18 +843,21 @@ export default function TargetPage() {
       }
 
       if (formMode === "TARGET_OVERRIDE") {
-        await overrideTarget(Number(form.salesId), {
-          periodYear: Number(form.periodYear),
-          periodMonth: Number(form.periodMonth),
-          metricCode: form.metricCode.trim(),
-          targetValue: form.targetValue.trim(),
+        await overrideTargetMutation.mutateAsync({
+          salesId: Number(form.salesId),
+          payload: {
+            periodYear: Number(form.periodYear),
+            periodMonth: Number(form.periodMonth),
+            metricCode: form.metricCode.trim(),
+            targetValue: form.targetValue.trim(),
+          },
         });
 
         setPageSuccess(`Target Sales ID #${form.salesId} berhasil di-override.`);
       }
 
       if (formMode === "KPI_DEFINITION") {
-        await createKpiDefinition({
+        await createKpiDefinitionMutation.mutateAsync({
           periodYear: Number(form.periodYear),
           periodMonth: Number(form.periodMonth),
           metricCode: form.metricCode.trim(),
@@ -995,7 +870,7 @@ export default function TargetPage() {
       }
 
       if (formMode === "RECOMPUTE") {
-        const response = await triggerRecompute({
+        const response = await triggerRecomputeMutation.mutateAsync({
           periodYear: Number(form.periodYear),
           periodMonth: Number(form.periodMonth),
         });
@@ -1011,7 +886,7 @@ export default function TargetPage() {
       setPeriodYear(Number(form.periodYear));
       setPeriodMonth(Number(form.periodMonth));
 
-      await loadData(false);
+      await loadData();
       closeModal();
     } catch (error) {
       setFormError(getErrorMessage(error));
@@ -1025,9 +900,9 @@ export default function TargetPage() {
     setPageSuccess("");
 
     try {
-      await deactivateKpiDefinition(item.id);
+      await deactivateDefinitionMutation.mutateAsync(item.id);
       setPageSuccess("KPI definition berhasil dinonaktifkan.");
-      await loadData(false);
+      await loadData();
     } catch (error) {
       setPageError(getErrorMessage(error));
     }
@@ -1040,7 +915,7 @@ export default function TargetPage() {
     setPageSuccess("");
 
     try {
-      const job = await getKpiJob(lastJob.id);
+      const job = await checkJobMutation.mutateAsync(lastJob.id);
       setLastJob(job || null);
       setPageSuccess(`Status job terbaru: ${job?.status || "-"}`);
     } catch (error) {
@@ -1051,116 +926,92 @@ export default function TargetPage() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b-2 border-[#C92C1E] p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
-              <span>Menu</span>
-              <svg
-                className="h-3 w-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={3}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-              <span className="text-[#C92C1E]">Target & KPI (Sprint 15)</span>
+      <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div className="flex flex-col w-full gap-4">
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-xs font-bold text-gray-500">
+                <span>Menu</span>
+                <svg
+                  className="h-3 w-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={3}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+                <span className="text-[#C92C1E]">Target & KPI (Sprint 15)</span>
+              </div>
+  
+              <h1 className="text-2xl font-black tracking-tight text-gray-900">
+                Sales Target, KPI, dan Ranking
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Manajemen Target Bulanan, Override Per Sales, Import Target Excel (Sprint 15), KPI Worker Recompute, dan Leaderboard.
+              </p>
             </div>
-
-            <h1 className="text-2xl font-black tracking-tight text-gray-900">
-              Sales Target, KPI, dan Ranking
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Manajemen Target Bulanan, Override Per Sales, Import Target Excel (Sprint 15), KPI Worker Recompute, dan Leaderboard.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setIsImportModalOpen(true)}
-              className="rounded-xl bg-blue-50 px-3.5 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-100 flex items-center gap-1.5"
-            >
-              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <span>Import Target Excel</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsImportHistoryModalOpen(true)}
-              className="rounded-xl bg-purple-50 px-3.5 py-2 text-xs font-black text-purple-700 transition hover:bg-purple-100 flex items-center gap-1.5"
-            >
-              <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Riwayat Import</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("TARGET_BULK")}
-              className="rounded-xl bg-orange-50 px-3.5 py-2 text-xs font-black text-orange-700 transition hover:bg-orange-100"
-            >
-              + Bulk Target
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("TARGET_OVERRIDE")}
-              className="rounded-xl bg-amber-50 px-3.5 py-2 text-xs font-black text-amber-700 transition hover:bg-amber-100"
-            >
-              + Override Target
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("KPI_DEFINITION")}
-              className="rounded-xl bg-red-50 px-3.5 py-2 text-xs font-black text-[#C92C1E] transition hover:bg-red-100"
-            >
-              + KPI Definition
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openModal("RECOMPUTE")}
-              className="rounded-xl bg-[#C92C1E] px-3.5 py-2 text-xs font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-            >
-              ⚡ Recompute KPI
-            </button>
           </div>
         </div>
+      </div>
 
-        {/* Sub Menu Tabs */}
-        <div className="flex flex-wrap gap-2 border-t border-gray-100 p-4">
+      {/* Metric Cards Summary */}
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label="Total Ranking Sales"
+          value={ranking.length}
+          description="Jumlah sales yang masuk ranking periode aktif."
+          tone="accent"
+          silhouette="target"
+        />
+        <QuickInfoCard
+          label="Achieved (>= 100%)"
+          value={achievedCount}
+          description="Target yang sudah tercapai atau terlampaui."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Near Achieved (>= 80%)"
+          value={nearCount}
+          description="Target yang hampir tercapai."
+          tone="amber"
+        />
+        <QuickInfoCard
+          label="Not Achieved (< 80%)"
+          value={notAchievedCount}
+          description="Target yang masih tertinggal jauh."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
+
+      <div className="flex w-max max-w-full overflow-x-auto rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
+        <div className="flex text-sm font-bold">
           <button
             type="button"
             onClick={() => setActiveSubMenu("OPERATIONS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+            className={`rounded-lg px-5 py-2.5 transition-all ${
               activeSubMenu === "OPERATIONS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
             }`}
           >
-            <span>Kelola Target, KPI & Ranking</span>
+            Kelola Target, KPI & Ranking
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubMenu("ANALYTICS")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+            className={`rounded-lg px-5 py-2.5 transition-all ${
               activeSubMenu === "ANALYTICS"
-                ? "bg-[#C92C1E] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-white text-[#C92C1E] shadow-sm"
+                : "text-gray-500 hover:bg-gray-200/50 hover:text-gray-700"
             }`}
           >
-            <span>Analitik & Progress Board</span>
+            Analitik & Progress Board
           </button>
         </div>
       </div>
@@ -1186,8 +1037,7 @@ export default function TargetPage() {
             </div>
           ) : null}
 
-          {/* Metric Cards Summary */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="hidden grid grid-cols-1 gap-4 md:grid-cols-4">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
               <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
                 Total Ranking Sales
@@ -1301,26 +1151,56 @@ export default function TargetPage() {
 
           {/* Ranking & Leaderboard Table */}
           <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
               <div>
-                <p className="text-sm font-black text-gray-900">
+                <h2 className="text-xl font-bold text-gray-900">
                   Ranking & Leaderboard KPI Sales
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-400">
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
                   Ranking dihitung otomatis lewat window function RANK() per periode.
                 </p>
               </div>
-
-              <input
-                value={search || ""}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Cari nama sales, kode, score, atau klasifikasi"
-                className="min-w-[280px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-              />
+              <div className="flex w-full flex-wrap items-center gap-3">
+                <ReportExportButton
+                  reportKey="targets_kpi"
+                  filters={{
+                    date_from: exportPeriod.dateFrom,
+                    date_to: exportPeriod.dateTo,
+                  }}
+                  label="Export KPI"
+                  loadingLabel="Menyiapkan Export..."
+                  successMessage="File KPI sedang diunduh."
+                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm text-gray-600">
+            <div className="border-b border-gray-50 px-6 py-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="relative flex-1">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                    <Search className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={search || ""}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Cari nama sales, kode, score, atau klasifikasi..."
+                    className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                  />
+                </div>
+                <ColumnVisibilityControl
+                  tableId="target-table"
+                  storageKey="column-visibility:target-table"
+                  buttonLabel="Kolom"
+                />
+              </div>
+            </div>
+
+            <div className="relative w-full">
+              <div className="flex flex-col">
+                <div className="overflow-x-auto">
+                  <table id="target-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
                 <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="px-4 py-4 font-bold">Rank</th>
@@ -1399,21 +1279,84 @@ export default function TargetPage() {
               </table>
             </div>
           </div>
+        </div>
+          </div>
 
           {/* Tables Grid: Sales Target & KPI Definitions */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-              <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-                <p className="text-sm font-black text-gray-900">
-                  Target Bulanan Sales (`/sales-targets`)
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-400">
-                  Target per Sales ID dan Metric.
-                </p>
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Target Bulanan Sales
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Target per Sales ID dan Metric.
+                  </p>
+                </div>
+                <div className="flex w-full flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200 flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span>Import Target Excel</span>
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => setIsImportHistoryModalOpen(true)}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200 flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Riwayat Import</span>
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("TARGET_BULK")}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200"
+                    >
+                      + Bulk Target
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("TARGET_OVERRIDE")}
+                      className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-200"
+                    >
+                      + Override Target
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("KPI_DEFINITION")}
+                      className="rounded-xl bg-[#C92C1E] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#A82216]"
+                    >
+                      + KPI Definition
+                    </button>
+        
+                    <button
+                      type="button"
+                      onClick={() => openModal("RECOMPUTE")}
+                      className="rounded-xl bg-[#C92C1E] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#A82216]"
+                    >
+                      ⚡ Recompute KPI
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-sm text-gray-600">
+              <div className="relative w-full flex-1">
+                <div className="flex flex-col h-full">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-left text-sm text-gray-600">
                   <thead className="border-b border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                     <tr>
                       <th className="px-4 py-4">Sales</th>
@@ -1456,19 +1399,25 @@ export default function TargetPage() {
                 </table>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-              <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-                <p className="text-sm font-black text-gray-900">
-                  KPI Definitions (`/kpi-definitions`)
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-400">
-                  Weight dan threshold evaluasi per metric.
-                </p>
+        <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    KPI Definitions
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Weight dan threshold evaluasi per metric.
+                  </p>
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm text-gray-600">
+              <div className="relative w-full flex-1">
+                <div className="flex flex-col h-full">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-sm text-gray-600">
                   <thead className="border-b border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                     <tr>
                       <th className="px-4 py-4">Metric</th>
@@ -1519,23 +1468,26 @@ export default function TargetPage() {
                             ) : (
                               <button
                                 type="button"
+                                title="Nonaktifkan"
                                 onClick={() =>
                                   void handleDeactivateDefinition(item)
                                 }
-                                className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-black text-gray-600 transition hover:bg-gray-200"
+                                className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200"
                               >
-                                Nonaktifkan
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                               </button>
                             )}
                           </td>
                         </tr>
                       ))
                     )}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
           <TargetFormModal
             open={showModal}
@@ -1555,10 +1507,10 @@ export default function TargetPage() {
             >
               <div className="flex min-h-full items-center justify-center p-4 md:p-6">
                 <div
-                  className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+                  className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+                  <div className="app-modal-header px-5 py-4 md:px-6">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -1577,14 +1529,14 @@ export default function TargetPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedRanking(null)}
-                        className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                        className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
                       >
                         Tutup
                       </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
+                  <div className="app-modal-body grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                     {[
                       ["Rank Position", `#${selectedRanking.rank_position || "-"}`],
                       ["Sales Code", selectedRanking.sales_code || "-"],
@@ -1629,7 +1581,7 @@ export default function TargetPage() {
           setIsImportHistoryModalOpen(true);
         }}
         onSuccess={() => {
-          loadData(false);
+          void loadData();
         }}
       />
 

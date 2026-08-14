@@ -18,6 +18,8 @@ import {
   type StageHistoryItem,
   type TrainingItem,
 } from "@/app/lib/api";
+import DetailSummaryCard from "@/app/components/ui/DetailSummaryCard";
+import { formatPhoneDisplay } from "@/app/lib/phone";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 function formatDateTime(value?: string | null): string {
@@ -101,41 +103,6 @@ function Badge({
     <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${className}`}>
       {value ?? "-"}
     </span>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  description,
-  primary = false,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  primary?: boolean;
-}) {
-  if (primary) {
-    return (
-      <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden min-h-[144px]">
-        <div className="relative z-10">
-          <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-          <h2 className="text-3xl font-black">{value}</h2>
-          <p className="mt-2 text-[11px] text-red-100/90 max-w-[90%]">{description}</p>
-        </div>
-        <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm min-h-[144px]">
-      <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-      <h2 className="text-3xl font-black text-gray-900">{value}</h2>
-      <p className="mt-2 text-[11px] text-gray-400">{description}</p>
-    </div>
   );
 }
 
@@ -324,6 +291,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     () => interactions.filter((item) => item.follow_up_at).length,
     [interactions],
   );
+  const outletPhoneRaw = lead?.outlet?.phone || outlet?.phone;
+  const outletPhoneDisplay = outletPhoneRaw ? formatPhoneDisplay(outletPhoneRaw) : "-";
 
   return (
     <div className="space-y-6">
@@ -406,20 +375,23 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <SummaryCard
+            <DetailSummaryCard
               title="Kode Lead"
               value={lead.code}
               description="Identitas utama lead di CRM untuk tracking aktivitas dan assignment."
               primary
+              silhouette="lead"
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Stage Saat Ini"
               value={formatLabel(lead.stage)}
+              tone="sky"
               description={`Skor saat ini: ${lead.current_score ?? "-"} • status lead ${formatLabel(lead.status)}`}
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Aktivitas Tercatat"
               value={interactions.length}
+              tone="emerald"
               description={`Follow-up terjadwal ${totalFollowUps} • training ${trainings.length} • closing ${closings.length}`}
             />
           </div>
@@ -455,7 +427,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <FieldBox label="ID Owner" value={lead.owner?.id ?? "-"} />
             <FieldBox label="Kode Owner" value={lead.owner?.code || "-"} />
             <FieldBox label="Nama Owner" value={lead.owner?.name || "-"} />
-            <FieldBox label="Telepon Owner" value={lead.owner?.phone || "-"} />
+            <FieldBox label="Telepon Owner" value={lead.owner?.phone ? formatPhoneDisplay(lead.owner.phone) : "-"} />
             <FieldBox label="Brand Laundry" value={lead.owner?.brand_name || "-"} />
             <FieldBox label="Kota" value={lead.owner?.city || "-"} />
             <FieldBox label="Provinsi" value={lead.owner?.province || "-"} />
@@ -494,7 +466,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <FieldBox label="Outlet ID" value={lead.outlet_id ?? "-"} />
             <FieldBox label="Kode Outlet" value={lead.outlet?.code || outlet?.code || "-"} />
             <FieldBox label="Nama Outlet" value={lead.outlet?.name || outlet?.name || "-"} />
-            <FieldBox label="Telepon Outlet" value={lead.outlet?.phone || outlet?.phone || "-"} />
+            <FieldBox label="Telepon Outlet" value={outletPhoneDisplay} />
             <FieldBox label="Status Outlet" value={outlet?.status || "-"} />
             <FieldBox label="Lokasi Outlet" value={outlet ? [outlet.city, outlet.province].filter(Boolean).join(", ") || "-" : "-"} />
             <FieldBox label="Alamat Outlet" span value={outlet?.address || (lead.outlet_id ? "Detail outlet belum tersedia." : "Lead ini belum terhubung ke outlet tertentu.")} />
@@ -725,14 +697,16 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           </TimelinePanel>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SummaryCard
+            <DetailSummaryCard
               title="Closing Terbaru"
               value={latestClosing ? formatRupiah(latestClosing.final_amount) : "-"}
+              tone="emerald"
               description={latestClosing ? `${formatLabel(latestClosing.status)} • ${formatDateOnly(latestClosing.closed_at)}` : "Belum ada closing pada lead ini."}
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Interaksi Terakhir"
               value={latestInteraction ? formatLabel(latestInteraction.type) : "-"}
+              tone="sky"
               description={latestInteraction ? `${formatDateOnly(latestInteraction.interaction_at)} • ${latestInteraction.sales?.name || latestInteraction.created_by?.name || "-"}` : "Belum ada interaksi yang tercatat."}
             />
           </div>

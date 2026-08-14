@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
 
 interface SopItem {
   id: number;
@@ -159,11 +160,16 @@ export default function SopKelolaanPage() {
                       Nasabah dapat dikategorikan sebagai nasabah potensi apabila memenuhi indikator berikut:
                     </p>
                     <ul className="space-y-2.5 text-[13px] font-semibold text-gray-600">
-                      {indikatorPotensi.map((item) => (
-                        <li key={item.id} className="flex items-start gap-2.5 rounded-lg p-1">
+                      {indikatorPotensi.map((item, idx) => (
+                        <AnimatedListItem
+                          key={item.id}
+                          as="li"
+                          index={idx}
+                          className="flex items-start gap-2.5 rounded-lg p-1"
+                        >
                           <span className="mt-0.5 shrink-0 text-emerald-600">{item.label}</span>
                           <span className="flex-1">{item.keterangan}</span>
-                        </li>
+                        </AnimatedListItem>
                       ))}
                     </ul>
 
@@ -172,11 +178,11 @@ export default function SopKelolaanPage() {
                         Untuk nasabah potensi, tim bisnis wajib:
                       </span>
                       <ul className="space-y-1.5 text-[12px] font-semibold leading-relaxed text-gray-600">
-                        {kewajibanBisnis.map((item) => (
-                          <li key={item.id} className="flex items-start gap-2">
+                        {kewajibanBisnis.map((item, idx) => (
+                          <AnimatedListItem key={item.id} as="li" index={idx} className="flex items-start gap-2">
                             <span className="shrink-0 text-[#C92C1E]">{item.label}</span>
                             <span className="flex-1">{item.keterangan}</span>
-                          </li>
+                          </AnimatedListItem>
                         ))}
                       </ul>
                     </div>
@@ -192,11 +198,16 @@ export default function SopKelolaanPage() {
                       Nasabah ditarik dari daftar aktif apabila memenuhi kriteria berikut:
                     </p>
                     <ul className="space-y-2.5 text-[13px] font-semibold text-gray-600">
-                      {indikatorTidakPotensi.map((item) => (
-                        <li key={item.id} className="flex items-start gap-2.5 rounded-lg p-1">
+                      {indikatorTidakPotensi.map((item, idx) => (
+                        <AnimatedListItem
+                          key={item.id}
+                          as="li"
+                          index={idx}
+                          className="flex items-start gap-2.5 rounded-lg p-1"
+                        >
                           <span className="mt-0.5 shrink-0 text-rose-600">{item.label}</span>
                           <span className="flex-1">{item.keterangan}</span>
-                        </li>
+                        </AnimatedListItem>
                       ))}
                     </ul>
                   </div>
@@ -213,11 +224,16 @@ export default function SopKelolaanPage() {
                     Tim Sales
                   </h4>
                   <div className="divide-y divide-gray-100 pl-1">
-                    {todoSales.map((item) => (
-                      <div key={item.id} className="flex items-start gap-3 rounded-lg px-1 py-2.5 text-[12.5px] font-semibold text-gray-600">
+                    {todoSales.map((item, idx) => (
+                      <AnimatedListItem
+                        key={item.id}
+                        as="div"
+                        index={idx}
+                        className="flex items-start gap-3 rounded-lg px-1 py-2.5 text-[12.5px] font-semibold text-gray-600"
+                      >
                         <span className="shrink-0 font-bold text-[#C92C1E]">{item.label}</span>
                         <span className="flex-1 leading-relaxed">{item.keterangan}</span>
-                      </div>
+                      </AnimatedListItem>
                     ))}
                   </div>
                 </div>
@@ -227,11 +243,16 @@ export default function SopKelolaanPage() {
                     Tim CS
                   </h4>
                   <div className="divide-y divide-gray-100 pl-1">
-                    {todoCs.map((item) => (
-                      <div key={item.id} className="flex items-start gap-3 rounded-lg px-1 py-2.5 text-[12.5px] font-semibold text-gray-600">
+                    {todoCs.map((item, idx) => (
+                      <AnimatedListItem
+                        key={item.id}
+                        as="div"
+                        index={idx}
+                        className="flex items-start gap-3 rounded-lg px-1 py-2.5 text-[12.5px] font-semibold text-gray-600"
+                      >
                         <span className="shrink-0 font-bold text-[#C92C1E]">{item.label}</span>
                         <span className="flex-1 leading-relaxed">{item.keterangan}</span>
-                      </div>
+                      </AnimatedListItem>
                     ))}
                   </div>
                 </div>
@@ -247,13 +268,18 @@ export default function SopKelolaanPage() {
                     <h3 className="text-base font-black text-gray-800">Modul Call CS</h3>
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {modulCall.map((item) => (
-                      <div key={item.id} className="flex flex-col items-start gap-4 rounded-lg p-4 sm:flex-row">
+                    {modulCall.map((item, idx) => (
+                      <AnimatedListItem
+                        key={item.id}
+                        as="div"
+                        index={idx}
+                        className="flex flex-col items-start gap-4 rounded-lg p-4 sm:flex-row"
+                      >
                         <div className="flex w-full flex-1 flex-col gap-2 text-[13px] sm:flex-row sm:gap-6">
                           <div className="shrink-0 font-bold text-[#C92C1E] sm:w-1/3">{item.label}</div>
                           <div className="flex-1 font-semibold leading-relaxed text-gray-600">{item.keterangan}</div>
                         </div>
-                      </div>
+                      </AnimatedListItem>
                     ))}
                   </div>
                 </div>

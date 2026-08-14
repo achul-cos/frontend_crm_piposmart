@@ -8,6 +8,8 @@ import {
   type OutletDetail,
   type SubscriptionDetailData,
 } from "@/app/lib/api";
+import DetailSummaryCard from "@/app/components/ui/DetailSummaryCard";
+import { formatPhoneDisplay } from "@/app/lib/phone";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 
 function formatDateTime(value?: string | null): string {
@@ -82,41 +84,6 @@ function getStatusBadgeClass(status?: string | null): string {
     default:
       return "bg-gray-50 text-gray-600 border border-gray-200";
   }
-}
-
-function SummaryCard({
-  title,
-  value,
-  description,
-  primary = false,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  primary?: boolean;
-}) {
-  if (primary) {
-    return (
-      <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden min-h-[144px]">
-        <div className="relative z-10">
-          <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-          <h2 className="text-3xl font-black">{value}</h2>
-          <p className="mt-2 text-[11px] text-red-100/90 max-w-[90%]">{description}</p>
-        </div>
-        <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm min-h-[144px]">
-      <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-      <h2 className="text-3xl font-black text-gray-900">{value}</h2>
-      <p className="mt-2 text-[11px] text-gray-400">{description}</p>
-    </div>
-  );
 }
 
 function InfoSection({
@@ -303,20 +270,23 @@ export default function SubscriptionDetailPage({ params }: { params: Promise<{ i
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <SummaryCard
+            <DetailSummaryCard
               title="Kode Subscribe"
               value={subscription.code || `SUB-${subscription.id}`}
               description="Identitas langganan aktif/expired yang tercatat di sistem."
               primary
+              silhouette="check-square"
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Status Subscribe"
               value={formatLabel(subscription.status)}
+              tone="sky"
               description={`${subscription.total_duration_days || 0} hari • ${formatDateOnly(subscription.active_from)} sampai ${formatDateOnly(subscription.active_until)}`}
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Nilai Order"
               value={formatRupiah(order?.final_amount)}
+              tone="emerald"
               description={`Order ${order?.code || order?.id || "-"} • ${formatLabel(order?.status)}`}
             />
           </div>
@@ -350,7 +320,7 @@ export default function SubscriptionDetailPage({ params }: { params: Promise<{ i
             <FieldBox label="Outlet ID" value={subscription.outlet_id ?? "-"} />
             <FieldBox label="Kode Outlet" value={outlet?.code || "-"} />
             <FieldBox label="Nama Outlet" value={outlet?.name || "-"} />
-            <FieldBox label="Telepon Outlet" value={outlet?.phone || "-"} />
+            <FieldBox label="Telepon Outlet" value={outlet?.phone ? formatPhoneDisplay(outlet.phone) : "-"} />
             <FieldBox label="Lokasi Outlet" value={outlet ? [outlet.city, outlet.province].filter(Boolean).join(", ") || "-" : "-"} />
             <FieldBox label="Alamat Outlet" value={outlet?.address || "-"} span />
           </InfoSection>

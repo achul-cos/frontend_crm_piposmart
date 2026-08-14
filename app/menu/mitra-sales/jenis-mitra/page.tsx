@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
-import { listPartnerTypes, type PartnerTypeItem } from "@/app/lib/api";
+import type { PartnerTypeItem } from "@/app/lib/api";
+import { usePartnerTypesQuery } from "@/app/lib/queries/mitraSales";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
@@ -31,40 +33,11 @@ function formatCommission(item?: PartnerTypeItem | null) {
 export default function MitraSalesJenisMitraPage() {
   usePageTitle("Jenis Mitra Sales");
 
-  const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState("");
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadData = async () => {
-      setLoading(true);
-      setPageError("");
-
-      try {
-        const result = await listPartnerTypes();
-
-        if (cancelled) return;
-
-        setPartnerTypes(result.items || []);
-      } catch (error) {
-        if (!cancelled) {
-          setPageError(getErrorMessage(error));
-          setPartnerTypes([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data, isLoading: loading, error } = usePartnerTypesQuery();
+  const partnerTypes: PartnerTypeItem[] = data?.items || [];
+  const pageError = error ? getErrorMessage(error) : "";
 
   const filteredItems = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -199,9 +172,10 @@ export default function MitraSalesJenisMitraPage() {
               Jenis mitra tidak ditemukan.
             </div>
           ) : (
-            filteredItems.map((item) => (
-              <div
+            filteredItems.map((item, itemIndex) => (
+              <AnimatedListItem
                 key={item.id}
+                index={itemIndex}
                 className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -248,7 +222,7 @@ export default function MitraSalesJenisMitraPage() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </AnimatedListItem>
             ))
           )}
         </div>

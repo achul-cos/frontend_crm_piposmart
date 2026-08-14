@@ -185,6 +185,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
       setTopups(topupData);
       setTransfers(transferData);
       setSubscriptions(subData);
+      setHistoryItems(historyData);
     } catch (err) {
       console.error("Gagal memuat detail:", err);
     } finally {
@@ -864,6 +865,65 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                     })}
                   </tbody>
                 </table>
+              )}
+            </div>
+          </div>
+
+          {/* Level 8: Riwayat Perubahan */}
+          <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                  <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Perubahan</h4>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">LOG PERUBAHAN DATA OWNER, TERMASUK DARI SINKRONISASI ADMIN DASHBOARD LAMA</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold bg-red-50 text-[#C92C1E] px-3 py-1 rounded-full border border-red-200">
+                {historyItems.length} Perubahan
+              </span>
+            </div>
+
+            <div className="flex-1">
+              {historyItems.length === 0 ? (
+                <div className="text-center py-12 bg-white">
+                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat perubahan untuk owner ini.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {historyItems.map((item) => (
+                    <div key={item.id} className="p-5 flex items-start justify-between gap-4 hover:bg-gray-50/50 transition-colors">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                            {item.action}
+                          </span>
+                          <span className="text-xs font-bold text-gray-700">
+                            {item.actor?.name || "Sistem/Scraper"}
+                          </span>
+                        </div>
+                        {item.before && item.after && (
+                          <p className="text-xs text-gray-500 mt-2 break-words">
+                            {Object.keys(item.after)
+                              .filter((key) => JSON.stringify((item.before as Record<string, unknown>)[key]) !== JSON.stringify((item.after as Record<string, unknown>)[key]))
+                              .map((key) => (
+                                <span key={key} className="block">
+                                  <span className="font-bold text-gray-700">{key}</span>: &quot;{String((item.before as Record<string, unknown>)[key] ?? "")}&quot; &rarr; &quot;{String((item.after as Record<string, unknown>)[key] ?? "")}&quot;
+                                </span>
+                              ))}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                        {formatIndonesianDate(item.created_at, true)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

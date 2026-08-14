@@ -5,23 +5,32 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { CheckCircle2, PowerOff } from "lucide-react";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 import {
-  createPartnerType,
-  createPartnerTypeCommissionRule,
-  deactivatePartnerTypeCommissionRule,
-  getCatalogPackages,
-  getCatalogPlans,
-  getPartnerType,
-  getPartnerTypeCommissionRule,
-  getProfile,
-  listPartnerTypeCommissionRules,
-  listPartnerTypes,
-  updatePartnerType,
-  type CatalogPackage,
-  type CatalogPlan,
+  ViewActionButton,
+  EditActionButton,
+  RowActionButton,
+  RowActionGroup,
+} from "@/app/components/table/RowActionButton";
+import { AnimatedListItem } from "@/app/components/motion/primitives";
+import {
   type PartnerCommissionRuleItem,
   type PartnerTypeItem,
 } from "@/app/lib/api";
+import {
+  useCatalogPackagesQuery,
+  useCatalogPlansQuery,
+  useCreatePartnerTypeCommissionRuleMutation,
+  useCreatePartnerTypeMutation,
+  useDeactivatePartnerTypeCommissionRuleMutation,
+  useMitraProfileQuery,
+  usePartnerTypeDetailQuery,
+  usePartnerTypeListQuery,
+  usePartnerTypeRulesDetailedQuery,
+  useUpdatePartnerTypeMutation,
+} from "@/app/lib/queries/mitra";
+import type { CatalogPlan } from "@/app/lib/api";
 
 type TypeFormState = {
   code: string;
@@ -99,17 +108,10 @@ function formatFlatCommission(item?: PartnerTypeItem | null) {
 }
 
 export default function JenisMitraPage() {
-  const [currentRole, setCurrentRole] = useState("");
-  const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
+  const { confirm, withLoading, showError } = useFeedback();
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
-  const [selectedType, setSelectedType] = useState<PartnerTypeItem | null>(null);
-  const [commissionRules, setCommissionRules] = useState<PartnerCommissionRuleItem[]>([]);
-  const [packages, setPackages] = useState<CatalogPackage[]>([]);
-  const [plans, setPlans] = useState<CatalogPlan[]>([]);
-  const [loading, setLoading] = useState(true);
   const [savingType, setSavingType] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
-  const [pageError, setPageError] = useState("");
   const [typeFormError, setTypeFormError] = useState("");
   const [ruleFormError, setRuleFormError] = useState("");
   const [typeFormSuccess, setTypeFormSuccess] = useState("");
@@ -119,6 +121,43 @@ export default function JenisMitraPage() {
   const [editingType, setEditingType] = useState<PartnerTypeItem | null>(null);
   const [typeForm, setTypeForm] = useState<TypeFormState>(EMPTY_TYPE_FORM);
   const [ruleForm, setRuleForm] = useState<RuleFormState>(EMPTY_RULE_FORM);
+
+  const profileQuery = useMitraProfileQuery();
+  const currentRole =
+    profileQuery.data?.role ||
+    (typeof window !== "undefined" ? localStorage.getItem("piposmart_user_role") || "" : "");
+
+  const typesQuery = usePartnerTypeListQuery();
+  const partnerTypes = useMemo(() => typesQuery.data?.items || [], [typesQuery.data]);
+
+  const packagesQuery = useCatalogPackagesQuery();
+  const packages = packagesQuery.data || [];
+  const plansQuery = useCatalogPlansQuery();
+  const plans = plansQuery.data || [];
+
+  // Default the selection to the first partner type once the list has loaded.
+  useEffect(() => {
+    if (selectedTypeId === null && partnerTypes.length > 0) {
+      setSelectedTypeId(partnerTypes[0].id);
+    }
+  }, [partnerTypes, selectedTypeId]);
+
+  const typeDetailQuery = usePartnerTypeDetailQuery(selectedTypeId);
+  const selectedType = typeDetailQuery.data || null;
+  const rulesQuery = usePartnerTypeRulesDetailedQuery(selectedTypeId);
+  const commissionRules = useMemo(() => rulesQuery.data || [], [rulesQuery.data]);
+
+  const loading = typesQuery.isLoading || (Boolean(selectedTypeId) && (typeDetailQuery.isLoading || rulesQuery.isLoading));
+  const pageError = typesQuery.error
+    ? getErrorMessage(typesQuery.error)
+    : typeDetailQuery.error
+      ? getErrorMessage(typeDetailQuery.error)
+      : "";
+
+  const createTypeMutation = useCreatePartnerTypeMutation();
+  const updateTypeMutation = useUpdatePartnerTypeMutation();
+  const createRuleMutation = useCreatePartnerTypeCommissionRuleMutation();
+  const deactivateRuleMutation = useDeactivatePartnerTypeCommissionRuleMutation();
 
   // Backend: partner-type CRUD (create/update/delete) is ADMIN-only (canManagePartnerType).
   const canManageTypes = currentRole === "ADMIN";
@@ -234,96 +273,6 @@ export default function JenisMitraPage() {
     return commissionRules.filter((rule) => rule.active).length;
   }, [commissionRules]);
 
-  const loadSelectedType = async (typeId: number) => {
-    setLoading(true);
-    try {
-      const [typeDetail, ruleList] = await Promise.all([
-        getPartnerType(typeId),
-        listPartnerTypeCommissionRules(typeId),
-      ]);
-      const detailedRules = await Promise.all(
-        ruleList.items.map(async (rule) => {
-          try {
-            return await getPartnerTypeCommissionRule(typeId, rule.id);
-          } catch {
-            return rule;
-          }
-        }),
-      );
-      setSelectedType(typeDetail);
-      setCommissionRules(detailedRules);
-    } catch (error) {
-      setPageError(getErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const reloadTypes = async (preferredId?: number | null) => {
-    const typesResult = await listPartnerTypes();
-    setPartnerTypes(typesResult.items);
-    const nextId = preferredId || typesResult.items[0]?.id || null;
-    setSelectedTypeId(nextId);
-    if (nextId) {
-      await loadSelectedType(nextId);
-    } else {
-      setSelectedType(null);
-      setCommissionRules([]);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    const bootstrap = async () => {
-      setLoading(true);
-      setPageError("");
-      try {
-        const [profileResult, packagesResult, plansResult, typesResult] = await Promise.allSettled([
-          getProfile(),
-          getCatalogPackages(),
-          getCatalogPlans(),
-          listPartnerTypes(),
-        ]);
-
-        if (cancelled) return;
-        setCurrentRole(profileResult.status === "fulfilled" ? profileResult.value.role || "" : typeof window !== "undefined" ? localStorage.getItem("piposmart_user_role") || "" : "");
-        setPackages(packagesResult.status === "fulfilled" ? packagesResult.value : []);
-        setPlans(plansResult.status === "fulfilled" ? plansResult.value : []);
-
-        if (typesResult.status === "fulfilled") {
-          setPartnerTypes(typesResult.value.items);
-          const firstId = typesResult.value.items[0]?.id || null;
-          setSelectedTypeId(firstId);
-          if (firstId) {
-            await loadSelectedType(firstId);
-          } else {
-            setLoading(false);
-          }
-        } else {
-          setPageError(getErrorMessage(typesResult.reason));
-          setLoading(false);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setPageError(getErrorMessage(error));
-          setLoading(false);
-        }
-      }
-    };
-
-    void bootstrap();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!selectedTypeId) return;
-    if (selectedType?.id === selectedTypeId) return;
-    void loadSelectedType(selectedTypeId);
-  }, [selectedTypeId]);
-
   const startCreateType = () => {
     setEditingType(null);
     setTypeForm(EMPTY_TYPE_FORM);
@@ -367,16 +316,19 @@ export default function JenisMitraPage() {
     setSavingType(true);
     try {
       if (editingType) {
-        await updatePartnerType(editingType.id, {
-          name: typeForm.name.trim(),
-          commission_mode: typeForm.commissionMode,
-          commission_value: stripThousandDots(typeForm.commissionValue) || "0",
-          description: typeForm.description.trim(),
+        await updateTypeMutation.mutateAsync({
+          typeId: editingType.id,
+          payload: {
+            name: typeForm.name.trim(),
+            commission_mode: typeForm.commissionMode,
+            commission_value: stripThousandDots(typeForm.commissionValue) || "0",
+            description: typeForm.description.trim(),
+          },
         });
         setTypeFormSuccess("Jenis mitra berhasil diperbarui.");
-        await reloadTypes(editingType.id);
+        setSelectedTypeId(editingType.id);
       } else {
-        const created = await createPartnerType({
+        const created = await createTypeMutation.mutateAsync({
           code: typeForm.code.trim().toUpperCase(),
           name: typeForm.name.trim(),
           commission_mode: typeForm.commissionMode,
@@ -384,7 +336,7 @@ export default function JenisMitraPage() {
           description: typeForm.description.trim() || undefined,
         });
         setTypeFormSuccess(`Jenis mitra ${created.name} (${created.code}) berhasil dibuat.`);
-        await reloadTypes(created.id);
+        setSelectedTypeId(created.id);
         setShowTypeForm(false);
       }
     } catch (error) {
@@ -421,23 +373,25 @@ export default function JenisMitraPage() {
 
     setSavingRule(true);
     try {
-      await createPartnerTypeCommissionRule(selectedTypeId, {
-        plan_id: ruleForm.planId ? Number(ruleForm.planId) : undefined,
-        mode: ruleForm.mode,
-        value: ruleForm.mode === "TIER" ? undefined : ruleForm.value.trim(),
-        effective_from: new Date(ruleForm.effectiveFrom).toISOString(),
-        effective_to: ruleForm.effectiveTo ? new Date(ruleForm.effectiveTo).toISOString() : undefined,
-        tiers: ruleForm.mode === "TIER" ? ruleForm.tiers.map((tier) => ({
-          tier_order: tier.tier_order,
-          min_closings: tier.min_closings,
-          max_closings: tier.max_closings ? Number(tier.max_closings) : undefined,
-          mode: tier.mode,
-          value: tier.value.trim(),
-        })) : undefined,
+      await createRuleMutation.mutateAsync({
+        typeId: selectedTypeId,
+        payload: {
+          plan_id: ruleForm.planId ? Number(ruleForm.planId) : undefined,
+          mode: ruleForm.mode,
+          value: ruleForm.mode === "TIER" ? undefined : ruleForm.value.trim(),
+          effective_from: new Date(ruleForm.effectiveFrom).toISOString(),
+          effective_to: ruleForm.effectiveTo ? new Date(ruleForm.effectiveTo).toISOString() : undefined,
+          tiers: ruleForm.mode === "TIER" ? ruleForm.tiers.map((tier) => ({
+            tier_order: tier.tier_order,
+            min_closings: tier.min_closings,
+            max_closings: tier.max_closings ? Number(tier.max_closings) : undefined,
+            mode: tier.mode,
+            value: tier.value.trim(),
+          })) : undefined,
+        },
       });
       setRuleFormSuccess("Commission rule berhasil dibuat.");
       setRuleForm(EMPTY_RULE_FORM);
-      await loadSelectedType(selectedTypeId);
     } catch (error) {
       setRuleFormError(getErrorMessage(error));
     } finally {
@@ -446,16 +400,32 @@ export default function JenisMitraPage() {
   };
 
   const handleDeactivateRule = async (rule: PartnerCommissionRuleItem) => {
-    if (!selectedTypeId || !window.confirm(`Nonaktifkan rule #${rule.id}?`)) return;
+    if (!selectedTypeId) return;
+    const ok = await confirm({
+      title: "Nonaktifkan Rule Komisi",
+      message: `Yakin ingin menonaktifkan rule komisi #${rule.id}? Rule ini tidak akan dipakai lagi untuk perhitungan komisi selanjutnya.`,
+      danger: true,
+    });
+    if (!ok) return;
     setSavingRule(true);
     setRuleFormError("");
     setRuleFormSuccess("");
     try {
-      await deactivatePartnerTypeCommissionRule(selectedTypeId, rule.id);
+      await withLoading(() =>
+        deactivateRuleMutation.mutateAsync({ typeId: selectedTypeId, ruleId: rule.id }),
+      );
       setRuleFormSuccess("Rule berhasil dinonaktifkan.");
-      await loadSelectedType(selectedTypeId);
     } catch (error) {
-      setRuleFormError(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setRuleFormError(message);
+      showError({
+        title: "Gagal menonaktifkan rule",
+        message: "Sistem gagal menonaktifkan rule komisi ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau data sudah berubah sejak halaman dimuat.",
+        solution: "Muat ulang halaman lalu coba lagi.",
+        technicalDetails: message,
+        onRetry: () => void handleDeactivateRule(rule),
+      });
     } finally {
       setSavingRule(false);
     }
@@ -529,48 +499,35 @@ export default function JenisMitraPage() {
                       <td className="px-4 py-4 text-sm font-bold text-gray-600">{formatFlatCommission(item)}</td>
                       <td className="px-4 py-4 text-sm font-bold text-gray-600">{selectedTypeId === item.id ? activeRuleCount : "Lihat detail"}</td>
                       <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <Link
+                        <RowActionGroup>
+                          <ViewActionButton
                             href={`/menu/kelolaan-mitra/jenis-mitra/${item.id}`}
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
                             title="Detail Jenis Mitra"
-                          >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </Link>
-                          <button
-                            type="button"
+                          />
+                          <RowActionButton
+                            icon={CheckCircle2}
+                            tone={isSelected ? "deactivate" : "activate"}
+                            title={isSelected ? "Terpilih" : "Pilih"}
                             onClick={() => setSelectedTypeId(item.id)}
-                            className={`rounded-2xl px-4 py-2 text-xs font-black transition ${isSelected ? "bg-[#C92C1E] text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-                          >
-                            {isSelected ? "Terpilih" : "Pilih"}
-                          </button>
+                          />
                           {canManageTypes ? (
-                            <button
-                              type="button"
+                            <EditActionButton
                               onClick={() => {
                                 setSelectedTypeId(item.id);
                                 setTimeout(() => startEditType(), 0);
                               }}
-                              className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100"
                               title="Edit"
-                            >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                            </button>
+                            />
                           ) : null}
                           {canManageTypes ? (
-                            <button
-                              type="button"
+                            <RowActionButton
+                              icon={PowerOff}
+                              tone="deactivate"
                               disabled
                               title="Backend belum menyediakan endpoint nonaktifkan partner type"
-                              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-300 shadow-sm cursor-not-allowed"
-                            >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-                            </button>
+                            />
                           ) : null}
-                        </div>
+                        </RowActionGroup>
                       </td>
                     </tr>
                   );
@@ -692,7 +649,7 @@ export default function JenisMitraPage() {
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.value || (rule.tiers && rule.tiers.length > 0 ? `${rule.tiers.length} tier` : "-")}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{formatDateTime(rule.effective_from)} - {formatDateTime(rule.effective_to)}</td>
                         <td className="px-4 py-4 text-sm font-bold text-gray-600">{rule.active ? "ACTIVE" : "INACTIVE"}</td>
-                        <td className="px-4 py-4">{canDeactivateRules && rule.active ? <button type="button" onClick={() => void handleDeactivateRule(rule)} className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100" title="Nonaktifkan"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></button> : <span className="text-xs font-bold text-gray-300">-</span>}</td>
+                        <td className="px-4 py-4">{canDeactivateRules && rule.active ? <RowActionButton icon={PowerOff} tone="deactivate" onClick={() => void handleDeactivateRule(rule)} title="Nonaktifkan" /> : <span className="text-xs font-bold text-gray-300">-</span>}</td>
                       </tr>
                     ))
                   )}

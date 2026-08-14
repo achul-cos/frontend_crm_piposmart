@@ -10,6 +10,14 @@ import {
   type ReactNode,
 } from "react";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { formatPhoneDisplay } from "@/app/lib/phone";
+import {
+  ViewActionButton,
+  EditActionButton,
+  ToggleActiveActionButton,
+  DeleteActionButton,
+  RowActionGroup,
+} from "@/app/components/table/RowActionButton";
 import {
   createPartner,
   createPartnerType,
@@ -36,6 +44,9 @@ import {
 import AnalyticsTab from "./AnalyticsTab";
 import { PartnerActivityBadge } from "@/app/components/PartnerActivityBadge";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 
 function AutocompleteFilter({
   label,
@@ -116,6 +127,10 @@ type PartnerFormState = {
   phone: string;
   email: string;
   address: string;
+  province: string;
+  city: string;
+  district: string;
+  sub_district: string;
   bankAccount: string;
   status: "ACTIVE" | "INACTIVE";
 };
@@ -165,6 +180,10 @@ const EMPTY_PARTNER_FORM: PartnerFormState = {
   phone: "",
   email: "",
   address: "",
+  province: "",
+  city: "",
+  district: "",
+  sub_district: "",
   bankAccount: "",
   status: "ACTIVE",
 };
@@ -316,59 +335,68 @@ function ModalShell({
   subtitle,
   onClose,
   children,
+  footer,
 }: {
   open: boolean;
   title: string;
   subtitle: string;
   onClose: () => void;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-6" onClick={onClose}>
-      <div
-        className="w-full max-w-5xl flex flex-col max-h-[92vh] overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl transition-all"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-white px-6 py-5 md:px-8">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#C92C1E]">
-                Kelolaan Mitra
-              </span>
-              <h2 className="mt-1.5 text-xl font-bold tracking-tight text-slate-900">
-                {title}
-              </h2>
-              <p className="mt-0.5 text-xs font-medium text-slate-500">
-                {subtitle}
-              </p>
+    <ScreenPortal>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm md:p-6" onClick={onClose}>
+        <div className="flex min-h-full items-center justify-center">
+          <div
+            className="app-modal-panel flex w-full max-w-5xl rounded-3xl shadow-2xl transition-all"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-modal-header px-6 py-5 md:px-8">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#C92C1E]">
+                    Kelolaan Mitra
+                  </span>
+                  <h2 className="mt-1.5 text-xl font-bold tracking-tight text-slate-900">
+                    {title}
+                  </h2>
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">
+                    {subtitle}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="app-modal-close flex h-9 w-9 items-center justify-center rounded-full transition-colors"
+                  title="Tutup Modal"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-              title="Tutup Modal"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="app-modal-body flex-1 min-h-0 space-y-6 p-6 md:p-8">
+              {children}
+            </div>
+
+            {footer ? <div className="app-modal-footer px-6 py-4 md:px-8">{footer}</div> : null}
           </div>
         </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8 space-y-6">
-          {children}
-        </div>
       </div>
-    </div>
+    </ScreenPortal>
   );
 }
 
 export default function KelolaanMitraPage() {
   usePageTitle("Mitra");
 
+  const { showSuccess, showError, confirm, withLoading } = useFeedback();
   const [currentRole, setCurrentRole] = useState("");
   const [tableMode, setTableMode] = useState<TableMode>("ACTIVE_PARTNERS");
   const [partnerTypes, setPartnerTypes] = useState<PartnerTypeItem[]>([]);
@@ -396,6 +424,8 @@ export default function KelolaanMitraPage() {
   const [filterTypeCode, setFilterTypeCode] = useState("");
   const [filterTypeName, setFilterTypeName] = useState("");
   const [typeSearch, setTypeSearch] = useState("");
+  const [selectedPartnerTypeIds, setSelectedPartnerTypeIds] = useState<number[]>([]);
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
   const [page, setPage] = useState(1);
 
   const [showPartnerModal, setShowPartnerModal] = useState(false);
@@ -477,12 +507,32 @@ export default function KelolaanMitraPage() {
   };
 
   const handleDeletePartnerType = async (item: PartnerTypeItem) => {
-    if (!confirm(`Hapus jenis mitra "${item.name}" (${item.code})? Tindakan ini tidak dapat dibatalkan.`)) return;
+    const ok = await confirm({
+      title: "Hapus Jenis Mitra",
+      message: `Hapus jenis mitra "${item.name}" (${item.code})? Tindakan ini tidak dapat dibatalkan.`,
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
-      await deletePartnerType(item.id);
+      await withLoading(() => deletePartnerType(item.id), {
+        label: "Menghapus jenis mitra...",
+      });
       setPartnerTypes((prev) => prev.filter((t) => t.id !== item.id));
+      showSuccess({
+        title: "Jenis mitra dihapus",
+        message: `Jenis mitra "${item.name}" berhasil dihapus.`,
+      });
     } catch (error) {
-      alert(getErrorMessage(error));
+      showError({
+        title: "Gagal menghapus jenis mitra",
+        message: `Sistem gagal menghapus jenis mitra "${item.name}".`,
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau jenis mitra ini masih dipakai oleh mitra aktif.",
+        solution: "Periksa koneksi Anda dan coba lagi. Jika masih gagal, pastikan tidak ada mitra yang memakai jenis ini.",
+        technicalDetails: error instanceof Error ? error.message : String(error),
+        onRetry: () => void handleDeletePartnerType(item),
+      });
     }
   };
 
@@ -504,10 +554,14 @@ export default function KelolaanMitraPage() {
         effective_from: new Date().toISOString(),
       }));
 
-      const results = await Promise.allSettled(
-        payloads.map((payload) =>
-          createPartnerTypeCommissionRule(typeId, payload),
-        ),
+      const results = await withLoading(
+        () =>
+          Promise.allSettled(
+            payloads.map((payload) =>
+              createPartnerTypeCommissionRule(typeId, payload),
+            ),
+          ),
+        { label: "Menyimpan rule komisi..." },
       );
 
       const failures = results.filter((r) => r.status === "rejected").length;
@@ -515,7 +569,10 @@ export default function KelolaanMitraPage() {
         setRuleFormError(`Berhasil menyimpan, tetapi ${failures} rule komisi gagal diproses.`);
       } else {
         await loadTypeDetail(typeId);
-        alert(`Semua rule komisi per plan untuk jenis mitra "${editingType?.name || selectedType?.name}" berhasil disimpan!`);
+        showSuccess({
+          title: "Rule komisi tersimpan",
+          message: `Semua rule komisi per plan untuk jenis mitra "${editingType?.name || selectedType?.name}" berhasil disimpan.`,
+        });
       }
     } catch (error) {
       setRuleFormError(getErrorMessage(error));
@@ -930,6 +987,10 @@ export default function KelolaanMitraPage() {
       phone: partner.phone || "",
       email: partner.email || "",
       address: partner.address || "",
+      province: partner.province || "",
+      city: partner.city || "",
+      district: partner.district || "",
+      sub_district: partner.sub_district || "",
       bankAccount: "",
       status: partner.status,
     });
@@ -1082,6 +1143,10 @@ export default function KelolaanMitraPage() {
           phone: partnerForm.phone.trim() || undefined,
           email: partnerForm.email.trim() || undefined,
           address: partnerForm.address.trim() || undefined,
+          province: partnerForm.province.trim() || undefined,
+          city: partnerForm.city.trim() || undefined,
+          district: partnerForm.district.trim() || undefined,
+          sub_district: partnerForm.sub_district.trim() || undefined,
           bank_account: partnerForm.bankAccount.trim() || undefined,
           status: partnerForm.status,
         });
@@ -1125,52 +1190,62 @@ export default function KelolaanMitraPage() {
     setSavingType(true);
 
     try {
-      let targetTypeId: number;
+      const targetTypeId = await withLoading(
+        async () => {
+          let typeId: number;
 
-      if (editingType) {
-        targetTypeId = editingType.id;
-        await updatePartnerType(editingType.id, {
-          name: typeForm.name.trim(),
-          commission_mode: typeForm.commissionMode,
-          commission_value: stripThousandDots(typeForm.commissionValue),
-          description: typeForm.description.trim() || undefined,
-        });
-      } else {
-        const generatedCode = typeForm.code.trim()
-          ? typeForm.code.trim().toUpperCase()
-          : "";
+          if (editingType) {
+            typeId = editingType.id;
+            await updatePartnerType(editingType.id, {
+              name: typeForm.name.trim(),
+              commission_mode: typeForm.commissionMode,
+              commission_value: stripThousandDots(typeForm.commissionValue),
+              description: typeForm.description.trim() || undefined,
+            });
+          } else {
+            const generatedCode = typeForm.code.trim()
+              ? typeForm.code.trim().toUpperCase()
+              : "";
 
-        const created = await createPartnerType({
-          code: generatedCode,
-          name: typeForm.name.trim(),
-          commission_mode: typeForm.commissionMode,
-          commission_value: stripThousandDots(typeForm.commissionValue),
-          description: typeForm.description.trim() || undefined,
-        });
-        targetTypeId = created.id;
-        setEditingType(created);
-        setSelectedType(created);
-      }
+            const created = await createPartnerType({
+              code: generatedCode,
+              name: typeForm.name.trim(),
+              commission_mode: typeForm.commissionMode,
+              commission_value: stripThousandDots(typeForm.commissionValue),
+              description: typeForm.description.trim() || undefined,
+            });
+            typeId = created.id;
+            setEditingType(created);
+            setSelectedType(created);
+          }
 
-      // Save all plan rules from planMatrixDraft
-      if (plans && plans.length > 0 && Object.keys(planMatrixDraft).length > 0) {
-        const payloads = Object.entries(planMatrixDraft).map(([planIdStr, item]) => ({
-          plan_id: Number(planIdStr),
-          mode: item.mode,
-          value: stripThousandDots(item.value) || "0",
-          effective_from: new Date().toISOString(),
-        }));
+          // Save all plan rules from planMatrixDraft
+          if (plans && plans.length > 0 && Object.keys(planMatrixDraft).length > 0) {
+            const payloads = Object.entries(planMatrixDraft).map(([planIdStr, item]) => ({
+              plan_id: Number(planIdStr),
+              mode: item.mode,
+              value: stripThousandDots(item.value) || "0",
+              effective_from: new Date().toISOString(),
+            }));
 
-        await Promise.allSettled(
-          payloads.map((payload) =>
-            createPartnerTypeCommissionRule(targetTypeId, payload),
-          ),
-        );
-      }
+            await Promise.allSettled(
+              payloads.map((payload) =>
+                createPartnerTypeCommissionRule(typeId, payload),
+              ),
+            );
+          }
+
+          return typeId;
+        },
+        { label: "Menyimpan jenis mitra..." },
+      );
 
       await refreshTypes(targetTypeId);
       setShowTypeModal(false);
-      alert(`Jenis mitra ${typeForm.name} dan rule komisi per plan berhasil disimpan!`);
+      showSuccess({
+        title: "Jenis mitra tersimpan",
+        message: `Jenis mitra ${typeForm.name} dan rule komisi per plan berhasil disimpan.`,
+      });
     } catch (error) {
       setTypeFormError(getErrorMessage(error));
     } finally {
@@ -1275,12 +1350,20 @@ export default function KelolaanMitraPage() {
   };
 
   const handleDeactivatePartner = async (partner: PartnerItem) => {
-    if (!window.confirm(`Nonaktifkan mitra ${partner.name}?`)) return;
+    const ok = await confirm({
+      title: "Nonaktifkan Mitra",
+      message: `Nonaktifkan mitra ${partner.name}? Mitra ini tidak akan bisa dipakai untuk referral baru sampai diaktifkan kembali.`,
+      confirmLabel: "Nonaktifkan",
+      danger: true,
+    });
+    if (!ok) return;
 
     setSaving(true);
 
     try {
-      await deactivatePartner(partner.id);
+      await withLoading(() => deactivatePartner(partner.id), {
+        label: "Menonaktifkan mitra...",
+      });
       await refreshPartners();
     } catch (error) {
       setPageError(getErrorMessage(error));
@@ -1290,12 +1373,19 @@ export default function KelolaanMitraPage() {
   };
 
   const handleRestorePartner = async (partner: PartnerItem) => {
-    if (!window.confirm(`Pulihkan mitra ${partner.name}?`)) return;
+    const ok = await confirm({
+      title: "Pulihkan Mitra",
+      message: `Pulihkan mitra ${partner.name} menjadi aktif kembali?`,
+      confirmLabel: "Pulihkan",
+    });
+    if (!ok) return;
 
     setSaving(true);
 
     try {
-      await updatePartner(partner.id, { status: "ACTIVE" });
+      await withLoading(() => updatePartner(partner.id, { status: "ACTIVE" }), {
+        label: "Memulihkan mitra...",
+      });
       await refreshPartners();
     } catch (error) {
       setPageError(getErrorMessage(error));
@@ -1307,12 +1397,23 @@ export default function KelolaanMitraPage() {
   const handleDeactivateRule = async (rule: PartnerCommissionRuleItem) => {
     const typeId = editingType?.id || selectedType?.id;
 
-    if (!typeId || !window.confirm(`Nonaktifkan rule #${rule.id}?`)) return;
+    if (!typeId) return;
+
+    const ok = await confirm({
+      title: "Nonaktifkan Rule Komisi",
+      message: `Nonaktifkan rule komisi #${rule.id}? Rule ini tidak akan dipakai lagi untuk perhitungan komisi berikutnya.`,
+      confirmLabel: "Nonaktifkan",
+      danger: true,
+    });
+    if (!ok) return;
 
     setSavingRule(true);
 
     try {
-      await deactivatePartnerTypeCommissionRule(typeId, rule.id);
+      await withLoading(
+        () => deactivatePartnerTypeCommissionRule(typeId, rule.id),
+        { label: "Menonaktifkan rule komisi..." },
+      );
       await loadTypeDetail(typeId);
     } catch (error) {
       setRuleFormError(getErrorMessage(error));
@@ -1362,64 +1463,44 @@ export default function KelolaanMitraPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-              Total Mitra
-            </p>
-            <h2 className="text-3xl font-black">{partners.length}</h2>
-          </div>
-        </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Total Mitra"
+          value={partners.length}
+          description="Seluruh mitra yang tercatat di modul ini."
+          tone="accent"
+          silhouette="people"
+        />
+        <QuickInfoCard
+          label="Mitra Aktif"
+          value={activePartners.length}
+          description="Mitra yang sedang aktif untuk operasional."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="Mitra Nonaktif"
+          value={inactivePartners.length}
+          description="Mitra yang sedang tidak aktif."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-              Mitra Aktif
-            </p>
-            <h2 className="text-3xl font-black text-gray-900">
-              {activePartners.length}
-            </h2>
-          </div>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-              Mitra Nonaktif
-            </p>
-            <h2 className="text-3xl font-black text-gray-900">
-              {inactivePartners.length}
-            </h2>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Jenis Mitra
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {partnerTypes.length}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Master yang dapat dipakai untuk onboarding mitra baru.
-          </p>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Paket Tersedia
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {packages.length}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Rule komisi bisa diarahkan ke paket tertentu sesuai backend.
-          </p>
-        </div>
-      </div>
+      <QuickInfoCardGrid columns={2}>
+        <QuickInfoCard
+          label="Jenis Mitra"
+          value={partnerTypes.length}
+          description="Master yang dipakai untuk onboarding mitra baru."
+          tone="violet"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Paket Tersedia"
+          value={packages.length}
+          description="Paket yang bisa dipakai untuk rule komisi."
+          tone="sky"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
@@ -1636,6 +1717,20 @@ export default function KelolaanMitraPage() {
             <table id="partner-types-table" data-column-visibility-manual="true" className="w-full min-w-[820px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredPartnerTypes.length > 0 && selectedPartnerTypeIds.length === filteredPartnerTypes.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedPartnerTypeIds(filteredPartnerTypes.map(pt => pt.id));
+                        } else {
+                          setSelectedPartnerTypeIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Code</th>
                   <th className="px-4 py-4 font-bold">Jenis Mitra</th>
                   <th className="px-4 py-4 font-bold">Komisi Dasar</th>
@@ -1645,15 +1740,34 @@ export default function KelolaanMitraPage() {
               </thead>
 
               <tbody className="divide-y divide-gray-100 bg-white">
-                {filteredPartnerTypes.length === 0 ? (
+                {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                      Memuat data jenis mitra...
+                    </td>
+                  </tr>
+                ) : filteredPartnerTypes.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       Jenis mitra tidak ditemukan.
                     </td>
                   </tr>
                 ) : (
                   filteredPartnerTypes.map((item) => (
-                    <tr key={item.id} className="transition-colors hover:bg-gray-50">
+                    <tr key={item.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerTypeIds.includes(item.id) ? "bg-red-50/50" : ""}`}>
+                      <td className="w-12 px-4 py-4 text-center align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedPartnerTypeIds.includes(item.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedPartnerTypeIds(prev =>
+                              checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
+                            );
+                          }}
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        />
+                      </td>
                       <td className="px-4 py-4 align-top font-medium text-gray-900">
                         {item.code}
                       </td>
@@ -1670,37 +1784,26 @@ export default function KelolaanMitraPage() {
                         {item.description || "Belum ada deskripsi."}
                       </td>
                       <td className="px-4 py-4 text-center align-top">
-                        <div className="flex items-center justify-center gap-2">
-                          <Link
+                        <RowActionGroup>
+                          <ViewActionButton
                             href={`/menu/kelolaan-mitra/jenis-mitra/${item.id}`}
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
                             title="Detail Ringkasan Komisi Mitra"
-                          >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                          </Link>
+                          />
 
                           {canManageTypes && (
                             <>
-                              <button
-                                type="button"
+                              <EditActionButton
                                 onClick={() => openEditTypeModal(item, "detail")}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100"
                                 title="Edit Jenis Mitra"
-                              >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                              </button>
+                              />
 
-                              <button
-                                type="button"
+                              <DeleteActionButton
                                 onClick={() => void handleDeletePartnerType(item)}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100"
                                 title="Hapus Jenis Mitra"
-                              >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              </button>
+                              />
                             </>
                           )}
-                        </div>
+                        </RowActionGroup>
                       </td>
                     </tr>
                   ))
@@ -1711,6 +1814,24 @@ export default function KelolaanMitraPage() {
             <table id="partners-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
+                  <th className="w-12 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length > 0 &&
+                        selectedPartnerIds.length === (tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners).length
+                      }
+                      onChange={(e) => {
+                        const targetList = tableMode === "ACTIVE_PARTNERS" ? activePartners : inactivePartners;
+                        if (e.target.checked) {
+                          setSelectedPartnerIds(targetList.map(p => p.id));
+                        } else {
+                          setSelectedPartnerIds([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                    />
+                  </th>
                   <th className="px-4 py-4 font-bold">Mitra</th>
                   <th className="px-4 py-4 font-bold">Type</th>
                   <th className="px-4 py-4 font-bold">Kontak</th>
@@ -1723,7 +1844,7 @@ export default function KelolaanMitraPage() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
                       Memuat data mitra...
                     </td>
                   </tr>
@@ -1732,7 +1853,7 @@ export default function KelolaanMitraPage() {
                     : inactivePartners
                   ).length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
                       Data mitra tidak ditemukan.
                     </td>
                   </tr>
@@ -1741,7 +1862,20 @@ export default function KelolaanMitraPage() {
                     ? activePartners
                     : inactivePartners
                   ).map((partner) => (
-                    <tr key={partner.id} className="transition-colors hover:bg-gray-50">
+                    <tr key={partner.id} className={`transition-colors hover:bg-gray-50 ${selectedPartnerIds.includes(partner.id) ? "bg-red-50/50" : ""}`}>
+                      <td className="w-12 px-4 py-4 text-center align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedPartnerIds.includes(partner.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedPartnerIds(prev =>
+                              checked ? [...prev, partner.id] : prev.filter(id => id !== partner.id)
+                            );
+                          }}
+                          className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        />
+                      </td>
                       <td className="px-4 py-4 align-top">
                         <p className="font-medium text-gray-900">{partner.name}</p>
                         <p className="mt-1 text-xs text-gray-400">{partner.code}</p>
@@ -1759,7 +1893,7 @@ export default function KelolaanMitraPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        {partner.phone || "-"}
+                        {partner.phone ? formatPhoneDisplay(partner.phone) : "-"}
                         <span className="mt-1 block text-xs text-gray-400">
                           {partner.email || "-"}
                         </span>
@@ -1771,54 +1905,39 @@ export default function KelolaanMitraPage() {
                         <PartnerActivityBadge partnerId={partner.id} />
                       </td>
                       <td className="px-4 py-4 text-center align-top">
-                        <div className="flex items-center justify-center gap-2">
-                          <Link
+                        <RowActionGroup>
+                          <ViewActionButton
                             href={
                               isSales
                                 ? `/menu/kelolaan-mitra/detail?id=${partner.id}&tab=interaction`
                                 : `/menu/kelolaan-mitra/detail?id=${partner.id}`
                             }
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
                             title="Detail Mitra"
-                          >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                          </Link>
+                          />
 
                           {isAdmin && tableMode === "ACTIVE_PARTNERS" ? (
                             <>
-                              <button
-                                type="button"
+                              <EditActionButton
                                 onClick={() => openEditPartnerModal(partner)}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-100"
                                 title="Edit Mitra"
-                              >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                              </button>
+                              />
 
-                              <button
-                                type="button"
+                              <ToggleActiveActionButton
+                                active={true}
                                 onClick={() => void handleDeactivatePartner(partner)}
                                 disabled={saving}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                title="Nonaktifkan Mitra"
-                              >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-                              </button>
+                              />
                             </>
                           ) : null}
 
                           {isAdmin && tableMode === "INACTIVE_PARTNERS" ? (
-                            <button
-                              type="button"
+                            <ToggleActiveActionButton
+                              active={false}
                               onClick={() => void handleRestorePartner(partner)}
                               disabled={saving}
-                              className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Pulihkan Mitra"
-                            >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                            </button>
+                            />
                           ) : null}
-                        </div>
+                        </RowActionGroup>
                       </td>
                     </tr>
                   ))
@@ -1859,23 +1978,46 @@ export default function KelolaanMitraPage() {
         title={editingPartner ? "Edit Mitra" : "Tambah Mitra"}
         subtitle="Form mitra mengikuti tampilan popup Komisi, dengan input clean dan background soft."
         onClose={() => setShowPartnerModal(false)}
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowPartnerModal(false)}
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              form="partner-mitra-form"
+              disabled={saving}
+              className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {saving
+                ? "Menyimpan..."
+                : editingPartner
+                  ? "Simpan Perubahan"
+                  : "Tambah Mitra"}
+            </button>
+          </div>
+        }
       >
-        <form onSubmit={handlePartnerSubmit} className="space-y-5">
+        <form id="partner-mitra-form" onSubmit={handlePartnerSubmit} className="space-y-5">
           {partnerFormError ? (
             <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
               {partnerFormError}
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="space-y-4">
             <div className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-5">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
                 Identitas
               </p>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-4">
                 {!editingPartner ? (
-                  <label className="space-y-2 md:col-span-2">
+                  <label className="space-y-2">
                     <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Jenis Mitra
                     </span>
@@ -1898,7 +2040,7 @@ export default function KelolaanMitraPage() {
                     </select>
                   </label>
                 ) : (
-                  <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-black text-slate-900 md:col-span-2">
+                  <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm font-black text-slate-900">
                     {editingPartner.partner_type.name}
                     <span className="mt-1 block text-[11px] text-slate-400">
                       {editingPartner.partner_type.code}
@@ -1968,7 +2110,7 @@ export default function KelolaanMitraPage() {
                 Kontak Mitra
               </p>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-4">
                 <label className="space-y-2">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                     Telepon
@@ -2003,7 +2145,7 @@ export default function KelolaanMitraPage() {
                   />
                 </label>
 
-                <label className="space-y-2 md:col-span-2">
+                <label className="space-y-2">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                     Alamat
                   </span>
@@ -2021,7 +2163,7 @@ export default function KelolaanMitraPage() {
                   />
                 </label>
 
-                <label className="space-y-2 md:col-span-2">
+                <label className="space-y-2">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                     Rekening
                   </span>
@@ -2038,22 +2180,64 @@ export default function KelolaanMitraPage() {
                   />
                 </label>
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Provinsi
+                  </span>
+                  <input
+                    value={partnerForm.province}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        province: event.target.value,
+                      }))
+                    }
+                    placeholder="Provinsi"
+                    className={inputClass}
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Kabupaten/Kota
+                  </span>
+                  <input
+                    value={partnerForm.city}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                    placeholder="Kabupaten atau Kota"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Kecamatan
+                  </span>
+                  <input
+                    value={partnerForm.district}
+                    onChange={(event) =>
+                      setPartnerForm((current) => ({
+                        ...current,
+                        district: event.target.value,
+                      }))
+                    }
+                    placeholder="Kecamatan"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-2xl bg-[#C92C1E] px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-            >
-              {saving
-                ? "Menyimpan..."
-                : editingPartner
-                  ? "Simpan Perubahan"
-                  : "Tambah Mitra"}
-            </button>
-          </div>
         </form>
       </ModalShell>
 
@@ -2062,6 +2246,25 @@ export default function KelolaanMitraPage() {
         title={editingType ? "Edit Jenis Mitra" : "Tambah Jenis Mitra"}
         subtitle="Atur informasi jenis mitra dan konfigurasi rule komisi per plan dalam satu halaman."
         onClose={() => setShowTypeModal(false)}
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowTypeModal(false)}
+              className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              form="type-mitra-form"
+              disabled={savingType}
+              className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-6 py-3 text-xs font-bold text-white shadow-md shadow-red-500/20 transition hover:bg-red-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {savingType ? "Menyimpan..." : "Simpan Jenis Mitra & Rule Komisi"}
+            </button>
+          </div>
+        }
       >
         <form id="type-mitra-form" onSubmit={handleTypeSubmit} className="space-y-6">
           {typeFormError && (
@@ -2326,24 +2529,6 @@ export default function KelolaanMitraPage() {
           </div>
 
         </form>
-        {/* Fixed Action Buttons */}
-        <div className="flex-shrink-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-6 py-4 md:px-8">
-          <button
-            type="button"
-            onClick={() => setShowTypeModal(false)}
-            className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
-          >
-            Batal
-          </button>
-          <button
-            type="submit"
-            form="type-mitra-form"
-            disabled={savingType}
-            className="rounded-xl bg-[#C92C1E] px-6 py-3 text-xs font-bold text-white shadow-md shadow-red-500/20 transition hover:bg-red-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-red-300 flex items-center gap-2"
-          >
-            {savingType ? "Menyimpan..." : "Simpan Jenis Mitra & Rule Komisi"}
-          </button>
-        </div>
       </ModalShell>
     </div>
   );

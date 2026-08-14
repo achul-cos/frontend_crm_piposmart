@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import DetailSummaryCard from "@/app/components/ui/DetailSummaryCard";
 import {
   createPartnerTypeCommissionRule,
   getCatalogPackages,
@@ -221,10 +222,10 @@ function ModalShell({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-6" onClick={onClose}>
       <div
-        className="w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl transition-all"
+        className="app-modal-panel flex w-full max-w-lg rounded-3xl shadow-2xl transition-all"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-white px-6 py-5 md:px-8">
+        <div className="app-modal-header px-6 py-5 md:px-8">
           <div className="flex items-center justify-between gap-4">
             <div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#C92C1E]">
@@ -241,7 +242,7 @@ function ModalShell({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              className="app-modal-close flex h-9 w-9 items-center justify-center rounded-full transition-colors"
               title="Tutup Modal"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -251,45 +252,10 @@ function ModalShell({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+        <div className="app-modal-body flex-1 space-y-6 p-6 md:p-8">
           {children}
         </div>
       </div>
-    </div>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  description,
-  primary = false,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  primary?: boolean;
-}) {
-  if (primary) {
-    return (
-      <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden min-h-[144px]">
-        <div className="relative z-10">
-          <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-          <h2 className="text-3xl font-black">{value}</h2>
-          <p className="mt-2 text-[11px] text-red-100/90 max-w-[90%]">{description}</p>
-        </div>
-        <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm2 5h10M7 12h6m-6 4h10" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm min-h-[144px]">
-      <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-      <h2 className="text-3xl font-black text-gray-900">{value}</h2>
-      <p className="mt-2 text-[11px] text-gray-400">{description}</p>
     </div>
   );
 }
@@ -593,20 +559,23 @@ export default function PartnerTypeDetailPage({ params }: { params: Promise<{ id
         <div className="space-y-6">
           {/* Summary Overview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <SummaryCard
+            <DetailSummaryCard
               title="Kode Jenis Mitra"
               value={partnerType.code}
               description="Identitas master yang dipakai untuk pengelompokan mitra dan komisi."
               primary
+              silhouette="people"
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Jumlah Plan / Paket"
               value={plans.length}
+              tone="sky"
               description={`${packages.length} paket langganan master tersedia`}
             />
-            <SummaryCard
+            <DetailSummaryCard
               title="Rule Komisi Aktif"
               value={activeRules.length}
+              tone="emerald"
               description={`Fallback komisi dasar: ${formatCommission(partnerType.commission_mode, partnerType.commission_value)}`}
             />
           </div>

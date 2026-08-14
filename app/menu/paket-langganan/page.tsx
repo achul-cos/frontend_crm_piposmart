@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
@@ -20,6 +21,7 @@ import {
   PowerOff,
   ArrowLeft,
 } from "lucide-react";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import {
   packageApi,
   planApi,
@@ -40,7 +42,14 @@ import {
   type CreatePromotionPayload,
   type CatalogScope,
 } from "@/app/lib/api";
-import AnalyticsTab from "./AnalyticsTab";
+import { usePackagesQuery, usePlansQuery, usePromotionsQuery } from "@/app/lib/queries/catalog";
+import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+
+const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
+  ssr: false,
+  loading: () => <AnalyticsTabSkeleton sections={2} />,
+});
 
 type Entity = "package" | "plan" | "promotion";
 
@@ -204,12 +213,15 @@ function Modal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4 md:p-6" onClick={onClose}>
-      <div
-        className="w-full md:w-[50vw] max-w-[50vw] h-[70vh] max-h-[70vh] flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl transition-all"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex-shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center">
+        <div
+          className={`app-modal-panel w-full rounded-[32px] shadow-2xl transition-all ${
+            wide ? "max-w-5xl" : "max-w-3xl xl:max-w-4xl"
+          }`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="app-modal-header px-5 py-4 md:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               {icon && (
@@ -238,15 +250,16 @@ function Modal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+              className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
             >
               Tutup
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-4">
+        <div className="app-modal-body flex-1 min-h-0 space-y-4 p-5 md:p-6">
           {children}
+        </div>
         </div>
       </div>
     </div>
@@ -301,11 +314,11 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-[60] bg-slate-950/70" onClick={onCancel}>
       <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
-        <div
-          className="w-full max-w-sm overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4">
+          <div
+            className="app-modal-panel w-full max-w-sm rounded-[32px] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-modal-header px-5 py-4">
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
               Konfirmasi
             </p>
@@ -317,8 +330,8 @@ function ConfirmDialog({
             </p>
           </div>
 
-          <div className="p-5">
-            <div className="flex gap-3">
+          <div className="app-modal-body p-5">
+            <div className="flex flex-col gap-3">
               <button
                 onClick={onCancel}
                 className="flex-1 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-black text-gray-600 transition hover:bg-gray-50"
@@ -412,12 +425,50 @@ export default function PaketLanggananPage() {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
-  const [packages, setPackages] = useState<CatalogPackageItem[]>([]);
-  const [plans, setPlans] = useState<CatalogPlanItem[]>([]);
-  const [promotions, setPromotions] = useState<CatalogPromotionItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const catalogBaseParams = useMemo(
+    () => ({
+      q: search || undefined,
+      active: activeFilter === "" ? undefined : activeFilter === "true",
+      page,
+      limit: rowsPerPage,
+      scope,
+    }),
+    [search, activeFilter, page, rowsPerPage, scope],
+  );
+  const packageQueryParams = catalogBaseParams;
+  const planQueryParams = useMemo(
+    () => ({ ...catalogBaseParams, package_id: packageFilter || undefined }),
+    [catalogBaseParams, packageFilter],
+  );
+  const promotionQueryParams = useMemo(
+    () => ({ ...catalogBaseParams, charge_type: chargeTypeFilter || undefined }),
+    [catalogBaseParams, chargeTypeFilter],
+  );
+
+  const packagesQuery = usePackagesQuery(packageQueryParams, entity === "package");
+  const plansQuery = usePlansQuery(planQueryParams, entity === "plan");
+  const promotionsQuery = usePromotionsQuery(promotionQueryParams, entity === "promotion");
+
+  const allPlansQuery = usePlansQuery({ page: 1, limit: 1000, active: true }, entity === "package");
+  const allPromotionsQuery = usePromotionsQuery({ page: 1, limit: 1000, active: true }, entity === "package");
+
+  const allPlans = allPlansQuery.data?.items ?? [];
+  const allPromotions = allPromotionsQuery.data?.items ?? [];
+
+  const activeQuery =
+    entity === "package" ? packagesQuery : entity === "plan" ? plansQuery : promotionsQuery;
+
+  const packages = packagesQuery.data?.items ?? [];
+  const plans = plansQuery.data?.items ?? [];
+  const promotions = promotionsQuery.data?.items ?? [];
+  const total = activeQuery.data?.pagination.total ?? 0;
+  const isLoading = activeQuery.isLoading;
+  const loadError = activeQuery.error instanceof Error ? activeQuery.error.message : null;
+  const load = React.useCallback(() => {
+    void packagesQuery.refetch();
+    void plansQuery.refetch();
+    void promotionsQuery.refetch();
+  }, [packagesQuery.refetch, plansQuery.refetch, promotionsQuery.refetch]);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [packageOptions, setPackageOptions] = useState<CatalogPackageItem[]>([]);
@@ -474,64 +525,6 @@ export default function PaketLanggananPage() {
       .catch(() => setPackageOptions([]));
   }, []);
 
-  const load = React.useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-
-    try {
-      const baseParams: Record<string, unknown> = {
-        q: search || undefined,
-        active: activeFilter === "" ? undefined : activeFilter === "true",
-        page,
-        limit: rowsPerPage,
-        scope,
-      };
-
-      if (entity === "package") {
-        const res = await packageApi.list(baseParams);
-        setPackages(res.items);
-        setTotal(res.pagination.total);
-      } else if (entity === "plan") {
-        const res = await planApi.list({
-          ...baseParams,
-          package_id: packageFilter || undefined,
-        });
-        setPlans(res.items);
-        setTotal(res.pagination.total);
-      } else {
-        const res = await promotionApi.list({
-          ...baseParams,
-          charge_type: chargeTypeFilter || undefined,
-        });
-        setPromotions(res.items);
-        setTotal(res.pagination.total);
-      }
-    } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : "Gagal memuat data katalog.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    entity,
-    scope,
-    search,
-    activeFilter,
-    packageFilter,
-    chargeTypeFilter,
-    page,
-    rowsPerPage,
-  ]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void load();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [load]);
-
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
 
   const currentIds = useMemo(() => {
@@ -548,6 +541,12 @@ export default function PaketLanggananPage() {
 
   const activeCount = currentItemsForCount.filter((item) => item.active).length;
   const inactiveCount = currentItemsForCount.length - activeCount;
+  const scopeLabel =
+    scope === "DELETED"
+      ? "Arsip"
+      : scope === "ALL"
+        ? "Semua Data"
+        : "Aktif";
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
@@ -651,50 +650,33 @@ export default function PaketLanggananPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-              Total {entityLabel}
-            </p>
-            <h2 className="text-3xl font-black">{total}</h2>
-          </div>
-          <Package className="absolute -bottom-4 -right-4 h-28 w-28 text-white opacity-10" />
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-              {entityLabel} Aktif
-            </p>
-            <h2 className="text-3xl font-black text-gray-900">{activeCount}</h2>
-          </div>
-
-          <div className="absolute right-0 top-0 p-5">
-            <span className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
-            </span>
-          </div>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <div className="relative z-10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-              {entityLabel} Nonaktif
-            </p>
-            <h2 className="text-3xl font-black text-gray-900">
-              {inactiveCount}
-            </h2>
-          </div>
-
-          <div className="absolute right-0 top-0 p-5">
-            <span className="relative flex h-3 w-3">
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
-            </span>
-          </div>
-        </div>
-      </div>
+      <QuickInfoCardGrid>
+        <QuickInfoCard
+          label={`Total ${entityLabel}`}
+          value={total}
+          description={`Total ${entityLabel.toLowerCase()} sesuai pencarian dan scope aktif.`}
+          tone="accent"
+          silhouette="tag"
+        />
+        <QuickInfoCard
+          label={`${entityLabel} Aktif`}
+          value={activeCount}
+          description={`Data aktif pada halaman ${entityLabel.toLowerCase()} saat ini.`}
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label={`${entityLabel} Nonaktif`}
+          value={inactiveCount}
+          description={`Data nonaktif pada halaman ${entityLabel.toLowerCase()} saat ini.`}
+          tone="rose"
+        />
+        <QuickInfoCard
+          label="Scope Aktif"
+          value={scopeLabel}
+          description="Mode data yang sedang ditampilkan pada katalog."
+          tone="sky"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
@@ -741,95 +723,24 @@ export default function PaketLanggananPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="border-b border-gray-100 bg-gray-50/50 p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[180px] max-w-xs flex-1">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder={`Cari ${entityLabel.toLowerCase()}...`}
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-              />
-            </div>
-
-            {scope !== "DELETED" && (
-              <FilterSelect
-                value={activeFilter}
-                onChange={(v) => {
-                  setActiveFilter(v as "" | "true" | "false");
-                  setPage(1);
-                }}
-                options={[
-                  { value: "true", label: "Aktif" },
-                  { value: "false", label: "Nonaktif" },
-                ]}
-                placeholder="Semua Status"
-              />
-            )}
-
-            {entity === "plan" && (
-              <FilterSelect
-                value={packageFilter}
-                onChange={(v) => {
-                  setPackageFilter(v);
-                  setPage(1);
-                }}
-                options={packageOptions.map((p) => ({
-                  value: String(p.id),
-                  label: p.name,
-                }))}
-                placeholder="Semua Package"
-              />
-            )}
-
-            {entity === "promotion" && (
-              <FilterSelect
-                value={chargeTypeFilter}
-                onChange={(v) => {
-                  setChargeTypeFilter(v);
-                  setPage(1);
-                }}
-                options={[
-                  { value: "FREE", label: "Gratis" },
-                  { value: "PAID", label: "Berbayar" },
-                ]}
-                placeholder="Semua Tipe Biaya"
-              />
-            )}
-
-            {(search || activeFilter || packageFilter || chargeTypeFilter) && (
-              <button
-                onClick={() => {
-                  setSearch("");
-                  setActiveFilter("");
-                  setPackageFilter("");
-                  setChargeTypeFilter("");
-                  setPage(1);
-                }}
-                className="flex items-center gap-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Reset
-              </button>
-            )}
-
-            <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Daftar {entityLabel}</h2>
+            <p className="mt-1 text-sm text-gray-500">Daftar seluruh data {entityLabel.toLowerCase()} dalam katalog.</p>
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() =>
                   changeScope(scope === "DELETED" ? "ACTIVE" : "DELETED")
                 }
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-black transition ${
+                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
                   scope === "DELETED"
                     ? "border-gray-800 bg-gray-800 text-white"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    : "border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
                 }`}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
                 {scope === "DELETED" ? "Kembali" : "Trash"}
               </button>
 
@@ -840,9 +751,9 @@ export default function PaketLanggananPage() {
                     else if (entity === "plan") setPlanForm({ mode: "create" });
                     else setPromotionForm({ mode: "create" });
                   }}
-                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-[#A82216] active:scale-[0.98]"
+                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#A82216] active:scale-[0.98]"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4" />
                   {addLabel}
                 </button>
               )}
@@ -850,8 +761,107 @@ export default function PaketLanggananPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-wrap items-start gap-4">
+            {scope !== "DELETED" && (
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Status</span>
+                <FilterSelect
+                  value={activeFilter}
+                  onChange={(v) => {
+                    setActiveFilter(v as "" | "true" | "false");
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "true", label: "Aktif" },
+                    { value: "false", label: "Nonaktif" },
+                  ]}
+                  placeholder="Semua Status"
+                />
+              </div>
+            )}
+
+            {entity === "plan" && (
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Package</span>
+                <FilterSelect
+                  value={packageFilter}
+                  onChange={(v) => {
+                    setPackageFilter(v);
+                    setPage(1);
+                  }}
+                  options={packageOptions.map((p) => ({
+                    value: String(p.id),
+                    label: p.name,
+                  }))}
+                  placeholder="Semua Package"
+                />
+              </div>
+            )}
+
+            {entity === "promotion" && (
+              <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                <span className="text-xs font-semibold text-black">Tipe Biaya</span>
+                <FilterSelect
+                  value={chargeTypeFilter}
+                  onChange={(v) => {
+                    setChargeTypeFilter(v);
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "FREE", label: "Gratis" },
+                    { value: "PAID", label: "Berbayar" },
+                  ]}
+                  placeholder="Semua Tipe Biaya"
+                />
+              </div>
+            )}
+
+            {(search || activeFilter || packageFilter || chargeTypeFilter) && (
+              <div className="flex flex-col gap-1.5 mt-auto pb-[1px]">
+                <button
+                  onClick={() => {
+                    setSearch("");
+                    setActiveFilter("");
+                    setPackageFilter("");
+                    setChargeTypeFilter("");
+                    setPage(1);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 h-9"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reset
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder={`Cari ${entityLabel.toLowerCase()}...`}
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+              />
+            </div>
+            <ColumnVisibilityControl tableId="catalog-table" storageKey="column-visibility:catalog-table" buttonLabel="Kolom" />
+          </div>
+        </div>
+
+        <div className="relative w-full">
+          <div className="flex flex-col">
+            <div className="overflow-x-auto">
+          <table id="catalog-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="w-10 px-4 py-4 text-center">
@@ -872,6 +882,9 @@ export default function PaketLanggananPage() {
                     <th className="px-4 py-4">Nama</th>
                     <th className="px-4 py-4">Level</th>
                     <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4">Jumlah Plan</th>
+                    <th className="px-4 py-4">Jumlah Promo</th>
+                    <th className="px-4 py-4">Harga Per Tenor</th>
                   </>
                 )}
 
@@ -904,19 +917,19 @@ export default function PaketLanggananPage() {
             <tbody className="divide-y divide-gray-100 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
+                  <td colSpan={12} className="px-4 py-10 text-center text-gray-400">
                     Memuat...
                   </td>
                 </tr>
               ) : loadError ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-red-500">
+                  <td colSpan={12} className="px-4 py-10 text-center text-red-500">
                     {loadError}
                   </td>
                 </tr>
               ) : currentIds.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={12} className="px-4 py-14 text-center text-gray-400">
                     Tidak ada data.
                   </td>
                 </tr>
@@ -948,6 +961,40 @@ export default function PaketLanggananPage() {
 
                     <td className="px-4 py-3.5 align-top">
                       <StatusBadge active={p.active} />
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top font-bold text-gray-900">
+                      {allPlans.filter((plan) => plan.package?.id === p.id).length} Plan
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top font-bold text-purple-700">
+                      {(() => {
+                        const packagePlanIds = allPlans
+                          .filter((plan) => plan.package?.id === p.id)
+                          .map((plan) => plan.id);
+                        const count = allPromotions.filter((promo) =>
+                          promo.plan_ids?.some((pid) => packagePlanIds.includes(pid))
+                        ).length;
+                        return `${count} Promo`;
+                      })()}
+                    </td>
+
+                    <td className="px-4 py-3.5 align-top max-w-xs">
+                      <div className="flex flex-wrap gap-1">
+                        {allPlans
+                          .filter((plan) => plan.package?.id === p.id)
+                          .map((plan) => (
+                            <span
+                              key={plan.id}
+                              className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-500/10"
+                            >
+                              {plan.tenure_months} Bln: {formatRupiah(plan.price)}
+                            </span>
+                          ))}
+                        {allPlans.filter((plan) => plan.package?.id === p.id).length === 0 && (
+                          <span className="text-gray-400 italic">-</span>
+                        )}
+                      </div>
                     </td>
 
                     <td className="px-4 py-3.5 align-top">
@@ -1120,7 +1167,8 @@ export default function PaketLanggananPage() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+          </div>
 
         {!isLoading && !loadError && (
           <Pagination
@@ -1135,6 +1183,7 @@ export default function PaketLanggananPage() {
             }}
           />
         )}
+      </div>
       </div>
         </>
       ) : (

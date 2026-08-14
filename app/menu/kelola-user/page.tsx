@@ -1,13 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { KeyRound, Search, Plus, RefreshCw, MoreVertical } from 'lucide-react';
+import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import { authFetchJson } from '@/app/lib/api';
+import {
+  RowActionButton,
+  RowActionGroup,
+  EditActionButton,
+} from '@/app/components/table/RowActionButton';
 import KelolaUserFormModal, {
   type UserFormState,
   type UserItem,
   type UserRole,
   type UserStatus,
 } from "./KelolaUserFormModal";
+import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 
 const EMPTY_FORM: UserFormState = {
   name: "",
@@ -458,6 +466,8 @@ export default function KelolaUserPage() {
   const [resettingId, setResettingId] = useState<number | null>(null);
 
   const [search, setSearch] = useState("");
+  const [userPage, setUserPage] = useState(1);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const [pageError, setPageError] = useState("");
@@ -496,6 +506,16 @@ export default function KelolaUserPage() {
           .includes(keyword);
       });
   }, [activeTab, search, users]);
+
+  useEffect(() => { setUserPage(1); }, [search, activeTab]);
+
+  const userPageSize = 20;
+  const userTotalItems = filteredUsers.length;
+  const userTotalPages = Math.max(1, Math.ceil(userTotalItems / userPageSize));
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPageSize;
+    return filteredUsers.slice(start, start + userPageSize);
+  }, [filteredUsers, userPage]);
 
   const totalUsers = users.length;
   const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
@@ -846,13 +866,6 @@ export default function KelolaUserPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => openCreateModal(activeTab)}
-            className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
-          >
-            + Buat Akun
-          </button>
         </div>
       </div>
 
@@ -868,62 +881,51 @@ export default function KelolaUserPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#C92C1E] to-[#A82216] p-5 text-white shadow-lg">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-red-100">
-            Total User
-          </p>
-          <h2 className="text-3xl font-black">{totalUsers}</h2>
-        </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Total User"
+          value={totalUsers}
+          description="Seluruh akun login internal CRM."
+          tone="accent"
+          silhouette="users"
+        />
+        <QuickInfoCard
+          label="User Aktif"
+          value={activeUsers}
+          description="Akun yang sedang aktif dipakai."
+          tone="emerald"
+        />
+        <QuickInfoCard
+          label="User Nonaktif"
+          value={inactiveUsers}
+          description="Akun yang sedang dinonaktifkan."
+          tone="rose"
+        />
+      </QuickInfoCardGrid>
 
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            User Aktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{activeUsers}</h2>
-        </div>
-
-        <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm transition-colors hover:border-[#C92C1E]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            User Nonaktif
-          </p>
-          <h2 className="text-3xl font-black text-gray-900">{inactiveUsers}</h2>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Admin
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">{totalAdmin}</h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Akses penuh ke sistem.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Supervisor
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">
-            {totalSupervisor}
-          </h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Monitoring dan pengawasan sales.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">
-            Sales
-          </p>
-          <h2 className="text-2xl font-black text-gray-900">{totalSales}</h2>
-          <p className="mt-1 text-xs font-medium text-gray-400">
-            Akun untuk follow up dan aktivitas sales.
-          </p>
-        </div>
-      </div>
+      <QuickInfoCardGrid columns={3}>
+        <QuickInfoCard
+          label="Admin"
+          value={totalAdmin}
+          description="Akses penuh ke seluruh sistem."
+          tone="violet"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Supervisor"
+          value={totalSupervisor}
+          description="Monitoring dan pengawasan sales."
+          tone="sky"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+        <QuickInfoCard
+          label="Sales"
+          value={totalSales}
+          description="Akun untuk aktivitas follow up lapangan."
+          tone="amber"
+          valueClassName="text-[2rem] md:text-[2.15rem]"
+        />
+      </QuickInfoCardGrid>
 
       <div className="flex w-max rounded-xl border border-gray-200/50 bg-gray-100 p-1.5 shadow-sm">
         <div className="flex text-sm font-bold">
@@ -948,33 +950,73 @@ export default function KelolaUserPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4">
+          <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
           <div>
-            <p className="text-sm font-black text-gray-900">
+            <h2 className="text-xl font-bold text-gray-900">
               Daftar{" "}
               {activeTab === "ADMIN"
                 ? "Admin"
                 : activeTab === "SUPERVISOR"
                   ? "Supervisor"
                   : "Sales"}
-            </p>
-            <p className="mt-1 text-xs font-medium text-gray-400">
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
               Kelola akun berdasarkan role yang dipilih.
             </p>
           </div>
-
-          <input
-            value={search || ""}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Cari nama, email, role, atau status"
-            className="min-w-[240px] rounded-lg border border-gray-200 bg-[#FAFAFA] px-3 py-2 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:border-[#C92C1E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-100"
-          />
+          <div className="flex w-full flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => openCreateModal(activeTab)}
+              className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
+            >
+              + Buat Akun
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm text-gray-600">
+        <div className="border-b border-gray-50 px-6 py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={search || ""}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Cari nama, email, role, atau status..."
+                className="block w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-black placeholder-gray-400 outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+              />
+            </div>
+            <ColumnVisibilityControl
+              tableId="users-table"
+              storageKey="column-visibility:kelola-user"
+              buttonLabel="Kolom"
+            />
+          </div>
+        </div>
+
+        <div className="relative w-full">
+          <div className="flex flex-col">
+            <div className="overflow-x-auto">
+              <table id="users-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
+                <th className="w-12 px-4 py-4 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredUsers.length > 0 && selectedUserIds.length === filteredUsers.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedUserIds(paginatedUsers.map(u => u.id));
+                      } else {
+                        setSelectedUserIds([]);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                  />
+                </th>
                 <th className="px-4 py-4 font-bold">User</th>
                 <th className="px-4 py-4 font-bold">Email Login</th>
                 <th className="px-4 py-4 font-bold">Role</th>
@@ -990,7 +1032,7 @@ export default function KelolaUserPage() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={activeTab === "SALES" ? 6 : 5}
+                    colSpan={activeTab === "SALES" ? 7 : 6}
                     className="px-6 py-14 text-center text-gray-500"
                   >
                     Memuat data user...
@@ -999,21 +1041,33 @@ export default function KelolaUserPage() {
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={activeTab === "SALES" ? 6 : 5}
+                    colSpan={activeTab === "SALES" ? 7 : 6}
                     className="px-6 py-14 text-center text-gray-500"
                   >
-                    Belum ada data {activeTab.toLowerCase()}.
+                    Data user tidak ditemukan.
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
-                  <tr
-                    key={`${user.role}-${user.id}`}
+                paginatedUsers.map((user) => (
+                  <tr 
+                    key={user.id} 
+                    className={`transition-colors hover:bg-gray-50 ${selectedUserIds.includes(user.id) ? "bg-red-50/50" : ""}`}
                     onClick={() => setSelectedUser(user)}
-                    className="cursor-pointer transition-colors hover:bg-red-50/40"
-                    title="Klik untuk lihat detail user"
                   >
-                    <td className="px-4 py-4">
+                    <td className="w-12 px-4 py-4 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(user.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedUserIds(prev =>
+                            checked ? [...prev, user.id] : prev.filter(id => id !== user.id)
+                          );
+                        }}
+                        className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                      />
+                    </td>
+                    <td className="px-4 py-4 align-top">
                       <p className="font-black text-gray-900">
                         {user.name || "-"}
                       </p>
@@ -1057,39 +1111,58 @@ export default function KelolaUserPage() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openEditModal(user);
-                          }}
-                          className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
+                    <td
+                      className="px-4 py-4 text-center"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <RowActionGroup>
+                        <EditActionButton
                           title="Edit User"
-                        >
-                          Edit
-                        </button>
+                          onClick={() => openEditModal(user)}
+                        />
 
-                        <button
-                          type="button"
+                        <RowActionButton
+                          icon={KeyRound}
+                          tone="password"
+                          title={resettingId === user.id ? "Reset..." : "Reset Password"}
                           disabled={resettingId === user.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleResetPassword(user);
-                          }}
-                          className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          title="Reset Password"
-                        >
-                          {resettingId === user.id ? "Reset..." : "Reset"}
-                        </button>
-                      </div>
+                          onClick={() => void handleResetPassword(user)}
+                        />
+                      </RowActionGroup>
                     </td>
                   </tr>
                 ))
               )}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+          {userTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
+              <div className="text-xs font-medium text-gray-500">
+                Menampilkan <span className="font-bold text-gray-900">{(userPage - 1) * userPageSize + 1}</span> hingga{" "}
+                <span className="font-bold text-gray-900">{Math.min(userPage * userPageSize, userTotalItems)}</span> dari{" "}
+                <span className="font-bold text-gray-900">{userTotalItems}</span> data
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                  disabled={userPage === 1}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <span className="text-xs font-bold text-gray-700">Halaman {userPage} / {userTotalPages}</span>
+                <button
+                  onClick={() => setUserPage((p) => Math.min(userTotalPages, p + 1))}
+                  disabled={userPage === userTotalPages}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            </div>
+          )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1113,10 +1186,10 @@ export default function KelolaUserPage() {
         >
           <div className="flex min-h-full items-center justify-center p-4 md:p-6">
             <div
-              className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl"
+              className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff_0%,#fff8f5_55%,#fee2e2_100%)] px-5 py-4 md:px-6">
+              <div className="app-modal-header px-5 py-4 md:px-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C92C1E]">
@@ -1133,14 +1206,14 @@ export default function KelolaUserPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedUser(null)}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                    className="app-modal-close rounded-2xl px-4 py-2 text-xs font-black transition"
                   >
                     Tutup
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
+              <div className="app-modal-body grid grid-cols-1 gap-3 p-5 md:grid-cols-2 md:p-6">
                 {[
                   ["Nama", selectedUser.name || "-"],
                   [
