@@ -135,6 +135,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
   const [topups, setTopups] = useState<WalletPaymentItem[]>([]);
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [subscriptions, setSubscriptions] = useState<OwnerSubscriptionItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Add Modal State
@@ -185,7 +186,6 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
       setTopups(topupData);
       setTransfers(transferData);
       setSubscriptions(subData);
-      setHistoryItems(historyData);
     } catch (err) {
       console.error("Gagal memuat detail:", err);
     } finally {
