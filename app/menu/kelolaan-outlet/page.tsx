@@ -4,7 +4,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   restoreOutletForOwner,
@@ -21,7 +21,6 @@ import {
 } from "@/app/lib/api";
 import { useGlobalOutletsQuery, useOutletSubscriptionStatusesQuery, outletKeys } from "@/app/lib/queries/outlets";
 import { usePackagesQuery, usePlansQuery } from "@/app/lib/queries/catalog";
-import { useBulkSelect } from "@/app/lib/hooks/useBulkSelect";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import OutletFormModal from "./OutletFormModal";
 import BulkEditOutletModal, { type BulkEditFields } from "./BulkEditOutletModal";
@@ -912,7 +911,7 @@ usePageTitle("Outlet");
     );
     setIsBulkActing(false);
     setBulkRestoreConfirm(false);
-    bulkSelect.clear();
+    setSelectedIds([]);
     setBulkResultMessage(
       result.failCount > 0
         ? `${result.successCount} outlet dipulihkan, ${result.failCount} gagal.`
@@ -1104,7 +1103,7 @@ usePageTitle("Outlet");
                     </button>
                   </>
                 )}
-                {isAdmin && bulkSelect.selectedCount > 0 && tableState === "umum" && (
+                {isAdmin && selectedIds.length > 0 && tableState === "umum" && (
                   <>
                     <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
                       <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
@@ -1141,21 +1140,21 @@ usePageTitle("Outlet");
                     </button>
                   </>
                 )}
-                {isAdmin && bulkSelect.selectedCount > 0 && tableState === "sampah" && (
+                {isAdmin && selectedIds.length > 0 && tableState === "sampah" && (
                   <>
                     <button
                       type="button"
                       onClick={() => setBulkRestoreConfirm(true)}
                       className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-bold text-emerald-600 shadow-sm transition-all hover:bg-emerald-50"
                     >
-                      Pulihkan ({bulkSelect.selectedCount})
+                      Pulihkan ({selectedIds.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setBulkDeleteConfirm(true)}
                       className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-50"
                     >
-                      Hapus Permanen ({bulkSelect.selectedCount})
+                      Hapus Permanen ({selectedIds.length})
                     </button>
                   </>
                 )}
@@ -1264,8 +1263,8 @@ usePageTitle("Outlet");
                           className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                         >
                           <option value="">Semua Status Dibuat</option>
-                          <option value="NEW">Baru</option>
-                          <option value="EXISTING">Sudah Ada</option>
+                          <option value="NEW">New</option>
+                          <option value="EXISTING">Existing</option>
                         </select>
                       </div>
 
@@ -1464,8 +1463,8 @@ usePageTitle("Outlet");
                               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                             >
                               <option value="">Semua Status Dibuat</option>
-                              <option value="NEW">Baru</option>
-                              <option value="EXISTING">Sudah Ada</option>
+                              <option value="NEW">New</option>
+                              <option value="EXISTING">Existing</option>
                             </select>
                           </div>
 
@@ -1778,7 +1777,7 @@ usePageTitle("Outlet");
       {bulkRestoreConfirm && (
         <ConfirmDialog
           title="Pulihkan Outlet Terpilih?"
-          message={`${bulkSelect.selectedCount} outlet terpilih akan dipulihkan dan aktif kembali.`}
+          message={`${selectedIds.length} outlet terpilih akan dipulihkan dan aktif kembali.`}
           confirmLabel="Pulihkan"
           isBusy={isBulkActing}
           onClose={() => setBulkRestoreConfirm(false)}

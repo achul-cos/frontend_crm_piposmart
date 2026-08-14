@@ -106,18 +106,7 @@ export default function ColumnVisibilityControl({
         return current.filter((idx) => allowed.has(idx));
       });
 
-      // Setup observer if not already setup
-      if (!observer && table) {
-        const thead = table.querySelector("thead");
-        observer = new MutationObserver(() => {
-          frame = window.requestAnimationFrame(updateColumns);
-        });
-        if (thead) {
-          observer.observe(thead, { childList: true, subtree: true });
-        } else {
-          observer.observe(table, { childList: true, subtree: true });
-        }
-      }
+
     };
 
     const attachToTable = (table: HTMLElement) => {
