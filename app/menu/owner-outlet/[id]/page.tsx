@@ -1,26 +1,31 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import React, { useCallback, useEffect, useState, use } from "react";
+import { useRouter } from "next/navigation";
 import {
+  authFetchJson,
+  findRelatedLead,
   fetchOwnerDetail,
   type BackendOwner,
+  type BackendLead,
   fetchOwnerOutlets,
   type BackendOutlet,
   bulkCreateOwnerOutlets,
   bulkUpdateOwnerOutlets,
   bulkSoftDeleteOwnerOutlets,
-  fetchOwnerWalletTransactions,
   fetchOwnerSubscriptions,
-  type WalletTransactionItem,
   type OwnerSubscriptionItem,
-  type ImportRowError,
-  type ImportBatchResponse,
+  listOwnerTransfers,
+  type TransferItem,
+  type WalletPaymentItem,
 } from "@/app/lib/api";
+import { formatPhoneDisplay } from "@/app/lib/phone";
 import { useLocation } from "@/app/lib/useLocation";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import OwnerOverviewCard from "../OwnerOverviewCard";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
+import { ViewActionButton, EditActionButton, DeleteActionButton, RowActionGroup } from "@/app/components/table/RowActionButton";
 
 function formatIndonesianDate(value?: string | null, includeTime = false) {
   if (!value) return "-";
@@ -37,15 +42,98 @@ function formatIndonesianDate(value?: string | null, includeTime = false) {
   return includeTime ? `${formatted} WIB` : formatted;
 }
 
+function formatRupiah(value?: string | number | null) {
+  const amount = Number(value || 0);
+  if (Number.isNaN(amount)) return String(value || "-");
+
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatLabel(value?: string | null) {
+  if (!value) return "-";
+
+  return String(value)
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeItems<T>(payload: unknown): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (payload && typeof payload === "object" && Array.isArray((payload as { items?: unknown[] }).items)) {
+    return (payload as { items: T[] }).items;
+  }
+  return [];
+}
+
+async function fetchOwnerTopups(ownerId: number): Promise<WalletPaymentItem[]> {
+  const response = await authFetchJson<{ data?: { items?: WalletPaymentItem[] } | WalletPaymentItem[] }>(
+    `/wallet-payments/all?owner_id=${ownerId}&payment_type=TOPUP&sort=-paid_at`,
+  );
+
+  return normalizeItems<WalletPaymentItem>(response.data);
+}
+
+function paymentStatusBadgeClass(status?: string | null) {
+  switch (String(status || "").toUpperCase()) {
+    case "ACCEPTED":
+    case "PAID":
+      return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+    case "PENDING":
+      return "bg-amber-50 text-amber-700 border border-amber-200";
+    case "REJECTED":
+      return "bg-rose-50 text-rose-700 border border-rose-200";
+    case "EXPIRED":
+      return "bg-gray-100 text-gray-500 border border-gray-200";
+    default:
+      return "bg-gray-50 text-gray-600 border border-gray-200";
+  }
+}
+
+function transferStatusBadgeClass(status?: string | null) {
+  switch (String(status || "").toUpperCase()) {
+    case "MATCHED":
+      return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+    case "SUGGESTED":
+      return "bg-amber-50 text-amber-700 border border-amber-200";
+    case "REJECTED_MATCH":
+      return "bg-rose-50 text-rose-700 border border-rose-200";
+    default:
+      return "bg-gray-100 text-gray-500 border border-gray-200";
+  }
+}
+
+function subscriptionStatusBadgeClass(status?: string | null) {
+  switch (String(status || "").toUpperCase()) {
+    case "ACTIVE":
+    case "COMPLETED":
+    case "PAID":
+    case "RECONCILED":
+      return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+    case "PENDING":
+    case "PENDING_RECONCILIATION":
+      return "bg-amber-50 text-amber-700 border border-amber-200";
+    default:
+      return "bg-gray-100 text-gray-600 border border-gray-200";
+  }
+}
+
 export default function OwnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   usePageTitle("Detail Owner");
   const router = useRouter();
+  const { showSuccess, showError, confirm, withLoading } = useFeedback();
   const resolvedParams = use(params);
   const ownerId = Number(resolvedParams.id);
   
   const [owner, setOwner] = useState<BackendOwner | null>(null);
+  const [lead, setLead] = useState<BackendLead | null>(null);
   const [outlets, setOutlets] = useState<BackendOutlet[]>([]);
-  const [transactions, setTransactions] = useState<WalletTransactionItem[]>([]);
+  const [topups, setTopups] = useState<WalletPaymentItem[]>([]);
+  const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [subscriptions, setSubscriptions] = useState<OwnerSubscriptionItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -80,57 +168,88 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
 
   const { provinces, cities, districts, villages, loadCitiesByProvinceName, loadDistrictsByCityName, loadVillagesByDistrictName, loadAllForEdit, loadingProvinces, loadingCities, loadingDistricts, loadingVillages } = useLocation();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [ownerRes, outletsData, walletData, subData] = await Promise.all([
+      const [ownerRes, outletsData, topupData, transferData, subData, leadData] = await Promise.all([
         fetchOwnerDetail(ownerId),
         fetchOwnerOutlets(ownerId),
-        fetchOwnerWalletTransactions(ownerId).catch(() => []),
+        fetchOwnerTopups(ownerId).catch(() => []),
+        listOwnerTransfers(ownerId, { all: true }).then((result) => result.items || []).catch(() => []),
         fetchOwnerSubscriptions(ownerId).catch(() => []),
+        findRelatedLead({ ownerId }).catch(() => null),
       ]);
       setOwner(ownerRes.data);
+      setLead(leadData);
       setOutlets(outletsData);
-      setTransactions(walletData);
+      setTopups(topupData);
+      setTransfers(transferData);
       setSubscriptions(subData);
     } catch (err) {
       console.error("Gagal memuat detail:", err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [ownerId]);
 
   useEffect(() => {
     if (!ownerId || isNaN(ownerId)) {
       router.replace("/menu/owner-outlet");
       return;
     }
-    loadData();
-  }, [ownerId, router]);
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addForm.name.trim()) {
-      alert("Nama Outlet wajib diisi.");
-      return;
-    }
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
 
+    return () => window.clearTimeout(timer);
+  }, [loadData, ownerId, router]);
+
+  const submitAddOutlet = async () => {
     setIsSubmitting(true);
     try {
-      await bulkCreateOwnerOutlets(ownerId, [addForm]);
-      alert("Outlet berhasil ditambahkan!");
+      await withLoading(async () => {
+        await bulkCreateOwnerOutlets(ownerId, [addForm]);
+        const outletsData = await fetchOwnerOutlets(ownerId);
+        setOutlets(outletsData);
+      }, { label: "Menyimpan outlet baru..." });
+
+      showSuccess({
+        title: "Outlet berhasil ditambahkan",
+        message: "Outlet baru berhasil disimpan untuk owner ini.",
+      });
       setIsAddModalOpen(false);
       setAddForm({ code: "", name: "", phone: "", province: "", city: "", district: "", sub_district: "", address: "" });
-      // Reload outlets
-      const outletsData = await fetchOwnerOutlets(ownerId);
-      setOutlets(outletsData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Gagal menambah outlet:", err);
-      const errorMessage = err?.message || "Periksa kembali data (Kode Outlet mungkin sudah terpakai).";
-      alert(`Gagal menambahkan outlet. ${errorMessage}`);
+      const errorMessage = err instanceof Error
+        ? err.message
+        : "Periksa kembali data (Kode Outlet mungkin sudah terpakai).";
+      showError({
+        title: "Gagal menambahkan outlet",
+        message: "Sistem gagal menyimpan outlet baru.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau kode outlet sudah terpakai.",
+        solution: "Periksa kembali data outlet dan koneksi Anda, lalu coba lagi.",
+        technicalDetails: errorMessage,
+        onRetry: () => void submitAddOutlet(),
+      });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addForm.name.trim()) {
+      showError({
+        title: "Data belum lengkap",
+        message: "Nama Outlet wajib diisi.",
+        solution: "Lengkapi nama outlet terlebih dahulu.",
+      });
+      return;
+    }
+
+    void submitAddOutlet();
   };
 
   const handleEditClick = (outlet: BackendOutlet) => {
@@ -149,41 +268,79 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
     setIsEditModalOpen(true);
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editForm.code.trim() || !editForm.name.trim()) {
-      alert("Kode dan Nama Outlet wajib diisi.");
-      return;
-    }
-
+  const submitEditOutlet = async () => {
     setIsEditSubmitting(true);
     try {
-      await bulkUpdateOwnerOutlets(ownerId, [editForm]);
-      alert("Outlet berhasil diperbarui!");
+      await withLoading(async () => {
+        await bulkUpdateOwnerOutlets(ownerId, [editForm]);
+        const outletsData = await fetchOwnerOutlets(ownerId);
+        setOutlets(outletsData);
+      }, { label: "Menyimpan perubahan outlet..." });
+
+      showSuccess({
+        title: "Outlet berhasil diperbarui",
+        message: "Perubahan data outlet berhasil disimpan.",
+      });
       setIsEditModalOpen(false);
-      // Reload outlets
-      const outletsData = await fetchOwnerOutlets(ownerId);
-      setOutlets(outletsData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Gagal memperbarui outlet:", err);
-      const errorMessage = err?.message || "Silakan coba lagi.";
-      alert(`Gagal memperbarui outlet. ${errorMessage}`);
+      const errorMessage = err instanceof Error ? err.message : "Silakan coba lagi.";
+      showError({
+        title: "Gagal memperbarui outlet",
+        message: "Sistem gagal menyimpan perubahan outlet.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah atau kode outlet sudah dipakai outlet lain.",
+        solution: "Periksa kembali data outlet dan koneksi Anda, lalu coba lagi.",
+        technicalDetails: errorMessage,
+        onRetry: () => void submitEditOutlet(),
+      });
     } finally {
       setIsEditSubmitting(false);
     }
   };
 
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.name.trim()) {
+      showError({
+        title: "Data belum lengkap",
+        message: "Nama Outlet wajib diisi.",
+        solution: "Lengkapi nama outlet terlebih dahulu.",
+      });
+      return;
+    }
+
+    void submitEditOutlet();
+  };
+
   const handleDeleteClick = async (outletId: number) => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus outlet ini?")) {
-      try {
-        await bulkSoftDeleteOwnerOutlets(ownerId, [outletId]);
-        alert("Outlet berhasil dihapus.");
-        const outletsData = await fetchOwnerOutlets(ownerId);
-        setOutlets(outletsData);
-      } catch (err) {
-        console.error("Gagal menghapus outlet:", err);
-        alert("Gagal menghapus outlet.");
-      }
+    const ok = await confirm({
+      title: "Hapus Outlet",
+      message: "Apakah Anda yakin ingin menghapus outlet ini?",
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
+
+    try {
+      await withLoading(() => bulkSoftDeleteOwnerOutlets(ownerId, [outletId]), {
+        label: "Menghapus outlet...",
+      });
+      showSuccess({
+        title: "Outlet berhasil dihapus",
+        message: "Outlet berhasil dihapus dari data owner ini.",
+      });
+      const outletsData = await fetchOwnerOutlets(ownerId);
+      setOutlets(outletsData);
+    } catch (err) {
+      console.error("Gagal menghapus outlet:", err);
+      showError({
+        title: "Gagal menghapus outlet",
+        message: "Sistem gagal menghapus outlet ini.",
+        cause: "Bisa disebabkan oleh koneksi bermasalah.",
+        solution: "Periksa koneksi Anda dan coba lagi.",
+        technicalDetails: err instanceof Error ? err.message : String(err),
+        onRetry: () => void handleDeleteClick(outletId),
+      });
     }
   };
 
@@ -248,12 +405,12 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Level 1: Ringkasan (Quick Stats) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-[#C92C1E] to-[#A82216] rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+            <div className="app-accent-surface rounded-2xl p-5 shadow-lg relative overflow-hidden flex flex-col justify-between">
               <div className="relative z-10">
-                <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-1">Total Outlet Terdaftar</p>
-                <h2 className="text-3xl font-black">{outlets.length}</h2>
+                <p className="app-accent-kicker text-xs font-bold uppercase tracking-wider mb-1">Total Outlet Terdaftar</p>
+                <h2 className="text-3xl font-black">{outlets.length.toLocaleString("id-ID")}</h2>
               </div>
-              <svg className="absolute -bottom-4 -right-4 w-28 h-28 text-white opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="app-accent-decor absolute -bottom-4 -right-4 w-28 h-28 opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
@@ -276,6 +433,40 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                   <span className={`relative inline-flex rounded-full h-3 w-3 ${owner.status === "ACTIVE" ? "bg-emerald-500" : "bg-red-500"}`}></span>
                 </span>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
+              <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m2 5H7a2 2 0 01-2-2V7a2 2 0 012-2h3l2 2h5a2 2 0 012 2v8a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-base font-black text-gray-900 leading-tight">Relasi Lead</h4>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Koneksi owner ini dengan pipeline lead</p>
+              </div>
+            </div>
+            <div className="p-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-black text-gray-900">
+                  {lead ? lead.outlet?.name || lead.owner?.name || lead.code : "Lead belum ditemukan"}
+                </p>
+                <p className="text-xs font-medium text-gray-500">
+                  {lead
+                    ? `Kode lead ${lead.code} • stage ${formatLabel(lead.stage)} • status ${formatLabel(lead.status)}`
+                    : "Owner ini belum memiliki relasi lead yang bisa dibuka dari halaman detail."}
+                </p>
+              </div>
+              {lead ? (
+                <Link
+                  href={`/menu/lead/${lead.id}`}
+                  className="inline-flex items-center justify-center rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-[#A82216]"
+                >
+                  Lihat Detail Lead
+                </Link>
+              ) : null}
             </div>
           </div>
 
@@ -325,7 +516,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 border-b border-gray-50">
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Nomor Kontak</span>
-                <span className="font-bold text-gray-900">{owner.phone || "-"}</span>
+                <span className="font-bold text-gray-900">{owner.phone ? formatPhoneDisplay(owner.phone) : "-"}</span>
               </div>
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Provinsi</span>
@@ -413,7 +604,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                       <tr key={outlet.id} className="transition-colors hover:bg-red-50/30 group">
                         <td className="px-6 py-4 font-bold text-gray-900">{outlet.code || "-"}</td>
                         <td className="px-6 py-4 font-bold text-gray-900">{outlet.name}</td>
-                        <td className="px-6 py-4 text-gray-600 font-medium">{outlet.phone || "-"}</td>
+                        <td className="px-6 py-4 text-gray-600 font-medium">{outlet.phone ? formatPhoneDisplay(outlet.phone) : "-"}</td>
                         <td className="px-6 py-4 text-gray-600 font-medium">
                           {[outlet.sub_district, outlet.district, outlet.city, outlet.province].filter(Boolean).join(", ") || "-"}
                         </td>
@@ -430,36 +621,11 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2 opacity-100 sm:opacity-100 transition-opacity">
-                            <Link 
-                              href={`/menu/kelolaan-outlet/detail?id=${outlet.id}`}
-                              className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700" 
-                              title="Lihat Detail Outlet"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </Link>
-                            <button 
-                              onClick={() => handleEditClick(outlet)}
-                              className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700" 
-                              title="Edit Outlet"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteClick(outlet.id)}
-                              className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600" 
-                              title="Hapus Outlet"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
+                          <RowActionGroup>
+                            <ViewActionButton href={`/menu/kelolaan-outlet/detail?id=${outlet.id}`} title="Lihat Detail Outlet" />
+                            <EditActionButton onClick={() => handleEditClick(outlet)} title="Edit Outlet" />
+                            <DeleteActionButton onClick={() => handleDeleteClick(outlet.id)} title="Hapus Outlet" />
+                          </RowActionGroup>
                         </td>
                       </tr>
                     ))}
@@ -469,7 +635,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Level 5: Riwayat Topup */}
+          {/* Level 5: Riwayat Top Up */}
           <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
@@ -479,71 +645,143 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                   </svg>
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Topup</h4>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">SALDO WALLET INI DIPAKAI BERSAMA SELURUH OUTLET OWNER</p>
+                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Top Up</h4>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">PERMINTAAN TOP UP DAN STATUS VERIFIKASI PEMBAYARAN</p>
                 </div>
               </div>
               <span className="text-xs font-bold bg-red-50 text-[#C92C1E] px-3 py-1 rounded-full border border-red-200">
-                {transactions.length} Transaksi
+                {topups.length} Top Up
               </span>
             </div>
 
             <div className="flex-1 overflow-x-auto">
-              {transactions.length === 0 ? (
+              {topups.length === 0 ? (
                 <div className="text-center py-12 bg-white">
-                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat top up atau transaksi saldo aplikasi untuk owner ini.</p>
+                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat top up untuk owner ini.</p>
                 </div>
               ) : (
                 <table className="w-full text-left text-sm text-gray-600">
                   <thead className="bg-gray-50/80 uppercase text-gray-500 text-[10px] font-black tracking-wider border-b-2 border-[#C92C1E]">
                     <tr>
+                      <th className="px-6 py-4">Kode Top Up</th>
+                      <th className="px-6 py-4">Channel</th>
                       <th className="px-6 py-4">Tanggal</th>
-                      <th className="px-6 py-4">Tipe Transaksi</th>
-                      <th className="px-6 py-4">Sumber</th>
                       <th className="px-6 py-4 text-right">Nominal</th>
-                      <th className="px-6 py-4 text-right">Saldo Akhir</th>
-                      <th className="px-6 py-4">Keterangan</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Transfer Efektif</th>
+                      <th className="px-6 py-4">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white text-xs">
-                    {transactions.map((tx) => {
-                      const isCredit = tx.transaction_type === "CREDIT" || tx.source_type === "TOPUP";
-                      const numAmount = Number(tx.amount || 0);
-                      const numBalance = Number(tx.balance_after || 0);
-                      return (
-                        <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
-                            {tx.created_at ? new Date(tx.created_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-"}
-                          </td>
-                          <td className="px-6 py-4 font-bold">
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
-                              isCredit ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
-                            }`}>
-                              {tx.transaction_type || (isCredit ? "CREDIT" : "DEBIT")}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 font-bold text-gray-800">
-                            {tx.source_type || "-"}
-                          </td>
-                          <td className={`px-6 py-4 text-right font-black ${isCredit ? "text-emerald-600" : "text-rose-600"}`}>
-                            {isCredit ? "+" : "-"} Rp {numAmount.toLocaleString("id-ID")}
-                          </td>
-                          <td className="px-6 py-4 text-right font-bold text-gray-900">
-                            Rp {numBalance.toLocaleString("id-ID")}
-                          </td>
-                          <td className="px-6 py-4 text-gray-600 max-w-[250px] truncate">
-                            {tx.note || tx.source_reference || "-"}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {topups.map((topup) => (
+                      <tr key={topup.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-gray-900">
+                          {topup.code || `PAY-${topup.id}`}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-gray-800">
+                          {topup.payment_channel || topup.channel || "-"}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
+                          {formatIndonesianDate(topup.paid_at || topup.created_at, true)}
+                        </td>
+                        <td className="px-6 py-4 text-right font-black text-gray-900">
+                          {formatRupiah(topup.amount)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${paymentStatusBadgeClass(topup.status)}`}>
+                            {topup.status || "-"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
+                          {formatIndonesianDate(topup.effective_transfer_date, true)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <RowActionGroup>
+                            <ViewActionButton href={`/menu/wallets/payments/${topup.id}`} title="Lihat Detail Top Up" />
+                          </RowActionGroup>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
             </div>
           </div>
 
-          {/* Level 6: Riwayat Subscribe */}
+          {/* Level 6: Riwayat Transfer */}
+          <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                  <svg className="w-5 h-5 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a5 5 0 10-10 0v2M5 9h14l-1 10a2 2 0 01-2 2H8a2 2 0 01-2-2L5 9z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Transfer</h4>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">BUKTI TRANSFER BANK OWNER DAN STATUS MATCHING-NYA</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold bg-red-50 text-[#C92C1E] px-3 py-1 rounded-full border border-red-200">
+                {transfers.length} Transfer
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-x-auto">
+              {transfers.length === 0 ? (
+                <div className="text-center py-12 bg-white">
+                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat transfer untuk owner ini.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-sm text-gray-600">
+                  <thead className="bg-gray-50/80 uppercase text-gray-500 text-[10px] font-black tracking-wider border-b-2 border-[#C92C1E]">
+                    <tr>
+                      <th className="px-6 py-4">Kode Transfer</th>
+                      <th className="px-6 py-4">Tanggal Transfer</th>
+                      <th className="px-6 py-4 text-right">Nominal</th>
+                      <th className="px-6 py-4">Status Match</th>
+                      <th className="px-6 py-4">Sumber</th>
+                      <th className="px-6 py-4">External Ref</th>
+                      <th className="px-6 py-4">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white text-xs">
+                    {transfers.map((transfer) => (
+                      <tr key={transfer.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-gray-900">
+                          TRF-{transfer.id}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
+                          {formatIndonesianDate(transfer.transfer_date, true)}
+                        </td>
+                        <td className="px-6 py-4 text-right font-black text-gray-900">
+                          {formatRupiah(transfer.amount)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${transferStatusBadgeClass(transfer.match_status)}`}>
+                            {formatLabel(transfer.match_status)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-bold text-gray-800">
+                          {formatLabel(transfer.source)}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-700">
+                          {transfer.external_reference || "-"}
+                        </td>
+                        <td className="px-6 py-4">
+                          <RowActionGroup>
+                            <ViewActionButton href={`/menu/wallets/transfers/${transfer.id}`} title="Lihat Detail Transfer" />
+                          </RowActionGroup>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Level 7: Riwayat Pembelian Paket */}
           <div className="w-full bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden flex flex-col">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
@@ -553,8 +791,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                   </svg>
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Subscribe</h4>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">LANGGANAN PAKET PADA OWNER INI</p>
+                  <h4 className="text-base font-black text-gray-900 leading-tight">Riwayat Pembelian Paket</h4>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">ORDER PEMBELIAN LANGGANAN PADA OWNER INI</p>
                 </div>
               </div>
               <span className="text-xs font-bold bg-red-50 text-[#C92C1E] px-3 py-1 rounded-full border border-red-200">
@@ -565,7 +803,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex-1 overflow-x-auto">
               {subscriptions.length === 0 ? (
                 <div className="text-center py-12 bg-white">
-                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat langganan paket untuk owner ini.</p>
+                  <p className="text-gray-500 text-xs font-medium">Belum ada riwayat pembelian paket untuk owner ini.</p>
                 </div>
               ) : (
                 <table className="w-full text-left text-sm text-gray-600">
@@ -575,20 +813,22 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                       <th className="px-6 py-4">Tipe Order</th>
                       <th className="px-6 py-4">Nama Outlet</th>
                       <th className="px-6 py-4">Paket / Plan</th>
-                      <th className="px-6 py-4">Tgl. Mulai</th>
-                      <th className="px-6 py-4">Tgl. Berakhir</th>
-                      <th className="px-6 py-4 text-right">Total Bayar</th>
-                      <th className="px-6 py-4 text-center">Status</th>
                       <th className="px-6 py-4">Tanggal Order</th>
+                      <th className="px-6 py-4">Periode</th>
+                      <th className="px-6 py-4 text-right">Total Bayar</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white text-xs">
                     {subscriptions.map((sub) => {
                       const numTotal = Number(sub.total_amount || sub.amount || 0);
-                      const isSuccess = sub.status === "ACTIVE" || sub.status === "COMPLETED" || sub.status === "PAID" || sub.status === "RECONCILED";
+
                       return (
                         <tr key={sub.id} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 font-bold text-gray-900">{sub.code || `SUB-${sub.id}`}</td>
+                          <td className="px-6 py-4 font-bold text-gray-900">
+                            {sub.code || `ORDER-${sub.id}`}
+                          </td>
                           <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
                               sub.order_type === "UPGRADE" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
@@ -601,23 +841,23 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                             {[sub.package_name, sub.plan_name].filter(Boolean).join(" - ") || "-"}
                           </td>
                           <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
-                            {formatIndonesianDate(sub.start_date || sub.created_at)}
+                            {formatIndonesianDate(sub.purchased_at || sub.created_at, true)}
                           </td>
                           <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
-                            {formatIndonesianDate(sub.end_date)}
+                            {formatIndonesianDate(sub.start_date)} - {formatIndonesianDate(sub.end_date)}
                           </td>
                           <td className="px-6 py-4 text-right font-black text-gray-900">
-                            Rp {numTotal.toLocaleString("id-ID")}
+                            {formatRupiah(numTotal)}
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${
-                              isSuccess ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"
-                            }`}>
-                              {sub.status}
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${subscriptionStatusBadgeClass(sub.status)}`}>
+                              {formatLabel(sub.status)}
                             </span>
                           </td>
-                          <td className="px-6 py-4 font-medium text-gray-700 whitespace-nowrap">
-                            {sub.purchased_at || sub.created_at ? new Date(sub.purchased_at || sub.created_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-"}
+                          <td className="px-6 py-4">
+                            <RowActionGroup>
+                              <ViewActionButton href={`/menu/subscribe/orders/${sub.id}`} title="Lihat Detail Order Langganan" />
+                            </RowActionGroup>
                           </td>
                         </tr>
                       );
@@ -638,8 +878,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             onClick={() => !isSubmitting && setIsAddModalOpen(false)} 
           />
           
-          <div className="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-4">
+          <div className="app-modal-panel relative z-10 w-full max-w-lg rounded-2xl shadow-2xl transition-all">
+            <div className="app-modal-header flex items-center justify-between px-6 py-4">
               <div>
                 <h3 className="text-lg font-black text-gray-900">
                   Tambah Outlet Baru
@@ -650,7 +890,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <button
                 onClick={() => !isSubmitting && setIsAddModalOpen(false)}
-                className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                className="app-modal-close rounded-xl p-2 transition-colors"
                 disabled={isSubmitting}
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -659,7 +899,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               </button>
             </div>
             
-            <form onSubmit={handleAddSubmit} className="p-6">
+            <form onSubmit={handleAddSubmit} className="app-modal-body p-6">
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
@@ -809,7 +1049,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !addForm.name.trim() || !addForm.code.trim()}
+                  disabled={isSubmitting || !addForm.name.trim()}
                   className="rounded-xl bg-[#C92C1E] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isSubmitting ? (
@@ -838,8 +1078,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             onClick={() => !isEditSubmitting && setIsEditModalOpen(false)} 
           />
           
-          <div className="relative z-10 w-full max-w-lg transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-4">
+          <div className="app-modal-panel relative z-10 w-full max-w-lg rounded-2xl shadow-2xl transition-all">
+            <div className="app-modal-header flex items-center justify-between px-6 py-4">
               <div>
                 <h3 className="text-lg font-black text-gray-900">
                   Edit Outlet
@@ -850,7 +1090,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <button
                 onClick={() => !isEditSubmitting && setIsEditModalOpen(false)}
-                className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                className="app-modal-close rounded-xl p-2 transition-colors"
                 disabled={isEditSubmitting}
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -859,11 +1099,11 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               </button>
             </div>
             
-            <form onSubmit={handleEditSubmit} className="p-6">
+            <form onSubmit={handleEditSubmit} className="app-modal-body p-6">
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
-                    Kode Outlet <span className="text-[#C92C1E]">*</span>
+                    Kode Outlet <span className="text-gray-400 text-[10px] normal-case tracking-normal">(Opsional)</span>
                   </label>
                   <input
                     type="text"
@@ -871,7 +1111,6 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                     onChange={(e) => setEditForm({...editForm, code: e.target.value})}
                     placeholder="Contoh: OUT-001"
                     className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-all text-gray-900"
-                    required
                     disabled={isEditSubmitting}
                   />
                 </div>
@@ -1010,7 +1249,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
                 <button
                   type="submit"
-                  disabled={isEditSubmitting || !editForm.name.trim() || !editForm.code.trim()}
+                  disabled={isEditSubmitting || !editForm.name.trim()}
                   className="rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isEditSubmitting ? (

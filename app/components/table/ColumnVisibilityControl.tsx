@@ -55,16 +55,23 @@ export default function ColumnVisibilityControl({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const table = document.getElementById(tableId);
-    if (!table) return;
+    let table = document.getElementById(tableId);
+    let observer: MutationObserver | null = null;
+    let frame: number;
 
     const updateColumns = () => {
+      if (!table) table = document.getElementById(tableId);
+      if (!table) return;
+
       const headers = Array.from(
         table.querySelectorAll("thead tr:first-child th")
       ).map((cell, index) => ({
         index: index + 1,
         label: readHeaderLabel(cell, `Kolom ${index + 1}`),
       }));
+
+      // if no headers found yet, might still be rendering
+      if (headers.length === 0) return;
 
       setColumns(headers);
 
@@ -98,26 +105,37 @@ export default function ColumnVisibilityControl({
         const allowed = new Set(headers.map((c) => c.index));
         return current.filter((idx) => allowed.has(idx));
       });
+
+      // Setup observer if not already setup
+      if (!observer && table) {
+        const thead = table.querySelector("thead");
+        observer = new MutationObserver(() => {
+          frame = window.requestAnimationFrame(updateColumns);
+        });
+        if (thead) {
+          observer.observe(thead, { childList: true, subtree: true });
+        } else {
+          observer.observe(table, { childList: true, subtree: true });
+        }
+      }
     };
 
-    // Initial update
-    const frame = window.requestAnimationFrame(updateColumns);
+    // Initial update attempt
+    updateColumns();
 
-    // Watch for dynamic changes in the table header
-    const thead = table.querySelector("thead");
-    const observer = new MutationObserver(() => {
-      window.requestAnimationFrame(updateColumns);
-    });
-
-    if (thead) {
-      observer.observe(thead, { childList: true, subtree: true });
-    } else {
-      observer.observe(table, { childList: true, subtree: true });
-    }
+    // Poll in case the table mounts later (e.g. after a loading state)
+    const pollInterval = setInterval(() => {
+      if (!table || columns.length === 0) {
+        updateColumns();
+      } else {
+        clearInterval(pollInterval);
+      }
+    }, 500);
 
     return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
+      clearInterval(pollInterval);
+      if (frame) window.cancelAnimationFrame(frame);
+      if (observer) observer.disconnect();
     };
   }, [tableId, storageKey]);
 
@@ -197,7 +215,7 @@ export default function ColumnVisibilityControl({
       <button
         type="button"
         disabled
-        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-400 shadow-sm opacity-60 cursor-not-allowed"
+        className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-400 opacity-60 shadow-sm"
       >
         <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -215,13 +233,13 @@ export default function ColumnVisibilityControl({
         type="button"
         ref={buttonRef}
         onClick={() => setIsOpen((current) => !current)}
-        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 shadow-sm transition hover:bg-gray-50"
+        className="column-visibility-trigger inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-50"
       >
-        <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
         </svg>
         {buttonLabel}
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black text-gray-500">
+        <span className="column-visibility-count rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black text-gray-600">
           {visibleCount}/{columns.length}
         </span>
       </button>
@@ -230,7 +248,7 @@ export default function ColumnVisibilityControl({
         ? createPortal(
             <div
               ref={menuRef}
-              className="fixed z-[9999] w-80 rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl"
+              className="column-visibility-menu fixed z-[9999] w-80 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl text-gray-900"
               style={{
                 top: `${menuPosition.top}px`,
                 right: `${menuPosition.right}px`,
@@ -238,7 +256,7 @@ export default function ColumnVisibilityControl({
               }}
             >
               <div className="mb-3 border-b border-gray-100 pb-3">
-                <p className="text-sm font-black text-gray-900">Atur Kolom Tabel</p>
+                <p className="text-sm font-bold text-gray-900">Atur Kolom Tabel</p>
                 <p className="mt-1 text-xs text-gray-500">{description}</p>
               </div>
 
@@ -250,9 +268,9 @@ export default function ColumnVisibilityControl({
                   return (
                     <label
                       key={column.index}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 transition ${
+                      className={`column-visibility-item flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 transition ${
                         checked
-                          ? "border-[#C92C1E]/20 bg-[#FFF7F5]"
+                          ? "border-[#C92C1E]/30 bg-[#FFF7F5]"
                           : "border-gray-200 bg-white hover:bg-gray-50"
                       } ${isLastVisible ? "opacity-80" : ""}`}
                     >
@@ -264,7 +282,7 @@ export default function ColumnVisibilityControl({
                         className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       />
                       <div className="min-w-0">
-                        <p className="text-xs font-black text-gray-800">{column.label}</p>
+                        <p className="text-xs font-bold text-gray-900">{column.label}</p>
                       </div>
                     </label>
                   );
@@ -275,14 +293,14 @@ export default function ColumnVisibilityControl({
                 <button
                   type="button"
                   onClick={() => setHiddenColumns([])}
-                  className="text-xs font-black text-[#C92C1E] transition hover:text-[#a92217]"
+                  className="text-xs font-bold text-[#C92C1E] transition hover:underline"
                 >
                   Tampilkan Semua
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-black text-white transition hover:bg-black"
+                  className="column-visibility-done rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-black"
                 >
                   Selesai
                 </button>

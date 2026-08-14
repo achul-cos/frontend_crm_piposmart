@@ -9,6 +9,7 @@ export default function OutletTrashPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [actingId, setActingId] = useState<number | null>(null);
 
   const fetchTrashData = () => {
     setIsLoading(true);
@@ -91,6 +92,39 @@ export default function OutletTrashPage() {
       } catch (err) {
         console.error(err);
       }
+    }
+  };
+
+  const handleRestoreRow = async (item: OutletOverviewItem) => {
+    const ownerId = item.owner?.id;
+    if (!ownerId) return;
+    setActingId(item.id);
+    try {
+      await restoreOutletForOwner(ownerId, item.id);
+      fetchTrashData();
+      setSelectedIds((prev) => prev.filter((id) => id !== item.id));
+    } catch (err) {
+      console.error(err);
+      alert("Gagal memulihkan outlet.");
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleForceDeleteRow = async (item: OutletOverviewItem) => {
+    const ownerId = item.owner?.id;
+    if (!ownerId) return;
+    if (!confirm(`Yakin hapus permanen "${item.name}"? Tidak bisa dipulihkan.`)) return;
+    setActingId(item.id);
+    try {
+      await bulkForceDeleteOutletsForOwner(ownerId, [item.id]);
+      fetchTrashData();
+      setSelectedIds((prev) => prev.filter((id) => id !== item.id));
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus outlet secara permanen.");
+    } finally {
+      setActingId(null);
     }
   };
 
@@ -312,6 +346,7 @@ export default function OutletTrashPage() {
               <th className="p-3">Kontak</th>
               <th className="p-3">Lokasi</th>
               <th className="p-3 text-center">Tgl Dihapus</th>
+              <th className="p-3 text-center">Aksi</th>
             </tr>
           </thead>
 
@@ -355,6 +390,32 @@ export default function OutletTrashPage() {
                   <td className="p-3 text-gray-500 whitespace-normal break-words">{row.city || row.province || "-"}</td>
                   <td className="p-3 text-center font-mono text-gray-600">
                     {row.updated_at ? new Date(row.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : "-"}
+                  </td>
+                  <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={actingId === row.id}
+                        onClick={() => void handleRestoreRow(row)}
+                        className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Pulihkan Outlet"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actingId === row.id}
+                        onClick={() => void handleForceDeleteRow(row)}
+                        className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Hapus Permanen"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
