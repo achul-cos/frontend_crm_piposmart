@@ -10,6 +10,7 @@ services:
     env_file:
       - .env.production
     environment:
+      HOSTNAME: 0.0.0.0
       PORT: ${PORT:-3000}
       NODE_ENV: production
     ports:

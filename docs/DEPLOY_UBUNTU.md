@@ -129,6 +129,7 @@ Catatan penting:
 - jika nilai `NEXT_PUBLIC_*` berubah, wajib `up -d --build`
 - `PORT` adalah port di dalam container
 - `FRONTEND_PORT` adalah binding port host; kalau full lewat Traefik sebenarnya tetap boleh `3000`
+- frontend Docker ini sekarang dipaksa bind ke `0.0.0.0` lewat env `HOSTNAME=0.0.0.0`, karena Next.js standalone bisa mewarisi `HOSTNAME` bawaan container dan membuat healthcheck `127.0.0.1` gagal walaupun aplikasi sebenarnya hidup
 
 ## 5. Build dan jalankan frontend
 
