@@ -323,6 +323,24 @@ Biasanya masalah di:
 - label router
 - cert resolver Traefik
 
+Kalau `curl http://127.0.0.1:3000/` mengembalikan `200 OK`, tetapi `curl -kI -H "Host: crm.piposmart.com" https://127.0.0.1` masih `404 page not found`, biasanya berarti:
+
+- request sudah sampai ke Traefik
+- app frontend sebenarnya hidup
+- tetapi container frontend sedang dianggap `unhealthy` atau router Traefik belum refresh dengan benar
+
+Langkah aman:
+
+```bash
+docker-compose -f compose.prod.yaml --env-file .env.production up -d --build --force-recreate frontend
+docker restart Traefik-Proxy
+docker-compose -f compose.prod.yaml --env-file .env.production ps
+curl -I http://127.0.0.1:3000/
+curl -kI -H "Host: crm.piposmart.com" https://127.0.0.1
+```
+
+Kalau healthcheck lama bermasalah di `docker-compose 1.29.2`, pastikan source project sudah memakai healthcheck `wget` yang lebih sederhana seperti versi terbaru repo ini.
+
 Kalau skema domain yang dipakai adalah subdomain seperti `crm.piposmart.com`, cukup fokuskan DNS ke subdomain itu. Tidak perlu `www.crm.piposmart.com` kecuali memang sengaja ingin dipakai juga.
 
 ### Frontend jalan tapi API gagal dipanggil
