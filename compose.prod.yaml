@@ -1,4 +1,4 @@
-name: crm-piposmart-frontend-prod
+version: "2.4"
 
 services:
   frontend:
@@ -26,3 +26,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    networks:
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik-network}
+      traefik.http.routers.crm-frontend.rule: Host(`${FRONTEND_DOMAIN}`)
+      traefik.http.routers.crm-frontend.entrypoints: ${TRAEFIK_ENTRYPOINTS:-websecure}
+      traefik.http.routers.crm-frontend.tls: "true"
+      traefik.http.routers.crm-frontend.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.crm-frontend.service: crm-frontend
+      traefik.http.services.crm-frontend.loadbalancer.server.port: "3000"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik-network}

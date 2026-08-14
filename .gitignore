@@ -41,3 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 /.cache
+.lint-report.json
+scratch.ps1
+app/menu/scratch.ps1
+AGENTS.md
+CLAUDE.md
