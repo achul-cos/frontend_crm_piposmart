@@ -2045,20 +2045,24 @@ export default function DataKelolaanPage() {
                 onMouseDown={(e) => {
                   if ((e.target as HTMLElement).closest('button, a')) return;
                   if (e.button !== 0) return;
-                  handleRowMouseDown(row.no, selectedIds.includes(row.no));
+                  const isSelected = selectedIds.includes(row.no);
+                  setIsDragging(true);
+                  setDragMode(isSelected ? "deselect" : "select");
+                  setSelectedIds((prev) =>
+                    isSelected ? prev.filter((id) => id !== row.no) : [...prev, row.no]
+                  );
                 }}
                 onMouseEnter={() => {
-                  handleRowMouseEnter(row.no);
+                  if (isDragging && dragMode) {
+                    setSelectedIds((prev) => {
+                      if (dragMode === "select" && !prev.includes(row.no)) return [...prev, row.no];
+                      if (dragMode === "deselect" && prev.includes(row.no)) return prev.filter((id) => id !== row.no);
+                      return prev;
+                    });
+                  }
                 }}
               >
-                <td
-                    className="px-4 py-4 text-center cursor-pointer"
-                    onMouseDown={(e) => e.stopPropagation()} 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleSelectRow(row.no);
-                    }}
-                  >
+                <td className="px-4 py-4 text-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(row.no)}
@@ -2199,7 +2203,7 @@ export default function DataKelolaanPage() {
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
-              <span className="text-xs font-medium text-gray-500">baris</span>
+              
             </div>
           </div>
 

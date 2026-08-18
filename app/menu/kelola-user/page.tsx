@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyRound, Search, Plus, RefreshCw, MoreVertical } from 'lucide-react';
+import { KeyRound, Search, Plus, RefreshCw, MoreVertical, Trash2, X } from 'lucide-react';
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import { authFetchJson } from '@/app/lib/api';
 import {
   RowActionButton,
   RowActionGroup,
   EditActionButton,
+  ViewActionButton,
 } from '@/app/components/table/RowActionButton';
 import KelolaUserFormModal, {
   type UserFormState,
@@ -468,6 +469,19 @@ export default function KelolaUserPage() {
   const [search, setSearch] = useState("");
   const [userPage, setUserPage] = useState(1);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragAction, setDragAction] = useState<"select" | "deselect" | null>(null);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setDragAction(null);
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const [pageError, setPageError] = useState("");
@@ -509,13 +523,13 @@ export default function KelolaUserPage() {
 
   useEffect(() => { setUserPage(1); }, [search, activeTab]);
 
-  const userPageSize = 20;
+  const [userPageSize, setUserPageSize] = useState(10);
   const userTotalItems = filteredUsers.length;
   const userTotalPages = Math.max(1, Math.ceil(userTotalItems / userPageSize));
   const paginatedUsers = useMemo(() => {
     const start = (userPage - 1) * userPageSize;
     return filteredUsers.slice(start, start + userPageSize);
-  }, [filteredUsers, userPage]);
+  }, [filteredUsers, userPage, userPageSize]);
 
   const totalUsers = users.length;
   const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
@@ -964,14 +978,42 @@ export default function KelolaUserPage() {
               Kelola akun berdasarkan role yang dipilih.
             </p>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-3">
+          <div className="flex w-full overflow-x-auto flex-nowrap items-center gap-3 pb-2">
             <button
               type="button"
               onClick={() => openCreateModal(activeTab)}
-              className="rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
+              className="flex shrink-0 items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-200 transition-all hover:bg-red-700"
             >
               + Buat Akun
             </button>
+
+            {selectedUserIds.length > 0 && (
+              <>
+                <div className="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
+                  <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                  {selectedUserIds.length} terpilih
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert("Fitur hapus massal belum tersedia");
+                    setSelectedUserIds([]);
+                  }}
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition-all hover:bg-red-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Pindahkan ke Sampah
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserIds([])}
+                  className="flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white h-10 w-10 text-gray-500 shadow-sm transition-all hover:bg-gray-100 hover:text-gray-900"
+                  title="Batalkan Pilihan"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1051,20 +1093,32 @@ export default function KelolaUserPage() {
                 paginatedUsers.map((user) => (
                   <tr 
                     key={user.id} 
-                    className={`transition-colors hover:bg-gray-50 ${selectedUserIds.includes(user.id) ? "bg-red-50/50" : ""}`}
-                    onClick={() => setSelectedUser(user)}
+                    onMouseDown={(e) => {
+                      if ((e.target as HTMLElement).closest("button, a, [role='button']")) return;
+                      const isSelected = selectedUserIds.includes(user.id);
+                      setIsDragging(true);
+                      setDragAction(isSelected ? "deselect" : "select");
+                      setSelectedUserIds((prev) =>
+                        isSelected ? prev.filter((id) => id !== user.id) : [...prev, user.id]
+                      );
+                    }}
+                    onMouseEnter={() => {
+                      if (isDragging && dragAction) {
+                        setSelectedUserIds((prev) => {
+                          if (dragAction === "select" && !prev.includes(user.id)) return [...prev, user.id];
+                          if (dragAction === "deselect" && prev.includes(user.id)) return prev.filter((id) => id !== user.id);
+                          return prev;
+                        });
+                      }
+                    }}
+                    className={`transition-colors hover:bg-gray-50 cursor-pointer select-none ${selectedUserIds.includes(user.id) ? "bg-red-50/50" : ""}`}
                   >
-                    <td className="w-12 px-4 py-4 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                    <td className="w-12 px-4 py-4 text-center align-top">
                       <input
                         type="checkbox"
                         checked={selectedUserIds.includes(user.id)}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setSelectedUserIds(prev =>
-                            checked ? [...prev, user.id] : prev.filter(id => id !== user.id)
-                          );
-                        }}
-                        className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+                        readOnly
+                        className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       />
                     </td>
                     <td className="px-4 py-4 align-top">
@@ -1113,9 +1167,12 @@ export default function KelolaUserPage() {
 
                     <td
                       className="px-4 py-4 text-center"
-                      onClick={(event) => event.stopPropagation()}
                     >
                       <RowActionGroup>
+                        <ViewActionButton
+                          title="Detail User"
+                          onClick={() => setSelectedUser(user)}
+                        />
                         <EditActionButton
                           title="Edit User"
                           onClick={() => openEditModal(user)}
@@ -1137,10 +1194,26 @@ export default function KelolaUserPage() {
               </table>
           {userTotalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
-              <div className="text-xs font-medium text-gray-500">
-                Menampilkan <span className="font-bold text-gray-900">{(userPage - 1) * userPageSize + 1}</span> hingga{" "}
-                <span className="font-bold text-gray-900">{Math.min(userPage * userPageSize, userTotalItems)}</span> dari{" "}
-                <span className="font-bold text-gray-900">{userTotalItems}</span> data
+              <div className="flex items-center gap-4">
+                <div className="text-xs font-medium text-gray-500">
+                  Menampilkan <span className="font-bold text-gray-900">{userTotalItems === 0 ? 0 : (userPage - 1) * userPageSize + 1}</span> hingga{" "}
+                  <span className="font-bold text-gray-900">{Math.min(userPage * userPageSize, userTotalItems)}</span> dari{" "}
+                  <span className="font-bold text-gray-900">{userTotalItems}</span> data
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                  <select
+                    value={userPageSize}
+                    onChange={(e) => {
+                      setUserPageSize(Number(e.target.value));
+                      setUserPage(1);
+                    }}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#C92C1E] focus:outline-none"
+                  >
+                    {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <button

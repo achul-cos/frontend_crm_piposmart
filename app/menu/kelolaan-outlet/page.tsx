@@ -228,7 +228,7 @@ export default function KelolaanOutletPage() {
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [page, setPage] = useState(1);
-  const limit = 10;
+  const [limit, setLimit] = useState(10);
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -263,20 +263,51 @@ export default function KelolaanOutletPage() {
   }, []);
 
   const overviewScope = tableState === "sampah" ? "trash" : "active";
-  const overviewParams = useMemo(
-    () => ({
+  const overviewParams = useMemo(() => {
+    let computedStart = createdFrom || undefined;
+    let computedEnd = createdTo || undefined;
+
+    if (timeStatusFilter && month) {
+      const year = parseInt(month.split("-")[0]);
+      const monthNum = parseInt(month.split("-")[1]);
+
+      if (timeStatusFilter === "NEW" || timeStatusFilter === "NEW_EXISTING") {
+        computedStart = `${month}-01`;
+        const lastDay = new Date(year, monthNum, 0).getDate();
+        computedEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+      } else if (timeStatusFilter === "EXISTING") {
+        const prevMonthDate = new Date(year, monthNum - 1, 0);
+        const y = prevMonthDate.getFullYear();
+        const m = String(prevMonthDate.getMonth() + 1).padStart(2, "0");
+        const d = String(prevMonthDate.getDate()).padStart(2, "0");
+        computedEnd = `${y}-${m}-${d}`;
+      } else if (timeStatusFilter === "FUTURE") {
+        const nextMonthDate = new Date(year, monthNum, 1);
+        const y = nextMonthDate.getFullYear();
+        const m = String(nextMonthDate.getMonth() + 1).padStart(2, "0");
+        const d = String(nextMonthDate.getDate()).padStart(2, "0");
+        computedStart = `${y}-${m}-${d}`;
+      }
+    }
+
+    return {
       q: search || undefined,
+      code: filterCode || undefined,
+      name: filterName || undefined,
+      city: filterCity || undefined,
       page,
       limit,
-      start_date: createdFrom || undefined,
-      end_date: createdTo || undefined,
-    }),
-    [search, page, createdFrom, createdTo],
-  );
+      start_date: computedStart,
+      end_date: computedEnd,
+    };
+  }, [search, filterCode, filterName, filterCity, page, limit, createdFrom, createdTo, timeStatusFilter, month]);
 
   const subscriptionParams = useMemo(
     () => ({
       q: search || undefined,
+      code: filterCode || undefined,
+      name: filterName || undefined,
+      city: filterCity || undefined,
       subscription_status: statusLangganan || undefined,
       status_langganan: statusLangganan || undefined,
       status_jatuh_tempo: statusJatuhTempo || undefined,
@@ -287,7 +318,7 @@ export default function KelolaanOutletPage() {
       page,
       limit,
     }),
-    [search, statusLangganan, statusJatuhTempo, month, dueDateReference, dueDateStart, dueDateEnd, page],
+    [search, filterCode, filterName, filterCity, statusLangganan, statusJatuhTempo, month, dueDateReference, dueDateStart, dueDateEnd, page, limit],
   );
 
   const overviewQuery = useGlobalOutletsQuery(
@@ -1164,6 +1195,24 @@ export default function KelolaanOutletPage() {
                   <span className="text-xs font-medium text-gray-500">
                     Menampilkan {total === 0 ? 0 : (page - 1) * limit + 1}–{Math.min(page * limit, total)} dari {total} data
                   </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500">Tampilkan</span>
+                    <select
+                      value={limit}
+                      onChange={(e) => {
+                        setLimit(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 outline-none focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                    >
+                      {[10, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                    
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1347,14 +1396,7 @@ function OverviewTable({
             }}
           >
             {isAdmin && (
-              <td 
-                className="px-4 py-4 align-top text-center cursor-pointer"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelectRow(item.id);
-                }}
-              >
+              <td className="px-4 py-4 align-top text-center">
                 <input
                   type="checkbox"
                   checked={selectedIds.includes(item.id)}

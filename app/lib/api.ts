@@ -2094,7 +2094,8 @@ export interface PartnerItem {
   address?: string | null;
   pic_name?: string | null;
   bank_account_masked?: string | null;
-  status: "ACTIVE" | "INACTIVE";
+  status: "ACTIVE" | "INACTIVE" | "DELETED";
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -2159,6 +2160,8 @@ export interface PartnerReferralListData {
 
 export interface PartnerListParams {
   search?: string;
+  status?: string;
+  trash?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -2191,7 +2194,7 @@ export interface CreatePartnerPayload {
   email?: string;
   address?: string;
   bank_account?: string;
-  status?: "ACTIVE" | "INACTIVE";
+  status?: "ACTIVE" | "INACTIVE" | "DELETED";
   // Sprint 15a — TUPOKSI referral lead & aktivitas mitra ada di Sales, jadi
   // Sales bisa langsung jadi PIC mitra yang dia buat sendiri (atomic saat create),
   // tanpa perlu Supervisor assign terpisah lewat assignPartnerPic.
@@ -2208,7 +2211,7 @@ export interface UpdatePartnerPayload {
   sub_district?: string;
   address?: string;
   bank_account?: string;
-  status?: "ACTIVE" | "INACTIVE";
+  status?: "ACTIVE" | "INACTIVE" | "DELETED";
 }
 
 export interface AssignPartnerPicPayload {
@@ -2294,10 +2297,12 @@ export async function deletePartnerType(id: number): Promise<void> {
 }
 
 export async function listPartners(
-  params: PartnerListParams = {},
+  params: { search?: string; limit?: number; offset?: number; status?: string; trash?: boolean } = {},
 ): Promise<PartnerListData> {
   const qs = buildQueryString({
     search: params.search,
+    status: params.status,
+    trash: params.trash ? "true" : undefined,
     limit: params.limit,
     offset: params.offset,
   });
@@ -2359,7 +2364,33 @@ export async function deactivatePartner(partnerId: number): Promise<void> {
     headers: getAuthHeaders(),
   });
 
-  await handleResponse(res);
+  if (res.status !== 204 && res.status !== 200) {
+    await handleResponse(res);
+  }
+}
+
+export async function restorePartner(partnerId: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}/restore`, {
+    method: "POST",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (res.status !== 200) {
+    await handleResponse(res);
+  }
+}
+
+export async function permanentDeletePartner(partnerId: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/partners/${partnerId}/permanent`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (res.status !== 204 && res.status !== 200) {
+    await handleResponse(res);
+  }
 }
 
 export async function getActivePartnerAssignment(

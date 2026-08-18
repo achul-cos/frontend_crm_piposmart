@@ -775,7 +775,7 @@ export default function FormInputDummyPage() {
             />
 
             <div className="space-y-1">
-              <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+              <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-800">
                 <FieldIcon type="sales" />
                 PIC Sales *
               </label>
@@ -853,7 +853,7 @@ function OutletRowsInput({
   return (
     <div className="space-y-2 rounded-xl border border-red-100 bg-white p-3">
       <div className="flex items-center justify-between gap-2">
-        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-800">
           <FieldIcon type="outlet" />
           Outlet Owner *
         </label>
@@ -884,7 +884,7 @@ function OutletRowsInput({
               </div>
 
               <label className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-gray-400">
+                <span className="text-[10px] font-black uppercase text-gray-800">
                   Nama Outlet
                 </span>
 
@@ -894,7 +894,7 @@ function OutletRowsInput({
                     value={item.namaOutlet}
                     onChange={(event) => onUpdate(index, "namaOutlet", event.target.value)}
                     placeholder="Contoh: Azzahra Laundry Cabang 1"
-                    className={`min-w-0 flex-1 rounded-xl border bg-white p-2.5 text-xs font-bold outline-none focus:border-[#C92C1E] ${
+                    className={`min-w-0 flex-1 rounded-xl border bg-white p-2.5 text-xs font-bold text-gray-900 outline-none focus:border-[#C92C1E] ${
                       error && index === 0 ? "border-red-500 bg-red-50" : "border-gray-200"
                     }`}
                   />
@@ -966,7 +966,7 @@ function SourceTagSelect({
 }) {
   return (
     <div className="space-y-2">
-      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-800">
         <FieldIcon type="brand" />
         {label}
       </label>
@@ -1044,7 +1044,7 @@ function PhoneInput({
 
   return (
     <div className="space-y-1">
-      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-800">
         <FieldIcon type="phone" />
         {label}
       </label>
@@ -1075,7 +1075,7 @@ function PhoneInput({
           inputMode="tel"
           autoComplete="tel"
           placeholder={selectedCountry.placeholder}
-          className="min-w-0 flex-1 bg-white px-3 py-2.5 text-xs font-bold outline-none"
+          className="min-w-0 flex-1 bg-white px-3 py-2.5 text-xs font-bold text-gray-900 outline-none"
           title="Pilih negara lalu isi nomor telepon"
         />
       </div>
@@ -1111,7 +1111,7 @@ function FormInput({
 }) {
   return (
     <div className="space-y-1">
-      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-400">
+      <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-gray-800">
         <FieldIcon type={icon} />
         {label}
       </label>
@@ -1122,7 +1122,7 @@ function FormInput({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className={`w-full rounded-xl border bg-white p-2.5 text-xs font-bold focus:outline-none focus:border-[#C92C1E] ${
+        className={`w-full rounded-xl border bg-white p-2.5 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#C92C1E] ${
           error ? "border-red-500 bg-red-50" : "border-gray-200"
         }`}
       />

@@ -1037,7 +1037,7 @@ export default function LeadTrashPage() {
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
-              <span className="text-xs font-medium text-gray-500">baris</span>
+              
             </div>
           </div>
 

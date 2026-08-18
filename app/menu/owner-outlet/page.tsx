@@ -278,6 +278,15 @@ function SpinnerIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+function formatToDatetimeLocal(isoString?: string | null) {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60 * 1000);
+  return localDate.toISOString().slice(0, 16);
+}
+
 export default function OwnerPage() {
   usePageTitle("Owner");
   const router = useRouter();
@@ -297,6 +306,7 @@ export default function OwnerPage() {
     name: "",
     brand_name: "",
     phone: "",
+    province: "",
     city: "",
     status: "",
   });
@@ -325,6 +335,7 @@ export default function OwnerPage() {
     name: "",
     brand_name: "",
     phone: "",
+    email: "",
     province: "",
     city: "",
     district: "",
@@ -347,6 +358,7 @@ export default function OwnerPage() {
     name: "",
     brand_name: "",
     phone: "",
+    email: "",
     province: "",
     city: "",
     district: "",
@@ -426,6 +438,7 @@ export default function OwnerPage() {
       name: filters.name,
       brand_name: filters.brand_name,
       phone: filters.phone,
+      province: filters.province,
       city: filters.city,
       status: filters.status || undefined,
       subscription_status: filters.status || undefined,
@@ -441,6 +454,7 @@ export default function OwnerPage() {
   const { data: ownersData, isLoading, refetch: refetchOwners } = useOwnersQuery(ownersQueryParams);
   const owners = ownersData?.data.items ?? [];
   const total = ownersData?.data.pagination?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pagination.limit));
 
   const loadOwners = useCallback(() => {
     void refetchOwners();
@@ -515,7 +529,7 @@ export default function OwnerPage() {
       });
       setIsAddOwnerModalOpen(false);
       setAddOwnerForm({
-        code: "", name: "", brand_name: "", phone: "", province: "", city: "", district: "",
+        code: "", name: "", brand_name: "", phone: "", email: "", province: "", city: "", district: "",
         sub_district: "", address: "", outlet_name: "", outlet_phone: "", outlet_province: "",
         outlet_city: "", outlet_district: "", outlet_sub_district: "", outlet_address: "",
       });
@@ -562,6 +576,7 @@ export default function OwnerPage() {
       name: owner.name,
       brand_name: owner.brand_name || "",
       phone: owner.phone || "",
+      email: owner.email || "",
       province: owner.province || "",
       city: owner.city || "",
       district: owner.district || "",
@@ -579,8 +594,9 @@ export default function OwnerPage() {
       await withLoading(
         () => updateOwner(editOwnerForm.id, {
             code: editOwnerForm.code, name: editOwnerForm.name, brand_name: editOwnerForm.brand_name,
-            phone: editOwnerForm.phone, province: editOwnerForm.province, city: editOwnerForm.city,
+            phone: editOwnerForm.phone, email: editOwnerForm.email, province: editOwnerForm.province, city: editOwnerForm.city,
             district: editOwnerForm.district, sub_district: editOwnerForm.sub_district, address: editOwnerForm.address,
+            created_at: editOwnerForm.created_at || undefined,
         }),
         { label: "Menyimpan perubahan owner..." }
       );
@@ -939,8 +955,8 @@ export default function OwnerPage() {
   const uniqueNames = Array.from(new Set(owners.map(o => o.name).filter(Boolean))) as string[];
   const uniqueBrands = Array.from(new Set(owners.map(o => o.brand_name).filter(Boolean))) as string[];
   const uniquePhones = Array.from(new Set(owners.map(o => o.phone).filter(Boolean))) as string[];
-  const uniqueCities = Array.from(new Set(owners.map(o => o.city).filter(Boolean))) as string[];
-  const ownerStatusOptions = ["BERLANGGANAN", "TRIAL", "TIDAK BERLANGGANAN"];
+
+  const ownerStatusOptions = ["BERLANGGANAN", "TRIAL", "TIDAK BERLANGGANAN", "NEW"];
 
   const filterInputs = (
     <div className="grid grid-cols-2 gap-4 w-full md:grid-cols-3 lg:grid-cols-7">
@@ -974,16 +990,24 @@ export default function OwnerPage() {
         }}
         options={uniquePhones}
       />
-      <AutocompleteFilter
-        label="Wilayah / Lokasi"
-        placeholder="Semua Wilayah"
-        value={filters.city || ""}
-        onChange={(val) => {
-          setFilters(prev => ({ ...prev, city: val }));
-          setPagination(prev => ({ ...prev, page: 1 }));
-        }}
-        options={uniqueCities}
-      />
+      <div className="flex flex-col gap-1.5 w-full">
+        <span className="text-xs font-semibold text-black">Provinsi</span>
+        <select
+          value={filters.province || ""}
+          onChange={(e) => {
+            setFilters((prev) => ({ ...prev, province: e.target.value }));
+            setPagination((prev) => ({ ...prev, page: 1 }));
+          }}
+          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+        >
+          <option value="">Semua Provinsi</option>
+          {provinces.map((prov) => (
+            <option key={prov.id} value={prov.name}>
+              {prov.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="flex flex-col gap-1.5 w-full">
         <span className="text-xs font-semibold text-black">Status</span>
         <select
@@ -1200,7 +1224,7 @@ export default function OwnerPage() {
                     {renderSortableHeader("phone", "Kontak")}
                     {renderSortableHeader("city", "Lokasi")}
                     <th className="px-4 py-4 font-bold text-left">Saldo Aplikasi</th>
-                    {renderSortableHeader("created_at", "Tgl. Dibuat")}
+                    {renderSortableHeader("created_at", "Tanggal Registrasi")}
                     {renderSortableHeader("status", "Status")}
                     {renderSortableHeader("outlet_count", "Outlet")}
                     <th className="px-4 py-4 text-center font-bold">Aksi</th>
@@ -1239,20 +1263,23 @@ export default function OwnerPage() {
                           onMouseDown={(e) => {
                             if ((e.target as HTMLElement).closest('button, a')) return;
                             if (e.button !== 0) return;
-                            handleRowMouseDown(owner.id, isSelected);
+                            setIsDragging(true);
+                            setDragMode(isSelected ? "deselect" : "select");
+                            setSelectedOwnerIds((prev) =>
+                              isSelected ? prev.filter((id) => id !== owner.id) : [...prev, owner.id]
+                            );
                           }}
                           onMouseEnter={() => {
-                            handleRowMouseEnter(owner.id);
+                            if (isDragging && dragMode) {
+                              setSelectedOwnerIds((prev) => {
+                                if (dragMode === "select" && !prev.includes(owner.id)) return [...prev, owner.id];
+                                if (dragMode === "deselect" && prev.includes(owner.id)) return prev.filter((id) => id !== owner.id);
+                                return prev;
+                              });
+                            }
                           }}
                         >
-                          <td
-                            className="px-4 py-4 text-center cursor-pointer"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleSelectRow(owner.id);
-                            }}
-                          >
+                          <td className="px-4 py-4 text-center">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -1315,10 +1342,7 @@ export default function OwnerPage() {
                                 onClick={() => handleOpenEditOwner(owner)}
                                 title="Edit Owner"
                               />
-                              <DeleteActionButton
-                                onClick={() => handleDeleteOwner(owner.id)}
-                                title="Hapus Owner"
-                              />
+
                             </RowActionGroup>
                           </td>
                         </tr>
@@ -1355,7 +1379,7 @@ export default function OwnerPage() {
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                   </select>
-                  <span className="text-xs font-medium text-gray-500">baris</span>
+                  
                 </div>
               </div>
 
@@ -1374,7 +1398,7 @@ export default function OwnerPage() {
                 </button>
 
                 <span className="text-xs font-bold text-gray-700">
-                  Halaman {pagination.page}
+                  Halaman {pagination.page} / {totalPages}
                 </span>
 
                 <button
@@ -1425,7 +1449,7 @@ export default function OwnerPage() {
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kode Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1442,7 +1466,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nama Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1459,7 +1483,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nama Brand / Usaha
                 </span>
                 <input
@@ -1478,7 +1502,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nomor Kontak
                 </span>
                 <input
@@ -1494,7 +1518,23 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
+                  Email Owner
+                </span>
+                <input
+                  type="email"
+                  value={addOwnerForm.email || ""}
+                  onChange={(e) =>
+                    setAddOwnerForm({ ...addOwnerForm, email: e.target.value })
+                  }
+                  placeholder="Contoh: owner@email.com"
+                  className={modalInputClass}
+                  disabled={isAddOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Provinsi
                 </span>
                 <select
@@ -1520,7 +1560,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kota/Kabupaten
                 </span>
                 <select
@@ -1551,7 +1591,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kecamatan
                 </span>
                 <select
@@ -1581,7 +1621,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800">
                   Kelurahan/Desa
                 </span>
                 <select
@@ -1609,7 +1649,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800">
                   Alamat Lengkap
                 </span>
                 <textarea
@@ -1636,7 +1676,7 @@ export default function OwnerPage() {
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2 md:col-span-2">
-                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nama Outlet Pertama{" "}
                   <span className="text-[#C92C1E]">*</span>
                 </span>
@@ -1657,7 +1697,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nomor Telepon Outlet
                 </span>
                 <input
@@ -1676,7 +1716,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Provinsi Outlet
                 </span>
                 <select
@@ -1702,7 +1742,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kota/Kabupaten Outlet
                 </span>
                 <select
@@ -1733,7 +1773,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kecamatan Outlet
                 </span>
                 <select
@@ -1763,7 +1803,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kelurahan/Desa Outlet
                 </span>
                 <select
@@ -1791,7 +1831,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Alamat Lengkap Outlet
                 </span>
                 <textarea
@@ -1863,19 +1903,28 @@ export default function OwnerPage() {
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Tgl Dibuat
                 </span>
                 <input
-                  type="text"
-                  value={editOwnerForm.created_at ? new Date(editOwnerForm.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "-"}
-                  className={modalInputClass + " bg-gray-100 cursor-not-allowed text-gray-500"}
-                  disabled
+                  type="datetime-local"
+                  value={editOwnerForm.created_at ? formatToDatetimeLocal(editOwnerForm.created_at) : ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const isoString = val ? new Date(val).toISOString() : "";
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      created_at: isoString,
+                    });
+                  }}
+                  className={modalInputClass}
+                  required
+                  disabled={isEditOwnerSubmitting}
                 />
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kode Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1895,7 +1944,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nama Owner <span className="text-[#C92C1E]">*</span>
                 </span>
                 <input
@@ -1915,7 +1964,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nama Brand / Usaha
                 </span>
                 <input
@@ -1934,7 +1983,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Nomor Kontak
                 </span>
                 <input
@@ -1953,7 +2002,26 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
+                  Email Owner
+                </span>
+                <input
+                  type="email"
+                  value={editOwnerForm.email || ""}
+                  onChange={(e) =>
+                    setEditOwnerForm({
+                      ...editOwnerForm,
+                      email: e.target.value,
+                    })
+                  }
+                  placeholder="Contoh: owner@email.com"
+                  className={modalInputClass}
+                  disabled={isEditOwnerSubmitting}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Provinsi
                 </span>
                 <select
@@ -1979,7 +2047,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500 dark:text-slate-200">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-slate-200">
                   Kota/Kabupaten
                 </span>
                 <select
@@ -2010,7 +2078,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800">
                   Kecamatan
                 </span>
                 <select
@@ -2040,7 +2108,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800">
                   Kelurahan/Desa
                 </span>
                 <select
@@ -2068,7 +2136,7 @@ export default function OwnerPage() {
               </label>
 
               <label className="space-y-2 md:col-span-2">
-                <span className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+                <span className="owner-modal-label text-[11px] font-black uppercase tracking-wide text-gray-800">
                   Alamat Lengkap
                 </span>
                 <textarea

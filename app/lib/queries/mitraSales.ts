@@ -7,6 +7,8 @@ import {
   createPartnerInteraction,
   createPartnerReferral,
   deactivatePartner,
+  permanentDeletePartner,
+  restorePartner,
   getActivePartnerAssignment,
   getCatalogPackages,
   getCatalogPlans,
@@ -113,7 +115,7 @@ export function usePartnerTypeCommissionRulesQuery(
 
 // ─── Partners ───────────────────────────────────────────────────────────
 
-export function usePartnersQuery(params: PartnerListParams, enabled = true) {
+export function usePartnersQuery(params: PartnerListParams = {}, enabled = true) {
   return useQuery({
     queryKey: partnerKeys.list(params),
     queryFn: () => listPartners(params),
@@ -153,6 +155,22 @@ export function useDeactivatePartner() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deactivatePartner(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: partnerKeys.all }),
+  });
+}
+
+export function useRestorePartner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => restorePartner(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: partnerKeys.all }),
+  });
+}
+
+export function usePermanentDeletePartner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => permanentDeletePartner(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: partnerKeys.all }),
   });
 }

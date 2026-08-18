@@ -357,59 +357,7 @@ function ConfirmDialog({
   );
 }
 
-function BulkActionBar({
-  count,
-  isTrash,
-  onClear,
-  onDelete,
-  onRestore,
-  onForceDelete,
-}: {
-  count: number;
-  isTrash: boolean;
-  onClear: () => void;
-  onDelete: () => void;
-  onRestore: () => void;
-  onForceDelete: () => void;
-}) {
-  return (
-    <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-gray-900 px-5 py-3 text-white shadow-2xl">
-      <span className="text-xs font-bold">{count} data dipilih</span>
 
-      {isTrash ? (
-        <>
-          <button
-            onClick={onRestore}
-            className="rounded-lg border border-white/30 px-3 py-1.5 text-xs font-black transition hover:bg-white/10"
-          >
-            Pulihkan Massal
-          </button>
-
-          <button
-            onClick={onForceDelete}
-            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-black transition hover:bg-red-700"
-          >
-            Hapus Permanen
-          </button>
-        </>
-      ) : (
-        <button
-          onClick={onDelete}
-          className="rounded-lg border border-white/30 px-3 py-1.5 text-xs font-black transition hover:bg-white/10"
-        >
-          Hapus Massal
-        </button>
-      )}
-
-      <button
-        onClick={onClear}
-        className="text-xs font-bold text-white/60 hover:text-white"
-      >
-        Batal
-      </button>
-    </div>
-  );
-}
 
 export default function PaketLanggananPage() {
   usePageTitle("Katalog");
@@ -493,6 +441,38 @@ export default function PaketLanggananPage() {
 
   const [viewStack, setViewStack] = useState<ViewTarget[]>([]);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragAction, setDragAction] = useState(false);
+
+  useEffect(() => {
+    const handleMouseUp = () => setIsDragging(false);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleRowMouseDown = (id: number) => {
+    const willSelect = !selectedIds.has(id);
+    setIsDragging(true);
+    setDragAction(willSelect);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (willSelect) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleRowMouseEnter = (id: number) => {
+    if (isDragging) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (dragAction) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
+  };
 
   const pushView = (target: ViewTarget) =>
     setViewStack((prev) => [...prev, target]);
@@ -728,22 +708,8 @@ export default function PaketLanggananPage() {
             <h2 className="text-xl font-bold text-gray-900">Daftar {entityLabel}</h2>
             <p className="mt-1 text-sm text-gray-500">Daftar seluruh data {entityLabel.toLowerCase()} dalam katalog.</p>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() =>
-                  changeScope(scope === "DELETED" ? "ACTIVE" : "DELETED")
-                }
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
-                  scope === "DELETED"
-                    ? "border-gray-800 bg-gray-800 text-white"
-                    : "border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
-                }`}
-              >
-                <Trash2 className="h-4 w-4" />
-                {scope === "DELETED" ? "Kembali" : "Trash"}
-              </button>
-
+          <div className="flex w-full overflow-x-auto flex-nowrap items-center gap-3 pb-2">
+            <div className="flex flex-nowrap items-center gap-3 w-full sm:w-auto">
               {scope !== "DELETED" && (
                 <button
                   onClick={() => {
@@ -751,11 +717,73 @@ export default function PaketLanggananPage() {
                     else if (entity === "plan") setPlanForm({ mode: "create" });
                     else setPromotionForm({ mode: "create" });
                   }}
-                  className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#A82216] active:scale-[0.98]"
+                  className="flex shrink-0 items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#A82216] active:scale-[0.98]"
                 >
                   <Plus className="h-4 w-4" />
                   {addLabel}
                 </button>
+              )}
+              
+
+              {selectedIds.size > 0 && (
+                <>
+                  <div className="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm">
+                    <span className="flex items-center text-[#C92C1E]">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                    </span>
+                    {selectedIds.size} terpilih
+                  </div>
+
+                  {scope === "DELETED" ? (
+                    <>
+                      <button
+                        onClick={() =>
+                          setConfirmTarget({
+                            kind: "restore",
+                            ids: Array.from(selectedIds),
+                          })
+                        }
+                        className="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50"
+                      >
+                        <ArchiveRestore className="h-4 w-4 text-emerald-600" />
+                        Pulihkan
+                      </button>
+                      <button
+                        onClick={() =>
+                          setConfirmTarget({
+                            kind: "forceDelete",
+                            ids: Array.from(selectedIds),
+                          })
+                        }
+                        className="flex shrink-0 items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition hover:bg-red-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Hapus Permanen
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        setConfirmTarget({
+                          kind: "delete",
+                          ids: Array.from(selectedIds),
+                        })
+                      }
+                      className="flex shrink-0 items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm transition hover:bg-red-100"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Pindahkan ke Sampah
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={resetSelection}
+                    className="flex shrink-0 h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50 hover:text-gray-700"
+                    title="Batal"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -935,12 +963,18 @@ export default function PaketLanggananPage() {
                 </tr>
               ) : entity === "package" ? (
                 packages.map((p) => (
-                  <tr key={p.id} className="transition-colors hover:bg-gray-50">
+                  <tr 
+                    key={p.id} 
+                    className="transition-colors hover:bg-gray-50 cursor-pointer select-none"
+                    onMouseDown={() => handleRowMouseDown(p.id)}
+                    onMouseEnter={() => handleRowMouseEnter(p.id)}
+                  >
                     <td className="px-4 py-3.5 text-center align-top">
                       <input
                         type="checkbox"
+                        readOnly
                         checked={selectedIds.has(p.id)}
-                        onChange={() => toggleSelect(p.id)}
+                        className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       />
                     </td>
 
@@ -949,12 +983,9 @@ export default function PaketLanggananPage() {
                     </td>
 
                     <td className="px-4 py-3.5 align-top">
-                      <Link
-                        href={`/menu/paket-langganan/packages/${p.id}`}
-                        className="font-black text-gray-800 transition-colors hover:text-[#C92C1E]"
-                      >
+                      <span className="font-black text-gray-800">
                         {p.name}
-                      </Link>
+                      </span>
                     </td>
 
                     <td className="px-4 py-3.5 align-top">{p.level_order}</td>
@@ -997,7 +1028,12 @@ export default function PaketLanggananPage() {
                       </div>
                     </td>
 
-                    <td className="px-4 py-3.5 align-top">
+                    <td 
+                      className="px-4 py-3.5 align-top"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <RowActions
                         scope={scope}
                         active={p.active}
@@ -1024,12 +1060,18 @@ export default function PaketLanggananPage() {
                 ))
               ) : entity === "plan" ? (
                 plans.map((p) => (
-                  <tr key={p.id} className="transition-colors hover:bg-gray-50">
+                  <tr 
+                    key={p.id} 
+                    className="transition-colors hover:bg-gray-50 cursor-pointer select-none"
+                    onMouseDown={() => handleRowMouseDown(p.id)}
+                    onMouseEnter={() => handleRowMouseEnter(p.id)}
+                  >
                     <td className="px-4 py-3.5 text-center align-top">
                       <input
                         type="checkbox"
+                        readOnly
                         checked={selectedIds.has(p.id)}
-                        onChange={() => toggleSelect(p.id)}
+                        className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       />
                     </td>
 
@@ -1038,12 +1080,9 @@ export default function PaketLanggananPage() {
                     </td>
 
                     <td className="px-4 py-3.5 align-top">
-                      <Link
-                        href={`/menu/paket-langganan/plans/${p.id}`}
-                        className="font-black text-gray-800 transition-colors hover:text-[#C92C1E]"
-                      >
+                      <span className="font-black text-gray-800">
                         {p.name}
-                      </Link>
+                      </span>
                     </td>
 
                     <td className="px-4 py-3.5 align-top">
@@ -1064,7 +1103,12 @@ export default function PaketLanggananPage() {
                       <StatusBadge active={p.active} />
                     </td>
 
-                    <td className="px-4 py-3.5 align-top">
+                    <td 
+                      className="px-4 py-3.5 align-top"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <RowActions
                         scope={scope}
                         active={p.active}
@@ -1091,12 +1135,18 @@ export default function PaketLanggananPage() {
                 ))
               ) : (
                 promotions.map((p) => (
-                  <tr key={p.id} className="transition-colors hover:bg-gray-50">
+                  <tr 
+                    key={p.id} 
+                    className="transition-colors hover:bg-gray-50 cursor-pointer select-none"
+                    onMouseDown={() => handleRowMouseDown(p.id)}
+                    onMouseEnter={() => handleRowMouseEnter(p.id)}
+                  >
                     <td className="px-4 py-3.5 text-center align-top">
                       <input
                         type="checkbox"
+                        readOnly
                         checked={selectedIds.has(p.id)}
-                        onChange={() => toggleSelect(p.id)}
+                        className="pointer-events-none rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
                       />
                     </td>
 
@@ -1105,12 +1155,9 @@ export default function PaketLanggananPage() {
                     </td>
 
                     <td className="px-4 py-3.5 align-top">
-                      <Link
-                        href={`/menu/paket-langganan/promotions/${p.id}`}
-                        className="font-black text-gray-800 transition-colors hover:text-[#C92C1E]"
-                      >
+                      <span className="font-black text-gray-800">
                         {p.name}
-                      </Link>
+                      </span>
                     </td>
 
                     <td className="px-4 py-3.5 align-top">
@@ -1137,7 +1184,12 @@ export default function PaketLanggananPage() {
                       <StatusBadge active={p.active} />
                     </td>
 
-                    <td className="px-4 py-3.5 align-top">
+                    <td 
+                      className="px-4 py-3.5 align-top"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <RowActions
                         scope={scope}
                         active={p.active}
@@ -1190,31 +1242,6 @@ export default function PaketLanggananPage() {
         <AnalyticsTab />
       )}
 
-      {selectedIds.size > 0 && (
-        <BulkActionBar
-          count={selectedIds.size}
-          isTrash={scope === "DELETED"}
-          onClear={resetSelection}
-          onDelete={() =>
-            setConfirmTarget({
-              kind: "delete",
-              ids: Array.from(selectedIds),
-            })
-          }
-          onRestore={() =>
-            setConfirmTarget({
-              kind: "restore",
-              ids: Array.from(selectedIds),
-            })
-          }
-          onForceDelete={() =>
-            setConfirmTarget({
-              kind: "forceDelete",
-              ids: Array.from(selectedIds),
-            })
-          }
-        />
-      )}
 
       {packageForm && (
         <PackageFormModal
@@ -1354,7 +1381,7 @@ function RowActions({
         className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
         title="Lihat Detail"
       >
-        <Eye className="h-4 w-4" />
+        <Eye className="h-5 w-5" strokeWidth={2.25} />
       </button>
 
       <button
@@ -1378,13 +1405,7 @@ function RowActions({
         <Pencil className="h-4 w-4" />
       </button>
 
-      <button
-        onClick={onDelete}
-        className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-700"
-        title="Hapus"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+
     </div>
   );
 }
