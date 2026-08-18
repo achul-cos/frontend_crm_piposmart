@@ -33,7 +33,7 @@ export default function OwnerSearchPicker({
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const res = await fetchOwners({ q: query.trim(), limit: 8 });
+        const res = await fetchOwners({ q: query.trim(), limit: 8, sort: "name" });
         setResults(res.data.items);
       } catch {
         setResults([]);

@@ -222,7 +222,7 @@ function OutletDetailPageInner() {
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Koneksi outlet ini ke owner dan lead</p>
               </div>
             </div>
-            <div className="p-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="p-5 grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Owner Terkait</p>
                 <p className="mt-2 text-base font-black text-gray-900">{detail.owner.name || "-"}</p>
@@ -255,6 +255,19 @@ function OutletDetailPageInner() {
                   </Link>
                 ) : null}
               </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-col justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">PIC Sales Terakhir</p>
+                  <p className="mt-2 text-base font-black text-gray-900">
+                    {detail.latest_pic || lead?.active_sales?.name || (lead?.current_owner_role === "SALES" ? lead?.current_owner?.name : null) || "Belum Ada PIC"}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-gray-500">
+                    {detail.latest_pic || lead?.active_sales?.name
+                      ? "User penanggung jawab sales/CS terkait"
+                      : "Belum ada PIC Sales yang ditugaskan"}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -283,7 +296,6 @@ function OutletDetailPageInner() {
             <FieldBox label="Kode Outlet" value={detail.code} />
             <FieldBox label="Nama Outlet" value={detail.name} />
             <FieldBox label="Telepon" value={formatPhoneDisplay(detail.phone)} />
-            <FieldBox label="Nama Penginput" value={detail.entered_by_name || "-"} />
             <FieldBox label="Tanggal Dibuat Outlet" value={formatDate(detail.created_at)} />
             <FieldBox label="Provinsi" value={detail.province} />
             <FieldBox label="Kota/Kabupaten" value={detail.city} />

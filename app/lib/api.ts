@@ -1,4 +1,4 @@
-import { clearPersistedQueryCache } from "@/app/lib/queryPersistence";
+import { clearPersistedQueryCache } from "./queryPersistence";
 import { frontendEnv } from "@/app/lib/env";
 
 const API_BASE_URL = frontendEnv.apiBaseUrl;
@@ -2858,6 +2858,8 @@ export interface OutletOverviewItem {
   entered_by_user_id?: number;
   entered_by_name?: string;
   subscription_summary: OutletSubscriptionSummary;
+  latest_pic?: string;
+  creation_status: string;
   created_at: string;
   updated_at: string;
 }
@@ -2881,6 +2883,8 @@ export interface ListGlobalOutletsParams {
   sort?: string;
   start_date?: string;
   end_date?: string;
+  subscription_status?: string;
+  creation_status?: string;
 }
 
 export type OutletScope = "active" | "trash" | "unscoped";
@@ -2982,6 +2986,42 @@ export async function downloadGlobalOutletExportFile(
   if (!res.ok) {
     const errorText = await res.text();
     throw new Error(errorText || "Gagal mengunduh file export outlet");
+  }
+
+  return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
+}
+
+export async function downloadOutletSubscriptionMatrixExportFile(
+  params: Record<string, string | number | undefined> = {},
+): Promise<{ blob: Blob; disposition: string | null }> {
+  const qs = buildQueryString({ ...params });
+  const res = await fetch(`${API_BASE_URL}/api/v1/outlets/subscription-statuses/export-matrix${qs}`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || "Gagal mengunduh file matrix berlangganan");
+  }
+
+  return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
+}
+
+export async function downloadOutletSubscriptionImportTemplateFile(): Promise<{
+  blob: Blob;
+  disposition: string | null;
+}> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/outlets/subscription-statuses/import-template`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || "Gagal mengunduh template import langganan");
   }
 
   return { blob: await res.blob(), disposition: res.headers.get("Content-Disposition") };
@@ -3135,6 +3175,7 @@ export interface OutletSubscriptionStatusItem {
   subscription_start_date?: string;
   subscription_end_date?: string;
   package_plan: PackagePlanBrief;
+  creation_status: string;
   created_at: string;
   updated_at: string;
 }
@@ -3164,9 +3205,12 @@ export interface ListOutletSubscriptionStatusesParams {
   due_date_reference?: string;
   due_date_start?: string;
   due_date_end?: string;
+  start_date_start?: string;
+  start_date_end?: string;
   page?: number;
   limit?: number;
   sort?: string;
+  creation_status?: string;
 }
 
 export async function listOutletSubscriptionStatuses(
@@ -3197,6 +3241,7 @@ export interface OutletDetail {
   address?: string;
   status: string;
   subscription_summary: OutletSubscriptionSummary;
+  latest_pic?: string;
   entered_by_user_id?: number;
   entered_by_name?: string;
   created_at: string;

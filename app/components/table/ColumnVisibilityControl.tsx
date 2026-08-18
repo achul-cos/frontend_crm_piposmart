@@ -70,6 +70,9 @@ export default function ColumnVisibilityControl({
         label: readHeaderLabel(cell, `Kolom ${index + 1}`),
       }));
 
+      // if no headers found yet, might still be rendering
+      if (headers.length === 0) return;
+
       setColumns(headers);
 
       let initialHidden: number[] | null = null;
@@ -102,6 +105,8 @@ export default function ColumnVisibilityControl({
         const allowed = new Set(headers.map((c) => c.index));
         return current.filter((idx) => allowed.has(idx));
       });
+
+
     };
 
     const attachToTable = (table: HTMLElement) => {

@@ -78,26 +78,6 @@ async function fetchOwnerTopups(ownerId: number): Promise<WalletPaymentItem[]> {
   return normalizeItems<WalletPaymentItem>(response.data);
 }
 
-interface OwnerHistoryItem {
-  id: number;
-  action: string;
-  entity_type: string;
-  entity_id: number;
-  actor?: { id?: number; name?: string };
-  request_id?: string;
-  before?: Record<string, unknown> | null;
-  after?: Record<string, unknown> | null;
-  created_at: string;
-}
-
-async function fetchOwnerHistory(ownerId: number): Promise<OwnerHistoryItem[]> {
-  const response = await authFetchJson<{ data?: { items?: OwnerHistoryItem[] } | OwnerHistoryItem[] }>(
-    `/owners/${ownerId}/history`,
-  );
-
-  return normalizeItems<OwnerHistoryItem>(response.data);
-}
-
 function paymentStatusBadgeClass(status?: string | null) {
   switch (String(status || "").toUpperCase()) {
     case "ACCEPTED":
@@ -153,9 +133,9 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
   const [lead, setLead] = useState<BackendLead | null>(null);
   const [outlets, setOutlets] = useState<BackendOutlet[]>([]);
   const [topups, setTopups] = useState<WalletPaymentItem[]>([]);
-  const [historyItems, setHistoryItems] = useState<OwnerHistoryItem[]>([]);
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [subscriptions, setSubscriptions] = useState<OwnerSubscriptionItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Add Modal State
@@ -192,14 +172,13 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [ownerRes, outletsData, topupData, transferData, subData, leadData, historyData] = await Promise.all([
+      const [ownerRes, outletsData, topupData, transferData, subData, leadData] = await Promise.all([
         fetchOwnerDetail(ownerId),
         fetchOwnerOutlets(ownerId),
         fetchOwnerTopups(ownerId).catch(() => []),
         listOwnerTransfers(ownerId, { all: true }).then((result) => result.items || []).catch(() => []),
         fetchOwnerSubscriptions(ownerId).catch(() => []),
         findRelatedLead({ ownerId }).catch(() => null),
-        fetchOwnerHistory(ownerId).catch(() => []),
       ]);
       setOwner(ownerRes.data);
       setLead(leadData);
@@ -207,7 +186,6 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
       setTopups(topupData);
       setTransfers(transferData);
       setSubscriptions(subData);
-      setHistoryItems(historyData);
     } catch (err) {
       console.error("Gagal memuat detail:", err);
     } finally {
@@ -323,11 +301,11 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editForm.code.trim() || !editForm.name.trim()) {
+    if (!editForm.name.trim()) {
       showError({
         title: "Data belum lengkap",
-        message: "Kode dan Nama Outlet wajib diisi.",
-        solution: "Lengkapi kode dan nama outlet terlebih dahulu.",
+        message: "Nama Outlet wajib diisi.",
+        solution: "Lengkapi nama outlet terlebih dahulu.",
       });
       return;
     }
@@ -431,7 +409,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             <div className="app-accent-surface rounded-2xl p-5 shadow-lg relative overflow-hidden flex flex-col justify-between">
               <div className="relative z-10">
                 <p className="app-accent-kicker text-xs font-bold uppercase tracking-wider mb-1">Total Outlet Terdaftar</p>
-                <h2 className="text-3xl font-black">{outlets.length}</h2>
+                <h2 className="text-3xl font-black">{outlets.length.toLocaleString("id-ID")}</h2>
               </div>
               <svg className="app-accent-decor absolute -bottom-4 -right-4 w-28 h-28 opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -1131,7 +1109,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !addForm.name.trim() || !addForm.code.trim()}
+                  disabled={isSubmitting || !addForm.name.trim()}
                   className="rounded-xl bg-[#C92C1E] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isSubmitting ? (
@@ -1185,7 +1163,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
-                    Kode Outlet <span className="text-[#C92C1E]">*</span>
+                    Kode Outlet <span className="text-gray-400 text-[10px] normal-case tracking-normal">(Opsional)</span>
                   </label>
                   <input
                     type="text"
@@ -1193,7 +1171,6 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                     onChange={(e) => setEditForm({...editForm, code: e.target.value})}
                     placeholder="Contoh: OUT-001"
                     className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-all text-gray-900"
-                    required
                     disabled={isEditSubmitting}
                   />
                 </div>
@@ -1332,7 +1309,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
                 <button
                   type="submit"
-                  disabled={isEditSubmitting || !editForm.name.trim() || !editForm.code.trim()}
+                  disabled={isEditSubmitting || !editForm.name.trim()}
                   className="rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isEditSubmitting ? (
