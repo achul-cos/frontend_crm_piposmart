@@ -7,6 +7,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  createInteraction,
+  createLeadClosing,
+  scheduleTraining,
+  isAdminRole,
+  isSalesRole,
+  isSupervisorRole,
+  readStoredUserSession,
   restoreOutletForOwner,
   forceDeleteOutletForOwner,
   bulkUpdateOutletsForOwner,
@@ -22,12 +29,16 @@ import {
 import { useGlobalOutletsQuery, useOutletSubscriptionStatusesQuery, outletKeys } from "@/app/lib/queries/outlets";
 import { usePackagesQuery, usePlansQuery } from "@/app/lib/queries/catalog";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
+import { useFeedback } from "@/app/components/feedback/FeedbackContext";
+import CallPage, { type CallCustomer, type CallFormResult } from "@/app/menu/lead/call/components";
 import OutletFormModal from "./OutletFormModal";
 import BulkEditOutletModal, { type BulkEditFields } from "./BulkEditOutletModal";
 import SubscriptionImportModal from "./SubscriptionImportModal";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
+import { useLocation } from "@/app/lib/useLocation";
 
 const OutletAnalytics = dynamic(() => import("./OutletAnalytics"), {
   ssr: false,
@@ -282,6 +293,29 @@ const TIME_STATUS_OPTIONS = [
   { value: "NO_PACKAGE", label: "No Package" },
 ];
 
+function toTitleCase(str?: string | null): string {
+  if (!str) return "";
+  const trimmed = str.trim();
+  if (!trimmed || trimmed === "—" || trimmed === "-") return "";
+
+  const acronyms: Record<string, string> = {
+    dki: "DKI",
+    di: "DI",
+    ntb: "NTB",
+    ntt: "NTT",
+    diy: "DIY",
+  };
+
+  return trimmed
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => {
+      if (acronyms[word]) return acronyms[word];
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
 function currentMonthValue(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -370,9 +404,12 @@ function readSession<T>(key: string, fallback: T): T {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function KelolaanOutletPage() {
-usePageTitle("Outlet");
+  usePageTitle("Outlet");
   const queryClient = useQueryClient();
+  const { showSuccess, showError } = useFeedback();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSales, setIsSales] = useState(false);
+  const [callModalCustomer, setCallModalCustomer] = useState<CallCustomer | null>(null);
   const [tableState, setTableState] = useState<TableState>(() =>
     readSession("tableState", "umum" as TableState)
   );
@@ -398,6 +435,12 @@ usePageTitle("Outlet");
   const [filterOwnerCode, setFilterOwnerCode] = useState(() => readSession("filterOwnerCode", ""));
   const [filterCity, setFilterCity] = useState(() => readSession("filterCity", ""));
   const [filterCityName, setFilterCityName] = useState(() => readSession("filterCityName", ""));
+  const [filterDistrict, setFilterDistrict] = useState(() => readSession("filterDistrict", ""));
+  const [filterEnteredBy, setFilterEnteredBy] = useState(() => readSession("filterEnteredBy", ""));
+  const [filterOverviewPic, setFilterOverviewPic] = useState<string[]>(() => readSession("filterOverviewPic", []));
+  const [filterOverviewStatus, setFilterOverviewStatus] = useState<string[]>(() =>
+    readSession("filterOverviewStatus", SUBSCRIPTION_STATUS_ITEMS.map((item) => item.value))
+  );
   const [filterPlan, setFilterPlan] = useState(() => readSession("filterPlan", ""));
   const [createdFrom, setCreatedFrom] = useState(() => readSession("createdFrom", ""));
   const [createdTo, setCreatedTo] = useState(() => readSession("createdTo", ""));
@@ -410,6 +453,14 @@ usePageTitle("Outlet");
   const [isExportingMatrix, setIsExportingMatrix] = useState(false);
   const [showSubscriptionImportModal, setShowSubscriptionImportModal] = useState(false);
 
+  const { provinces: geoProvinces, cities: geoCities, loadCitiesByProvinceName } = useLocation();
+
+  useEffect(() => {
+    if (filterCity) {
+      loadCitiesByProvinceName(filterCity);
+    }
+  }, [filterCity, loadCitiesByProvinceName]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -417,7 +468,8 @@ usePageTitle("Outlet");
         tableState, searchInput, search, statusLangganan, month,
         statusJatuhTempo, dueDateReference, dueDateStart, dueDateEnd,
         timeStatusFilter, creationStatusFilter, filterCode, filterName, filterOwner, filterOwnerCode,
-        filterCity, filterCityName, filterPlan, createdFrom, createdTo,
+        filterCity, filterCityName, filterDistrict, filterEnteredBy, filterOverviewPic, filterOverviewStatus,
+        filterPlan, createdFrom, createdTo,
         startDateStart, startDateEnd, page, limit,
       }));
     } catch { }
@@ -425,7 +477,8 @@ usePageTitle("Outlet");
     tableState, searchInput, search, statusLangganan, month,
     statusJatuhTempo, dueDateReference, dueDateStart, dueDateEnd,
     timeStatusFilter, creationStatusFilter, filterCode, filterName, filterOwner, filterOwnerCode,
-    filterCity, filterCityName, filterPlan, createdFrom, createdTo,
+    filterCity, filterCityName, filterDistrict, filterEnteredBy, filterOverviewPic, filterOverviewStatus,
+    filterPlan, createdFrom, createdTo,
     startDateStart, startDateEnd, page, limit,
   ]);
 
@@ -438,6 +491,7 @@ usePageTitle("Outlet");
   const [showForm, setShowForm] = useState<{ mode: "create" | "edit"; outlet?: BackendOutlet } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<{ id: number; ownerId: number; name: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; ownerId: number; name: string } | null>(null);
+  const [trashTarget, setTrashTarget] = useState<{ id: number; ownerId: number; name: string } | null>(null);
   const [isActing, setIsActing] = useState(false);
 
   const [showBulkEdit, setShowBulkEdit] = useState(false);
@@ -448,6 +502,10 @@ usePageTitle("Outlet");
   const [bulkResultMessage, setBulkResultMessage] = useState<string | null>(null);
 
   const overviewScope = tableState === "sampah" ? "trash" : "active";
+  const filterOverviewStatusParam =
+    filterOverviewStatus.length > 0 && filterOverviewStatus.length < SUBSCRIPTION_STATUS_ITEMS.length
+      ? filterOverviewStatus.join(",")
+      : undefined;
   const overviewParams = useMemo(
     () => ({
       q: search || undefined,
@@ -457,14 +515,17 @@ usePageTitle("Outlet");
       owner_keyword: filterOwner || filterOwnerCode || undefined,
       province: filterCity || undefined,
       city: filterCityName || undefined,
-      subscription_status: timeStatusFilter || undefined,
+      district: filterDistrict || undefined,
+      entered_by: filterEnteredBy || undefined,
+      pic: filterOverviewPic.length > 0 ? filterOverviewPic.join(",") : undefined,
+      subscription_status: filterOverviewStatusParam,
       creation_status: creationStatusFilter || undefined,
       page,
       limit,
       start_date: createdFrom || undefined,
       end_date: createdTo || undefined,
     }),
-    [search, filterCode, filterName, filterOwner, filterOwnerCode, filterCity, filterCityName, timeStatusFilter, creationStatusFilter, page, limit, createdFrom, createdTo],
+    [search, filterCode, filterName, filterOwner, filterOwnerCode, filterCity, filterCityName, filterDistrict, filterEnteredBy, filterOverviewPic, filterOverviewStatusParam, creationStatusFilter, page, limit, createdFrom, createdTo],
   );
   const statusLanggananParam =
     statusLangganan.length > 0 && statusLangganan.length < SUBSCRIPTION_STATUS_ITEMS.length
@@ -544,14 +605,38 @@ usePageTitle("Outlet");
     () => Array.from(new Set(overviewItems.map((i) => i.owner.code).filter(Boolean) as string[])),
     [overviewItems]
   );
-  const uniqueOverviewCities = useMemo(
-    () => Array.from(new Set(overviewItems.map((i) => i.city).filter(Boolean) as string[])),
-    [overviewItems]
-  );
-  const uniqueOverviewProvinces = useMemo(() => {
-    const set = new Set<string>(INDONESIA_PROVINCES);
+  const uniqueOverviewCities = useMemo(() => {
+    const map = new Map<string, string>();
     overviewItems.forEach((i) => {
-      if (i.province && i.province.trim()) set.add(i.province.trim());
+      if (i.city && i.city.trim()) {
+        const formatted = toTitleCase(i.city);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "id"));
+  }, [overviewItems]);
+
+  const uniqueOverviewProvinces = useMemo(() => {
+    const map = new Map<string, string>();
+    INDONESIA_PROVINCES.forEach((p) => {
+      const formatted = toTitleCase(p);
+      if (formatted) map.set(formatted.toLowerCase(), formatted);
+    });
+    overviewItems.forEach((i) => {
+      if (i.province && i.province.trim()) {
+        const formatted = toTitleCase(i.province);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "id"));
+  }, [overviewItems]);
+
+  const uniqueOverviewPics = useMemo(() => {
+    const set = new Set<string>();
+    overviewItems.forEach((i) => {
+      if (i.latest_pic && i.latest_pic.trim() && i.latest_pic.trim() !== "—") {
+        set.add(i.latest_pic.trim());
+      }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, "id"));
   }, [overviewItems]);
@@ -576,10 +661,55 @@ usePageTitle("Outlet");
     () => Array.from(new Set(subscriptionItems.map((i) => i.owner.code).filter(Boolean) as string[])),
     [subscriptionItems]
   );
-  const uniqueSubCities = useMemo(
-    () => Array.from(new Set(subscriptionItems.map((i) => i.outlet_city).filter(Boolean))),
-    [subscriptionItems]
-  );
+  const uniqueSubCities = useMemo(() => {
+    const map = new Map<string, string>();
+    geoCities.forEach((c) => {
+      if (c.name && c.name.trim()) {
+        const formatted = toTitleCase(c.name);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    subscriptionItems.forEach((i) => {
+      if (i.outlet_city && i.outlet_city.trim()) {
+        const formatted = toTitleCase(i.outlet_city);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    overviewItems.forEach((i) => {
+      if (i.city && i.city.trim()) {
+        const formatted = toTitleCase(i.city);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "id"));
+  }, [subscriptionItems, overviewItems, geoCities]);
+
+  const uniqueSubProvinces = useMemo(() => {
+    const map = new Map<string, string>();
+    INDONESIA_PROVINCES.forEach((p) => {
+      const formatted = toTitleCase(p);
+      if (formatted) map.set(formatted.toLowerCase(), formatted);
+    });
+    geoProvinces.forEach((p) => {
+      if (p.name && p.name.trim()) {
+        const formatted = toTitleCase(p.name);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    subscriptionItems.forEach((i) => {
+      if (i.outlet_province && i.outlet_province.trim()) {
+        const formatted = toTitleCase(i.outlet_province);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    overviewItems.forEach((i) => {
+      if (i.province && i.province.trim()) {
+        const formatted = toTitleCase(i.province);
+        if (formatted) map.set(formatted.toLowerCase(), formatted);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "id"));
+  }, [subscriptionItems, overviewItems, geoProvinces]);
   const uniqueSubPlans = useMemo(() => {
     const list = new Set<string>();
     catalogPlans.forEach((plan) => {
@@ -637,8 +767,9 @@ usePageTitle("Outlet");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const role = localStorage.getItem("piposmart_user_role") || "";
-    setIsAdmin(role === "" || role === "ADMIN");
+    const role = localStorage.getItem("piposmart_user_role") || readStoredUserSession().role || "";
+    setIsAdmin(isAdminRole(role));
+    setIsSales(isSalesRole(role) || (!isAdminRole(role) && !isSupervisorRole(role)));
   }, []);
 
   useEffect(() => {
@@ -650,17 +781,23 @@ usePageTitle("Outlet");
   }, [searchInput]);
 
   const handleResetFilters = () => {
+    setSearch("");
+    setSearchInput("");
     setFilterCode("");
     setFilterName("");
     setFilterOwner("");
     setFilterOwnerCode("");
     setFilterCity("");
     setFilterCityName("");
+    setFilterDistrict("");
+    setFilterEnteredBy("");
+    setFilterOverviewPic([]);
+    setFilterOverviewStatus(SUBSCRIPTION_STATUS_ITEMS.map((item) => item.value));
     setFilterPlan("");
-    setCreatedFrom("");
-    setCreatedTo("");
-    setStartDateStart("");
-    setStartDateEnd("");
+    setTimeStatusFilter("");
+    setCreationStatusFilter("");
+    setStatusLangganan(SUBSCRIPTION_STATUS_ITEMS.map((item) => item.value));
+    setMonth(currentMonthValue());
     setStatusJatuhTempo("");
     setDueDateReference("");
     setDueDateStart("");
@@ -673,6 +810,7 @@ usePageTitle("Outlet");
       setMonth(currentMonthValue());
     } else {
       setTimeStatusFilter("");
+      setFilterOverviewStatus(SUBSCRIPTION_STATUS_ITEMS.map((item) => item.value));
     }
     setPage(1);
   };
@@ -680,7 +818,7 @@ usePageTitle("Outlet");
   useEffect(() => {
     setSelectedIds([]);
     setBulkResultMessage(null);
-  }, [tableState, page, search, statusLangganan, statusJatuhTempo, creationStatusFilter, dueDateReference, month, dueDateStart, dueDateEnd, timeStatusFilter, filterCode, filterName, filterOwner, filterCity, filterPlan]);
+  }, [tableState, page, search, statusLangganan, statusJatuhTempo, creationStatusFilter, dueDateReference, month, dueDateStart, dueDateEnd, filterOverviewStatus, filterCode, filterName, filterOwner, filterCity, filterPlan]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -767,7 +905,7 @@ usePageTitle("Outlet");
           owner_keyword: filterOwner || filterOwnerCode || undefined,
           province: filterCity || undefined,
           city: filterCityName || undefined,
-          subscription_status: timeStatusFilter || undefined,
+          subscription_status: filterOverviewStatusParam,
           creation_status: creationStatusFilter || undefined,
           start_date: createdFrom || undefined,
           end_date: createdTo || undefined,
@@ -866,7 +1004,34 @@ usePageTitle("Outlet");
     }
   };
 
-  const selectedItems = overviewItems.filter((item) => selectedIds.includes(item.id));
+  const handleTrash = async () => {
+    if (!trashTarget) return;
+    setIsActing(true);
+    try {
+      await bulkTrashOutletsForOwner(trashTarget.ownerId, [trashTarget.id]);
+      setTrashTarget(null);
+      setBulkResultMessage(`Outlet "${trashTarget.name}" berhasil dipindahkan ke sampah.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal memindahkan outlet ke sampah.");
+    } finally {
+      setIsActing(false);
+      invalidate();
+    }
+  };
+
+  const selectedItems = useMemo(() => {
+    if (tableState === "langganan") {
+      return subscriptionItems
+        .filter((item) => selectedIds.includes(item.outlet_id))
+        .map((item) => ({
+          id: item.outlet_id,
+          owner: item.owner,
+          code: item.outlet_code,
+          name: item.outlet_name,
+        } as unknown as OutletOverviewItem));
+    }
+    return overviewItems.filter((item) => selectedIds.includes(item.id));
+  }, [tableState, subscriptionItems, overviewItems, selectedIds]);
 
   const handleBulkEditSubmit = async (fields: BulkEditFields) => {
     setIsBulkActing(true);
@@ -936,15 +1101,93 @@ usePageTitle("Outlet");
     invalidate();
   };
 
+  const handleOpenCallAction = (item: OutletSubscriptionStatusItem) => {
+    const mappedCustomer: CallCustomer = {
+      no: item.owner.id || item.outlet_id,
+      namaOwner: item.owner.name,
+      namaOutlet: item.outlet_name,
+      outlet: item.outlet_name,
+      kodeOwner: item.owner.code,
+      kodeOutlet: item.outlet_code,
+      noHpOwner: item.outlet_phone || item.owner.phone || "",
+      noHpOutlet: item.outlet_phone || "",
+      pic: (item.owner as { pic?: string })?.pic || "",
+    };
+    setCallModalCustomer(mappedCustomer);
+  };
+
+  const handleSaveCallResult = async (result: CallFormResult) => {
+    try {
+      const { rawPayload, customerId } = result;
+      if (rawPayload && rawPayload.selectedRemarkScore === "3") {
+        if (!rawPayload.salesPayload) throw new Error("Missing sales payload for closing");
+        const planId = rawPayload.salesPayload.planId
+          || parseInt(rawPayload.salesPayload.packageType.replace(/\D/g, "")) || 1;
+        await createLeadClosing(customerId, {
+          plan_id: planId,
+          promotion_ids: rawPayload.salesPayload.promotionIds ?? undefined,
+          discount_amount: String(rawPayload.salesPayload.discount || 0),
+          unique_transfer_code: rawPayload.salesPayload.transferCode || 0,
+          closed_at: new Date(rawPayload.callTime).toISOString(),
+          call_status: rawPayload.callStatus || undefined,
+          chat_status: rawPayload.chatStatus || undefined,
+          contact_name: result.nextCustomer?.namaOwner || "-",
+          contact_phone: result.nextCustomer?.noHpOwner || "-",
+          customer_response: rawPayload.conclusion || "-",
+          note: `Call: ${rawPayload.callStatus}, Chat: ${rawPayload.chatStatus}`,
+        });
+      } else if (rawPayload && rawPayload.selectedRemarkScore && rawPayload.selectedRemarkScore !== "3") {
+        await createInteraction(customerId, {
+          call_status: rawPayload.callStatus || undefined,
+          chat_status: rawPayload.chatStatus || undefined,
+          remark_score: Number(rawPayload.selectedRemarkScore),
+          note: `Call: ${rawPayload.callStatus}, Chat: ${rawPayload.chatStatus} - ${rawPayload.conclusion}`,
+          follow_up_at: rawPayload.followUpDate ? rawPayload.followUpDate + "T00:00:00Z" : undefined,
+          interaction_at: new Date(rawPayload.callTime).toISOString(),
+        });
+
+        if (rawPayload.selectedRemarkScore === "2" && rawPayload.trainingPayload) {
+          const sType = rawPayload.trainingPayload.sessionType.toLowerCase();
+          const mappedType = sType.includes("offline") ? "OFFLINE" : "ONLINE";
+          await scheduleTraining(customerId, {
+            training_type: mappedType,
+            scheduled_at: new Date(rawPayload.trainingPayload.schedule).toISOString(),
+            location: rawPayload.trainingPayload.sessionType,
+            note: rawPayload.conclusion,
+          });
+        }
+      }
+      setCallModalCustomer(null);
+      invalidate();
+      showSuccess({
+        title: "Berhasil",
+        message: "Hasil Call & Chat berhasil disimpan.",
+      });
+    } catch (err) {
+      console.error("Gagal menyimpan interaksi lead:", err);
+      showError({
+        title: "Gagal Menyimpan",
+        message: `Gagal menyimpan interaksi ke server: ${err instanceof Error ? err.message : "Unknown"}`,
+      });
+    }
+  };
+
   const isAllCurrentPageSelected =
-    filteredOverviewItems.length > 0 &&
-    filteredOverviewItems.every((item) => selectedIds.includes(item.id));
+    tableState === "langganan"
+      ? filteredSubscriptionItems.length > 0 &&
+        filteredSubscriptionItems.every((item) => selectedIds.includes(item.outlet_id))
+      : filteredOverviewItems.length > 0 &&
+        filteredOverviewItems.every((item) => selectedIds.includes(item.id));
 
   const handleToggleSelectAll = () => {
     if (isAllCurrentPageSelected) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredOverviewItems.map((item) => item.id));
+      if (tableState === "langganan") {
+        setSelectedIds(filteredSubscriptionItems.map((item) => item.outlet_id));
+      } else {
+        setSelectedIds(filteredOverviewItems.map((item) => item.id));
+      }
     }
   };
 
@@ -1103,21 +1346,23 @@ usePageTitle("Outlet");
                     </button>
                   </>
                 )}
-                {isAdmin && selectedIds.length > 0 && tableState === "umum" && (
+                {isAdmin && selectedIds.length > 0 && (tableState === "umum" || tableState === "langganan") && (
                   <>
                     <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-bold text-gray-700">
                       <svg className="h-4 w-4 text-[#C92C1E]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                       {selectedIds.length} terpilih
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowBulkEdit(true)}
-                      className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                      Ubah Bulk ({selectedIds.length})
-                    </button>
+                    {tableState === "umum" && (
+                      <button
+                        type="button"
+                        onClick={() => setShowBulkEdit(true)}
+                        className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-100"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        Ubah Bulk ({selectedIds.length})
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1166,421 +1411,207 @@ usePageTitle("Outlet");
               <div className="border-b border-gray-50 px-6 py-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 w-full">
                   {tableState === "umum" && (
-                    <>
-                      <AutocompleteFilter
-                        label="Kode Outlet"
-                        placeholder="Filter Kode..."
-                        value={filterCode}
-                        onChange={(val) => {
-                          setFilterCode(val);
-                          setPage(1);
-                        }}
-                        options={uniqueOverviewCodes}
-                      />
-                      <AutocompleteFilter
-                        label="Nama Outlet"
-                        placeholder="Filter Nama Outlet..."
-                        value={filterName}
-                        onChange={(val) => {
-                          setFilterName(val);
-                          setPage(1);
-                        }}
-                        options={uniqueOverviewNames}
-                      />
-                      <AutocompleteFilter
-                        label="Nama Owner"
-                        placeholder="Filter Owner..."
-                        value={filterOwner}
-                        onChange={(val) => {
-                          setFilterOwner(val);
-                          setPage(1);
-                        }}
-                        options={uniqueOverviewOwners}
-                      />
-                      <AutocompleteFilter
-                        label="Kode Owner"
-                        placeholder="Filter Kode Owner..."
-                        value={filterOwnerCode}
-                        onChange={(val) => {
-                          setFilterOwnerCode(val);
-                          setPage(1);
-                        }}
-                        options={uniqueOverviewOwnerCodes}
-                      />
-                      <div className="flex flex-col gap-1.5 w-full">
-                        <span className="text-xs font-semibold text-black">Provinsi</span>
-                        <select
-                          value={filterCity}
-                          onChange={(e) => {
-                            setFilterCity(e.target.value);
-                            setPage(1);
-                          }}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                        >
-                          <option value="">Semua Provinsi</option>
-                          {uniqueOverviewProvinces.map((prov) => (
-                            <option key={prov} value={prov}>
-                              {prov}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <AutocompleteFilter
-                        label="Kota"
-                        placeholder="Filter Kota..."
-                        value={filterCityName}
-                        onChange={(val) => {
-                          setFilterCityName(val);
-                          setPage(1);
-                        }}
-                        options={uniqueOverviewCities}
-                      />
-                      <div className="flex flex-col gap-1.5 w-full">
-                        <span className="text-xs font-semibold text-black">Status Outlet</span>
-                        <select
-                          value={timeStatusFilter}
-                          onChange={(e) => {
-                            setTimeStatusFilter(e.target.value);
-                            setPage(1);
-                          }}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                        >
-                          {TIME_STATUS_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-1.5 w-full">
-                        <span className="text-xs font-semibold text-black">Status Dibuat</span>
-                        <select
-                          value={creationStatusFilter}
-                          onChange={(e) => {
-                            setCreationStatusFilter(e.target.value);
-                            setPage(1);
-                          }}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                        >
-                          <option value="">Semua Status Dibuat</option>
-                          <option value="NEW">New</option>
-                          <option value="EXISTING">Existing</option>
-                        </select>
-                      </div>
-
-                      <label className="flex flex-col gap-1.5 w-full">
-                        <span className="text-xs font-semibold text-black">Dibuat Dari</span>
+                    <div className="col-span-full flex flex-wrap items-end gap-3 w-full">
+                      <div className="flex flex-col gap-1.5 w-40 sm:w-44">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="createdFrom" className="text-xs font-semibold text-black truncate">Tanggal Dibuat (Dari)</label>
+                          {createdFrom && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCreatedFrom("");
+                                setPage(1);
+                              }}
+                              className="text-[10px] font-bold text-[#C92C1E] hover:underline cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
                         <input
+                          id="createdFrom"
                           type="date"
                           value={createdFrom}
                           onChange={(e) => {
                             setCreatedFrom(e.target.value);
                             setPage(1);
                           }}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                         />
-                      </label>
-                      <label className="flex flex-col gap-1.5 w-full">
-                        <span className="text-xs font-semibold text-black">Dibuat Sampai</span>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 w-40 sm:w-44">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="createdTo" className="text-xs font-semibold text-black truncate">Tanggal Dibuat (Sampai)</label>
+                          {createdTo && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCreatedTo("");
+                                setPage(1);
+                              }}
+                              className="text-[10px] font-bold text-[#C92C1E] hover:underline cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
                         <input
+                          id="createdTo"
                           type="date"
                           value={createdTo}
                           onChange={(e) => {
                             setCreatedTo(e.target.value);
                             setPage(1);
                           }}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                         />
-                      </label>
-                      <div className="col-span-full mt-2">
-                        <button
-                          type="button"
-                          onClick={handleResetFilters}
-                          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors"
-                        >
-                          Reset Filter
-                        </button>
                       </div>
-                    </>
+
+                      <button
+                        type="button"
+                        onClick={handleResetFilters}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap h-[34px] flex items-center"
+                      >
+                        Reset Filter
+                      </button>
+                    </div>
                   )}
 
                   {tableState === "langganan" && (
-                    <div className="col-span-full flex flex-col gap-4 w-full">
-                      {/* Filter Utama */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 items-end gap-4">
-                        <label className="flex flex-col gap-1.5 w-full">
-                          <span className="text-xs font-semibold text-black">Bulan Acuan</span>
-                          <input
-                            type="month"
-                            value={month}
-                            onChange={(e) => {
-                              setMonth(e.target.value);
-                              setDueDateReference("");
-                            }}
-                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                          />
-                        </label>
-                        <MultiSelectCheckboxFilter
-                          label="Kategori Nasabah"
-                          options={SUBSCRIPTION_STATUS_ITEMS}
-                          selectedValues={statusLangganan}
-                          onChange={(values) => {
-                            setStatusLangganan(values);
-                            setPage(1);
+                    <div className="col-span-full flex flex-wrap items-end gap-3 w-full">
+                      <label className="flex flex-col gap-1.5 w-36 sm:w-40">
+                        <span className="text-xs font-semibold text-black">Bulan Acuan</span>
+                        <input
+                          type="month"
+                          value={month}
+                          onChange={(e) => {
+                            setMonth(e.target.value);
+                            setDueDateReference("");
                           }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                         />
-                        <div className="flex flex-col gap-1.5 w-full">
-                          <span className="text-xs font-semibold text-black">Provinsi</span>
-                          <select
-                            value={filterCity}
-                            onChange={(e) => {
-                              setFilterCity(e.target.value);
-                              setPage(1);
-                            }}
-                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                          >
-                            <option value="">Semua Provinsi</option>
-                            {uniqueOverviewProvinces.map((prov) => (
-                              <option key={prov} value={prov}>
-                                {prov}
-                              </option>
-                            ))}
-                          </select>
+                      </label>
+
+                      <div className="flex flex-col gap-1.5 w-40 sm:w-44">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="startDateStart" className="text-xs font-semibold text-black truncate">Tanggal Mulai (Dari)</label>
+                          {startDateStart && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStartDateStart("");
+                                setPage(1);
+                              }}
+                              className="text-[10px] font-bold text-[#C92C1E] hover:underline"
+                            >
+                              Reset
+                            </button>
+                          )}
                         </div>
-                        <AutocompleteFilter
-                          label="Kode Owner"
-                          placeholder="Filter Kode Owner..."
-                          value={filterOwnerCode}
-                          onChange={(val) => {
-                            setFilterOwnerCode(val);
+                        <input
+                          id="startDateStart"
+                          type="date"
+                          value={startDateStart}
+                          onChange={(e) => {
+                            setStartDateStart(e.target.value);
                             setPage(1);
                           }}
-                          options={uniqueSubOwnerCodes}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
                         />
                       </div>
 
-                      <div className="flex items-center justify-between mt-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowMoreFilters(!showMoreFilters)}
-                          className="text-sm font-semibold text-[#C92C1E] hover:underline flex items-center gap-1"
-                        >
-                          {showMoreFilters ? "Sembunyikan Filter Lanjutan" : "Tampilkan Filter Lanjutan"}
-                          <svg
-                            className={`w-4 h-4 transition-transform ${showMoreFilters ? "rotate-180" : ""}`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleResetFilters}
-                          className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors"
-                        >
-                          Reset Filter
-                        </button>
+                      <div className="flex flex-col gap-1.5 w-40 sm:w-44">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="startDateEnd" className="text-xs font-semibold text-black truncate">Tanggal Mulai (Sampai)</label>
+                          {startDateEnd && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStartDateEnd("");
+                                setPage(1);
+                              }}
+                              className="text-[10px] font-bold text-[#C92C1E] hover:underline"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          id="startDateEnd"
+                          type="date"
+                          value={startDateEnd}
+                          onChange={(e) => {
+                            setStartDateEnd(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        />
                       </div>
 
-                      {/* Filter Lanjutan */}
-                      {showMoreFilters && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 items-end gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                          <AutocompleteFilter
-                            label="Kode Outlet"
-                            placeholder="Filter Kode..."
-                            value={filterCode}
-                            onChange={(val) => {
-                              setFilterCode(val);
-                              setPage(1);
-                            }}
-                            options={uniqueSubCodes}
-                          />
-                          <AutocompleteFilter
-                            label="Nama Outlet"
-                            placeholder="Filter Nama Outlet..."
-                            value={filterName}
-                            onChange={(val) => {
-                              setFilterName(val);
-                              setPage(1);
-                            }}
-                            options={uniqueSubNames}
-                          />
-                          <AutocompleteFilter
-                            label="Nama Owner"
-                            placeholder="Filter Owner..."
-                            value={filterOwner}
-                            onChange={(val) => {
-                              setFilterOwner(val);
-                              setPage(1);
-                            }}
-                            options={uniqueSubOwners}
-                          />
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <span className="text-xs font-semibold text-black">Paket / Plan</span>
-                            <select
-                              value={filterPlan}
-                              onChange={(e) => {
-                                setFilterPlan(e.target.value);
+                      <div className="flex flex-col gap-1.5 w-40 sm:w-44">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="dueDateStart" className="text-xs font-semibold text-black truncate">Tanggal Berakhir (Dari)</label>
+                          {dueDateStart && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDueDateStart("");
                                 setPage(1);
                               }}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                              className="text-[10px] font-bold text-[#C92C1E] hover:underline"
                             >
-                              <option value="">Semua Paket / Plan</option>
-                              {uniqueSubPlans.map((plan, idx) => (
-                                <option key={idx} value={plan}>
-                                  {plan}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <span className="text-xs font-semibold text-black">Status Jatuh Tempo</span>
-                            <select
-                              value={statusJatuhTempo}
-                              onChange={(e) => {
-                                setStatusJatuhTempo(e.target.value);
-                                setPage(1);
-                              }}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                            >
-                              {DUE_STATUS_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <span className="text-xs font-semibold text-black">Status Dibuat</span>
-                            <select
-                              value={creationStatusFilter}
-                              onChange={(e) => {
-                                setCreationStatusFilter(e.target.value);
-                                setPage(1);
-                              }}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                            >
-                              <option value="">Semua Status Dibuat</option>
-                              <option value="NEW">New</option>
-                              <option value="EXISTING">Existing</option>
-                            </select>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <div className="flex items-center justify-between">
-                              <label htmlFor="startDateStart" className="text-xs font-semibold text-black">Tanggal Mulai (Dari)</label>
-                              {startDateStart && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setStartDateStart("");
-                                    setPage(1);
-                                  }}
-                                  className="text-[10px] font-bold text-[#C92C1E] hover:underline"
-                                >
-                                  Reset
-                                </button>
-                              )}
-                            </div>
-                            <input
-                              id="startDateStart"
-                              type="date"
-                              value={startDateStart}
-                              onChange={(e) => {
-                                setStartDateStart(e.target.value);
-                                setPage(1);
-                              }}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                            />
-                          </div>
-
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <div className="flex items-center justify-between">
-                              <label htmlFor="startDateEnd" className="text-xs font-semibold text-black">Tanggal Mulai (Sampai)</label>
-                              {startDateEnd && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setStartDateEnd("");
-                                    setPage(1);
-                                  }}
-                                  className="text-[10px] font-bold text-[#C92C1E] hover:underline"
-                                >
-                                  Reset
-                                </button>
-                              )}
-                            </div>
-                            <input
-                              id="startDateEnd"
-                              type="date"
-                              value={startDateEnd}
-                              onChange={(e) => {
-                                setStartDateEnd(e.target.value);
-                                setPage(1);
-                              }}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                            />
-                          </div>
-
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <div className="flex items-center justify-between">
-                              <label htmlFor="dueDateStart" className="text-xs font-semibold text-black">Jatuh Tempo (Dari)</label>
-                              {dueDateStart && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDueDateStart("");
-                                    setPage(1);
-                                  }}
-                                  className="text-[10px] font-bold text-[#C92C1E] hover:underline"
-                                >
-                                  Reset
-                                </button>
-                              )}
-                            </div>
-                            <input
-                              id="dueDateStart"
-                              type="date"
-                              value={dueDateStart}
-                              onChange={(e) => {
-                                setDueDateStart(e.target.value);
-                                setPage(1);
-                              }}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                            />
-                          </div>
-
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <div className="flex items-center justify-between">
-                              <label htmlFor="dueDateEnd" className="text-xs font-semibold text-black">Jatuh Tempo (Sampai)</label>
-                              {dueDateEnd && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDueDateEnd("");
-                                    setPage(1);
-                                  }}
-                                  className="text-[10px] font-bold text-[#C92C1E] hover:underline"
-                                >
-                                  Reset
-                                </button>
-                              )}
-                            </div>
-                            <input
-                              id="dueDateEnd"
-                              type="date"
-                              value={dueDateEnd}
-                              onChange={(e) => {
-                                setDueDateEnd(e.target.value);
-                                setPage(1);
-                              }}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
-                            />
-                          </div>
+                              Reset
+                            </button>
+                          )}
                         </div>
-                      )}
+                        <input
+                          id="dueDateStart"
+                          type="date"
+                          value={dueDateStart}
+                          onChange={(e) => {
+                            setDueDateStart(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 w-40 sm:w-44">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="dueDateEnd" className="text-xs font-semibold text-black truncate">Tanggal Berakhir (Sampai)</label>
+                          {dueDateEnd && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDueDateEnd("");
+                                setPage(1);
+                              }}
+                              className="text-[10px] font-bold text-[#C92C1E] hover:underline"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          id="dueDateEnd"
+                          type="date"
+                          value={dueDateEnd}
+                          onChange={(e) => {
+                            setDueDateEnd(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-black outline-none transition focus:border-[#C92C1E] focus:ring-1 focus:ring-[#C92C1E]"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleResetFilters}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap h-[34px] flex items-center"
+                      >
+                        Reset Filter
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1629,13 +1660,82 @@ usePageTitle("Outlet");
             )}
 
             {/* Table Content */}
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[calc(100vh-270px)] min-h-[350px] relative border-b border-gray-100">
               {isLoading ? (
                 <p className="p-10 text-center text-sm font-medium text-gray-400">Memuat data...</p>
               ) : error ? (
                 <p className="p-10 text-center text-sm font-medium text-red-600">{error}</p>
               ) : tableState === "langganan" ? (
-                <SubscriptionTable items={filteredSubscriptionItems} />
+                <SubscriptionTable
+                  items={filteredSubscriptionItems}
+                  isAdmin={isAdmin}
+                  isSales={isSales}
+                  selectedIds={selectedIds}
+                  isAllCurrentPageSelected={isAllCurrentPageSelected}
+                  onToggleSelectAll={handleToggleSelectAll}
+                  onToggleSelectRow={handleToggleSelectRow}
+                  onRowMouseDown={handleRowMouseDown}
+                  onRowMouseEnter={handleRowMouseEnter}
+                  onOpenCall={handleOpenCallAction}
+                  onEdit={(outlet) => setShowForm({ mode: "edit", outlet })}
+                  onTrash={(outlet) =>
+                    setTrashTarget({
+                      id: outlet.outlet_id,
+                      ownerId: outlet.owner.id || 0,
+                      name: outlet.outlet_name,
+                    })
+                  }
+                  statusLangganan={statusLangganan}
+                  onStatusLanggananChange={(values) => {
+                    setStatusLangganan(values);
+                    setPage(1);
+                  }}
+                  filterName={filterName}
+                  onFilterNameChange={(val) => {
+                    setFilterName(val);
+                    setPage(1);
+                  }}
+                  filterOwnerCode={filterOwnerCode}
+                  onFilterOwnerCodeChange={(val) => {
+                    setFilterOwnerCode(val);
+                    setPage(1);
+                  }}
+                  filterOwner={filterOwner}
+                  onFilterOwnerChange={(val) => {
+                    setFilterOwner(val);
+                    setPage(1);
+                  }}
+                  filterCityName={filterCityName}
+                  onFilterCityNameChange={(val) => {
+                    setFilterCityName(val);
+                    setPage(1);
+                  }}
+                  filterCity={filterCity}
+                  onFilterCityChange={(val) => {
+                    setFilterCity(val);
+                    setPage(1);
+                  }}
+                  filterPlan={filterPlan}
+                  onFilterPlanChange={(val) => {
+                    setFilterPlan(val);
+                    setPage(1);
+                  }}
+                  creationStatusFilter={creationStatusFilter}
+                  onCreationStatusFilterChange={(val) => {
+                    setCreationStatusFilter(val);
+                    setPage(1);
+                  }}
+                  statusJatuhTempo={statusJatuhTempo}
+                  onStatusJatuhTempoChange={(val) => {
+                    setStatusJatuhTempo(val);
+                    setPage(1);
+                  }}
+                  uniqueCities={uniqueSubCities}
+                  uniqueProvinces={uniqueSubProvinces}
+                  uniquePlans={uniqueSubPlans}
+                  page={page}
+                  limit={limit}
+                />
               ) : (
                 <OverviewTable
                   items={filteredOverviewItems}
@@ -1649,7 +1749,74 @@ usePageTitle("Outlet");
                   onRowMouseEnter={handleRowMouseEnter}
                   hasMovedRef={hasMoved}
                   monthFilter={month}
+                  page={page}
+                  limit={limit}
+                  filterOwnerCode={filterOwnerCode}
+                  onFilterOwnerCodeChange={(val) => {
+                    setFilterOwnerCode(val);
+                    setPage(1);
+                  }}
+                  filterOwner={filterOwner}
+                  onFilterOwnerChange={(val) => {
+                    setFilterOwner(val);
+                    setPage(1);
+                  }}
+                  filterCode={filterCode}
+                  onFilterCodeChange={(val) => {
+                    setFilterCode(val);
+                    setPage(1);
+                  }}
+                  filterName={filterName}
+                  onFilterNameChange={(val) => {
+                    setFilterName(val);
+                    setPage(1);
+                  }}
+                  filterCityName={filterCityName}
+                  onFilterCityNameChange={(val) => {
+                    setFilterCityName(val);
+                    setPage(1);
+                  }}
+                  filterCity={filterCity}
+                  onFilterCityChange={(val) => {
+                    setFilterCity(val);
+                    setPage(1);
+                  }}
+                  filterDistrict={filterDistrict}
+                  onFilterDistrictChange={(val) => {
+                    setFilterDistrict(val);
+                    setPage(1);
+                  }}
+                  filterEnteredBy={filterEnteredBy}
+                  onFilterEnteredByChange={(val) => {
+                    setFilterEnteredBy(val);
+                    setPage(1);
+                  }}
+                  filterPic={filterOverviewPic}
+                  onFilterPicChange={(vals) => {
+                    setFilterOverviewPic(vals);
+                    setPage(1);
+                  }}
+                  creationStatusFilter={creationStatusFilter}
+                  onCreationStatusFilterChange={(val) => {
+                    setCreationStatusFilter(val);
+                    setPage(1);
+                  }}
+                  timeStatusFilter={filterOverviewStatus}
+                  onTimeStatusFilterChange={(vals) => {
+                    setFilterOverviewStatus(vals);
+                    setPage(1);
+                  }}
+                  uniqueCities={uniqueOverviewCities}
+                  uniqueProvinces={uniqueOverviewProvinces}
+                  uniquePics={uniqueOverviewPics}
                   onEdit={(outlet) => setShowForm({ mode: "edit", outlet })}
+                  onTrash={(outlet) =>
+                    setTrashTarget({
+                      id: outlet.id,
+                      ownerId: outlet.owner.id || 0,
+                      name: outlet.name,
+                    })
+                  }
                   onRestore={(outlet) =>
                     setRestoreTarget({ id: outlet.id, ownerId: outlet.owner.id || 0, name: outlet.name })
                   }
@@ -1722,6 +1889,14 @@ usePageTitle("Outlet");
         />
       )}
 
+      {callModalCustomer && (
+        <CallPage
+          customer={callModalCustomer}
+          onClose={() => setCallModalCustomer(null)}
+          onSave={handleSaveCallResult}
+        />
+      )}
+
       {showSubscriptionImportModal && (
         <SubscriptionImportModal
           onClose={() => setShowSubscriptionImportModal(false)}
@@ -1763,11 +1938,24 @@ usePageTitle("Outlet");
         />
       )}
 
+      {trashTarget && (
+        <ConfirmDialog
+          title="Pindahkan ke Sampah?"
+          message={`"${trashTarget.name}" akan dipindahkan ke riwayat hapus/sampah.`}
+          confirmLabel="Pindahkan"
+          danger
+          isBusy={isActing}
+          onClose={() => setTrashTarget(null)}
+          onConfirm={() => void handleTrash()}
+        />
+      )}
+
       {bulkTrashConfirm && (
         <ConfirmDialog
           title="Pindahkan ke Sampah?"
           message={`${selectedIds.length} outlet terpilih akan dipindahkan ke sampah.`}
           confirmLabel="Pindahkan"
+          danger
           isBusy={isBulkActing}
           onClose={() => setBulkTrashConfirm(false)}
           onConfirm={() => void handleBulkTrash()}
@@ -1784,254 +1972,7 @@ usePageTitle("Outlet");
           onConfirm={() => void handleBulkRestore()}
         />
       )}
-
-      {bulkDeleteConfirm && (
-        <ConfirmDialog
-          title="Hapus Permanen?"
-          message={`${selectedIds.length} outlet terpilih akan dihapus PERMANEN dan tidak bisa dipulihkan lagi.`}
-          confirmLabel="Hapus Permanen"
-          danger
-          isBusy={isBulkActing}
-          onClose={() => setBulkDeleteConfirm(false)}
-          onConfirm={() => void handleBulkForceDelete()}
-        />
-      )}
     </div>
-  );
-}
-
-function OverviewTable({
-  items,
-  scope,
-  isAdmin,
-  selectedIds,
-  isAllCurrentPageSelected,
-  onToggleSelectAll,
-  onToggleSelectRow,
-  onRowMouseDown,
-  onRowMouseEnter,
-  hasMovedRef,
-  monthFilter,
-  onEdit,
-  onRestore,
-  onForceDelete,
-}: {
-  items: OutletOverviewItem[];
-  scope: string;
-  isAdmin: boolean;
-  selectedIds: number[];
-  isAllCurrentPageSelected: boolean;
-  onToggleSelectAll: () => void;
-  onToggleSelectRow: (id: number) => void;
-  onRowMouseDown: (id: number, currentlySelected: boolean) => void;
-  onRowMouseEnter: (id: number) => void;
-  hasMovedRef: React.MutableRefObject<boolean>;
-  monthFilter: string;
-  onEdit: (outlet: BackendOutlet) => void;
-  onRestore: (outlet: OutletOverviewItem) => void;
-  onForceDelete: (outlet: OutletOverviewItem) => void;
-}) {
-
-
-  const colCount = isAdmin ? 13 : 12;
-
-  return (
-    <table id="kelolaan-outlet-overview-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
-      <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
-        <tr>
-          {isAdmin && (
-            <th className="w-12 px-4 py-4 text-center">
-              <input
-                type="checkbox"
-                checked={isAllCurrentPageSelected}
-                onChange={onToggleSelectAll}
-                className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
-              />
-            </th>
-          )}
-          <th className="px-4 py-4 font-bold">Kode Owner</th>
-          <th className="px-4 py-4 font-bold">Nama Owner</th>
-          <th className="px-4 py-4 font-bold">Kode Outlet</th>
-          <th className="px-4 py-4 font-bold">Nama Outlet</th>
-          <th className="px-4 py-4 font-bold">Kota</th>
-          <th className="px-4 py-4 font-bold">Provinsi</th>
-          <th className="px-4 py-4 font-bold">PIC</th>
-          <th className="px-4 py-4 font-bold">Tanggal Dibuat</th>
-          <th className="px-4 py-4 text-center font-bold">Status Dibuat</th>
-          <th className="px-4 py-4 text-center font-bold">Status</th>
-          <th className="px-4 py-4 text-center font-bold">Aksi</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-100 bg-white">
-        {items.length === 0 ? (
-          <tr>
-            <td colSpan={colCount} className="p-8 text-center text-sm font-medium text-gray-400">
-              Belum ada outlet yang ditambahkan.
-            </td>
-          </tr>
-        ) : (
-          items.map((item) => (
-          <tr
-            key={item.id}
-            className={`transition-colors cursor-pointer select-none ${selectedIds.includes(item.id) ? "bg-red-50/60" : "hover:bg-gray-50"
-              }`}
-            onMouseDown={(e) => {
-              if ((e.target as HTMLElement).closest('button, a')) return;
-              if (e.button !== 0) return;
-              onRowMouseDown(item.id, selectedIds.includes(item.id));
-            }}
-            onMouseEnter={() => {
-              onRowMouseEnter(item.id);
-            }}
-          >
-            {isAdmin && (
-              <td 
-                className="px-4 py-4 align-top text-center cursor-pointer"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelectRow(item.id);
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedIds.includes(item.id)}
-                  readOnly
-                  className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
-                />
-              </td>
-            )}
-            <td className="px-4 py-4 align-top font-medium text-gray-900">{item.owner.code || "—"}</td>
-            <td className="px-4 py-4 align-top">{item.owner.name || "—"}</td>
-            <td className="px-4 py-4 align-top font-medium text-gray-900">{item.code}</td>
-            <td className="px-4 py-4 align-top font-medium text-gray-900">{item.name}</td>
-            <td className="px-4 py-4 align-top">{item.city || "—"}</td>
-            <td className="px-4 py-4 align-top">{item.province || "—"}</td>
-            <td className="px-4 py-4 align-top">
-              {item.latest_pic ? (
-                <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  {item.latest_pic}
-                </span>
-              ) : (
-                <span className="text-gray-400">—</span>
-              )}
-            </td>
-            <td className="px-4 py-4 align-top">
-              {item.district || "—"}
-              {item.sub_district ? `, ${item.sub_district}` : ""}
-            </td>
-            <td className="px-4 py-4 align-top">
-              {item.entered_by_name || "—"}
-            </td>
-            <td className="px-4 py-4 align-top font-medium text-gray-700 whitespace-nowrap">
-              {formatIndonesianDate(item.created_at)}
-            </td>
-            <td className="px-4 py-4 align-top text-center">
-              {(() => {
-                const cs = (item.creation_status || "").toUpperCase();
-                const isNew = cs === "NEW";
-                return (
-                  <span
-                    className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${
-                      isNew
-                        ? "border-purple-200 bg-purple-50 text-purple-700"
-                        : "border-slate-200 bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {isNew ? "NEW" : "EXISTING"}
-                  </span>
-                );
-              })()}
-            </td>
-            <td className="px-4 py-4 align-top text-center">
-              {(() => {
-                const rawStatus = item.subscription_summary?.latest_subscription_status;
-                // Di Informasi Umum, NEW diperlakukan sebagai SUBSCRIBE
-                const normalizedStatus = (rawStatus === "NEW" || rawStatus === "BARU") ? "SUBSCRIBE" : rawStatus;
-                const statusBadgeClass = getSubscriptionStatusBadgeClass(normalizedStatus);
-                const displayLabel = getStatusDisplayLabel(normalizedStatus, "NO PACKAGE");
-                return (
-                  <span
-                    className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${statusBadgeClass}`}
-                  >
-                    {displayLabel}
-                  </span>
-                );
-              })()}
-            </td>
-            <td className="px-4 py-4 align-top text-center">
-              <div className="flex items-center justify-center gap-2">
-                <Link
-                  href={`/menu/kelolaan-outlet/detail?id=${item.id}`}
-                  className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                  title="Lihat Detail Outlet"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                </Link>
-                {isAdmin && scope === "umum" && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit({
-                        id: item.id,
-                        owner_id: item.owner.id || 0,
-                        code: item.code,
-                        name: item.name,
-                        phone: item.phone || "",
-                        province: item.province || "",
-                        city: item.city || "",
-                        district: item.district || "",
-                        sub_district: item.sub_district || "",
-                        address: item.address || "",
-                      });
-                    }}
-                    className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
-                    title="Edit Outlet"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
-                )}
-                {isAdmin && scope === "sampah" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onRestore(item); }}
-                      className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
-                      title="Pulihkan Outlet"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onForceDelete(item); }}
-                      className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                      title="Hapus Permanen"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </>
-                )}
-              </div>
-            </td>
-          </tr>
-        ))
-        )}
-      </tbody>
-    </table>
   );
 }
 
@@ -2090,44 +2031,940 @@ function getCreationStatusBadge(status: string) {
   );
 }
 
-function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] }) {
+function OverviewTable({
+  items,
+  scope,
+  isAdmin,
+  selectedIds,
+  isAllCurrentPageSelected,
+  onToggleSelectAll,
+  onToggleSelectRow,
+  onRowMouseDown,
+  onRowMouseEnter,
+  hasMovedRef,
+  monthFilter,
+  page,
+  limit,
+  filterOwnerCode,
+  onFilterOwnerCodeChange,
+  filterOwner,
+  onFilterOwnerChange,
+  filterCode,
+  onFilterCodeChange,
+  filterName,
+  onFilterNameChange,
+  filterCityName,
+  onFilterCityNameChange,
+  filterCity,
+  onFilterCityChange,
+  filterDistrict,
+  onFilterDistrictChange,
+  filterEnteredBy,
+  onFilterEnteredByChange,
+  filterPic,
+  onFilterPicChange,
+  creationStatusFilter,
+  onCreationStatusFilterChange,
+  timeStatusFilter,
+  onTimeStatusFilterChange,
+  uniqueCities,
+  uniqueProvinces,
+  uniquePics,
+  onEdit,
+  onTrash,
+  onRestore,
+  onForceDelete,
+}: {
+  items: OutletOverviewItem[];
+  scope: string;
+  isAdmin: boolean;
+  selectedIds: number[];
+  isAllCurrentPageSelected: boolean;
+  onToggleSelectAll: () => void;
+  onToggleSelectRow: (id: number) => void;
+  onRowMouseDown: (id: number, currentlySelected: boolean) => void;
+  onRowMouseEnter: (id: number) => void;
+  hasMovedRef: React.MutableRefObject<boolean>;
+  monthFilter: string;
+  page: number;
+  limit: number;
+  filterOwnerCode: string;
+  onFilterOwnerCodeChange: (val: string) => void;
+  filterOwner: string;
+  onFilterOwnerChange: (val: string) => void;
+  filterCode: string;
+  onFilterCodeChange: (val: string) => void;
+  filterName: string;
+  onFilterNameChange: (val: string) => void;
+  filterCityName: string;
+  onFilterCityNameChange: (val: string) => void;
+  filterCity: string;
+  onFilterCityChange: (val: string) => void;
+  filterDistrict: string;
+  onFilterDistrictChange: (val: string) => void;
+  filterEnteredBy: string;
+  onFilterEnteredByChange: (val: string) => void;
+  filterPic: string[];
+  onFilterPicChange: (values: string[]) => void;
+  creationStatusFilter: string;
+  onCreationStatusFilterChange: (val: string) => void;
+  timeStatusFilter: string[];
+  onTimeStatusFilterChange: (values: string[]) => void;
+  uniqueCities: string[];
+  uniqueProvinces: string[];
+  uniquePics: string[];
+  onEdit: (outlet: BackendOutlet) => void;
+  onTrash?: (outlet: OutletOverviewItem) => void;
+  onRestore: (outlet: OutletOverviewItem) => void;
+  onForceDelete: (outlet: OutletOverviewItem) => void;
+}) {
+  const colCount = isAdmin ? 15 : 14;
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
+
   return (
-    <table id="kelolaan-outlet-subscription-table" data-column-visibility-manual="true" className="w-full min-w-[1020px] text-left text-sm text-gray-600">
-      <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
+    <table
+      id="kelolaan-outlet-overview-table"
+      data-column-visibility-manual="true"
+      className="w-full min-w-[1100px] text-left text-sm text-gray-600"
+    >
+      <thead className="sticky top-0 z-20 border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500 shadow-xs">
         <tr>
-          <th className="px-4 py-4 font-bold">Kode Outlet</th>
-          <th className="px-4 py-4 font-bold">Nama Outlet</th>
-          <th className="px-4 py-4 font-bold">Kode Owner</th>
-          <th className="px-4 py-4 font-bold">Nama Owner</th>
-          <th className="px-4 py-4 font-bold">Kota</th>
-          <th className="px-4 py-4 font-bold">Provinsi</th>
-          <th className="px-4 py-4 font-bold">Paket / Plan</th>
-          <th className="px-4 py-4 text-center font-bold">Status Dibuat</th>
+          {isAdmin && (
+            <th className="w-12 px-4 py-4 text-center">
+              <input
+                type="checkbox"
+                checked={isAllCurrentPageSelected}
+                onChange={onToggleSelectAll}
+                className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+              />
+            </th>
+          )}
+          <th className="px-4 py-4 text-center font-bold w-12">No</th>
+          <HeaderInputFilter
+            label="Kode Owner"
+            value={filterOwnerCode}
+            onChange={onFilterOwnerCodeChange}
+            isOpen={openFilter === "ownerCode"}
+            onToggle={() => setOpenFilter(openFilter === "ownerCode" ? null : "ownerCode")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Kode Owner..."
+          />
+          <HeaderInputFilter
+            label="Nama Owner"
+            value={filterOwner}
+            onChange={onFilterOwnerChange}
+            isOpen={openFilter === "owner"}
+            onToggle={() => setOpenFilter(openFilter === "owner" ? null : "owner")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Nama Owner..."
+          />
+          <HeaderInputFilter
+            label="Kode Outlet"
+            value={filterCode}
+            onChange={onFilterCodeChange}
+            isOpen={openFilter === "code"}
+            onToggle={() => setOpenFilter(openFilter === "code" ? null : "code")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Kode Outlet..."
+          />
+          <HeaderInputFilter
+            label="Nama Outlet"
+            value={filterName}
+            onChange={onFilterNameChange}
+            isOpen={openFilter === "name"}
+            onToggle={() => setOpenFilter(openFilter === "name" ? null : "name")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Nama Outlet..."
+          />
+          <HeaderSelectFilter
+            label="Kota"
+            value={filterCityName}
+            onChange={onFilterCityNameChange}
+            isOpen={openFilter === "city"}
+            onToggle={() => setOpenFilter(openFilter === "city" ? null : "city")}
+            onClose={() => setOpenFilter(null)}
+            options={uniqueCities.map((c) => ({ value: c, label: c }))}
+          />
+          <HeaderSelectFilter
+            label="Provinsi"
+            value={filterCity}
+            onChange={onFilterCityChange}
+            isOpen={openFilter === "province"}
+            onToggle={() => setOpenFilter(openFilter === "province" ? null : "province")}
+            onClose={() => setOpenFilter(null)}
+            options={uniqueProvinces.map((p) => ({ value: p, label: p }))}
+          />
+          <HeaderMultiSelectFilter
+            label="PIC"
+            options={uniquePics.map((p) => ({ value: p, label: p }))}
+            selectedValues={filterPic}
+            onChange={onFilterPicChange}
+            isOpen={openFilter === "pic"}
+            onToggle={() => setOpenFilter(openFilter === "pic" ? null : "pic")}
+            onClose={() => setOpenFilter(null)}
+            align="left"
+          />
+          <HeaderInputFilter
+            label="Kecamatan / Kelurahan"
+            value={filterDistrict}
+            onChange={onFilterDistrictChange}
+            isOpen={openFilter === "district"}
+            onToggle={() => setOpenFilter(openFilter === "district" ? null : "district")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Kecamatan / Kelurahan..."
+          />
+          <HeaderInputFilter
+            label="Dibuat Oleh"
+            value={filterEnteredBy}
+            onChange={onFilterEnteredByChange}
+            isOpen={openFilter === "enteredBy"}
+            onToggle={() => setOpenFilter(openFilter === "enteredBy" ? null : "enteredBy")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Dibuat Oleh..."
+          />
           <th className="px-4 py-4 font-bold">Tanggal Dibuat</th>
-          <th className="px-4 py-4 text-center font-bold">Kategori Nasabah</th>
-          <th className="px-4 py-4 text-center font-bold">Status Jatuh Tempo</th>
+          <HeaderSelectFilter
+            label="Status Dibuat"
+            value={creationStatusFilter}
+            onChange={onCreationStatusFilterChange}
+            isOpen={openFilter === "creationStatus"}
+            onToggle={() => setOpenFilter(openFilter === "creationStatus" ? null : "creationStatus")}
+            onClose={() => setOpenFilter(null)}
+            align="center"
+            options={[
+              { value: "NEW", label: "New" },
+              { value: "EXISTING", label: "Existing" },
+            ]}
+          />
+          <HeaderMultiSelectFilter
+            label="Status"
+            options={SUBSCRIPTION_STATUS_ITEMS}
+            selectedValues={timeStatusFilter}
+            onChange={onTimeStatusFilterChange}
+            isOpen={openFilter === "timeStatus"}
+            onToggle={() => setOpenFilter(openFilter === "timeStatus" ? null : "timeStatus")}
+            onClose={() => setOpenFilter(null)}
+            align="center"
+          />
+          <th className="px-4 py-4 text-center font-bold">Aksi</th>
+        </tr>
+      </thead>
+        <tbody className="divide-y divide-gray-100 bg-white">
+        {items.length === 0 ? (
+          <tr>
+            <td colSpan={colCount} className="p-8 text-center text-sm font-medium text-gray-400">
+              Belum ada outlet yang ditambahkan.
+            </td>
+          </tr>
+        ) : (
+          items.map((item, idx) => (
+          <tr
+            key={item.id}
+            className={`transition-colors cursor-pointer select-none ${selectedIds.includes(item.id) ? "bg-red-50/60" : "hover:bg-gray-50"
+              }`}
+            onMouseDown={(e) => {
+              if ((e.target as HTMLElement).closest('button, a')) return;
+              if (e.button !== 0) return;
+              onRowMouseDown(item.id, selectedIds.includes(item.id));
+            }}
+            onMouseEnter={() => {
+              onRowMouseEnter(item.id);
+            }}
+          >
+            {isAdmin && (
+              <td 
+                className="px-4 py-4 align-top text-center cursor-pointer"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelectRow(item.id);
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(item.id)}
+                  readOnly
+                  className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
+                />
+              </td>
+            )}
+            <td className="px-4 py-4 text-center align-top font-medium text-gray-500 whitespace-nowrap">
+              {(page - 1) * limit + idx + 1}
+            </td>
+            <td className="px-4 py-4 align-top font-medium text-gray-900">{item.owner.code || "—"}</td>
+            <td className="px-4 py-4 align-top">{item.owner.name || "—"}</td>
+            <td className="px-4 py-4 align-top font-medium text-gray-900">{item.code}</td>
+            <td className="px-4 py-4 align-top font-medium text-gray-900">{item.name}</td>
+            <td className="px-4 py-4 align-top">{toTitleCase(item.city) || "—"}</td>
+            <td className="px-4 py-4 align-top">{toTitleCase(item.province) || "—"}</td>
+            <td className="px-4 py-4 align-top">
+              {item.latest_pic ? (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  {item.latest_pic}
+                </span>
+              ) : (
+                <span className="text-gray-400">—</span>
+              )}
+            </td>
+            <td className="px-4 py-4 align-top">
+              {toTitleCase(item.district) || "—"}
+              {item.sub_district ? `, ${toTitleCase(item.sub_district)}` : ""}
+            </td>
+            <td className="px-4 py-4 align-top">
+              {item.entered_by_name || "—"}
+            </td>
+            <td className="px-4 py-4 align-top font-medium text-gray-700 whitespace-nowrap">
+              {formatIndonesianDate(item.created_at)}
+            </td>
+            <td className="px-4 py-4 align-top text-center">
+              {(() => {
+                const cs = (item.creation_status || "").toUpperCase();
+                const isNew = cs === "NEW";
+                return (
+                  <span
+                    className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${
+                      isNew
+                        ? "border-purple-200 bg-purple-50 text-purple-700"
+                        : "border-slate-200 bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {isNew ? "NEW" : "EXISTING"}
+                  </span>
+                );
+              })()}
+            </td>
+            <td className="px-4 py-4 align-top text-center">
+              {(() => {
+                const rawStatus = item.subscription_summary?.latest_subscription_status;
+                const normalizedStatus = (rawStatus === "NEW" || rawStatus === "BARU") ? "SUBSCRIBE" : rawStatus;
+                const statusBadgeClass = getSubscriptionStatusBadgeClass(normalizedStatus);
+                const displayLabel = getStatusDisplayLabel(normalizedStatus, "NO PACKAGE");
+                return (
+                  <span
+                    className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${statusBadgeClass}`}
+                  >
+                    {displayLabel}
+                  </span>
+                );
+              })()}
+            </td>
+            <td className="px-4 py-4 align-top text-center">
+              <div className="flex items-center justify-center gap-2">
+                <Link
+                  href={`/menu/kelolaan-outlet/detail?id=${item.id}`}
+                  className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                  title="Lihat Detail Outlet"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </Link>
+                {isAdmin && scope === "umum" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit({
+                          id: item.id,
+                          owner_id: item.owner.id || 0,
+                          code: item.code,
+                          name: item.name,
+                          phone: item.phone || "",
+                          province: item.province || "",
+                          city: item.city || "",
+                          district: item.district || "",
+                          sub_district: item.sub_district || "",
+                          address: item.address || "",
+                        });
+                      }}
+                      className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                      title="Edit Outlet"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                    {onTrash && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTrash(item);
+                        }}
+                        className="rounded-lg bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
+                        title="Pindahkan ke Sampah"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </>
+                )}
+                {isAdmin && scope === "sampah" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onRestore(item); }}
+                      className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                      title="Pulihkan Outlet"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onForceDelete(item); }}
+                      className="rounded-lg bg-gray-50 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                      title="Hapus Permanen"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            </td>
+          </tr>
+        ))
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function HeaderInputFilter({
+  label,
+  value,
+  onChange,
+  isOpen,
+  onToggle,
+  onClose,
+  placeholder,
+  align = "left",
+  style,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  placeholder?: string;
+  align?: "left" | "center" | "right";
+  style?: React.CSSProperties;
+}) {
+  return (
+    <th
+      style={style}
+      className={`px-4 py-4 font-bold relative group whitespace-nowrap ${align === "center" ? "text-center" : ""}`}
+    >
+      <div className={`flex items-center gap-1.5 select-none ${align === "center" ? "justify-center" : ""}`}>
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          className={`p-1 rounded-md transition-colors cursor-pointer ${
+            value ? "text-[#C92C1E] bg-red-50 hover:bg-red-100" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          }`}
+          title={`Filter ${label}`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+        </button>
+      </div>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={onClose} />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-64 min-w-[250px] bg-white border border-gray-200 rounded-lg shadow-xl z-30 p-2.5 transform origin-top text-left normal-case tracking-normal font-normal">
+            <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-gray-100">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                <span className="text-xs font-semibold text-gray-700 truncate">Filter {toTitleCase(label) || label}</span>
+              </div>
+              {value && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange("");
+                  }}
+                  className="text-[10px] text-red-600 hover:underline font-bold whitespace-nowrap flex-shrink-0 cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              placeholder={placeholder || `Ketik ${label}...`}
+              className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 font-normal focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E]"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onClose();
+              }}
+            />
+          </div>
+        </>
+      )}
+    </th>
+  );
+}
+
+function HeaderSelectFilter({
+  label,
+  value,
+  onChange,
+  isOpen,
+  onToggle,
+  onClose,
+  options,
+  align = "left",
+  style,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  options: { value: string; label: string }[];
+  align?: "left" | "center" | "right";
+  style?: React.CSSProperties;
+}) {
+  return (
+    <th
+      style={style}
+      className={`px-4 py-4 font-bold relative group whitespace-nowrap ${align === "center" ? "text-center" : ""}`}
+    >
+      <div className={`flex items-center gap-1.5 select-none ${align === "center" ? "justify-center" : ""}`}>
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          className={`p-1 rounded-md transition-colors cursor-pointer ${
+            value ? "text-[#C92C1E] bg-red-50 hover:bg-red-100" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          }`}
+          title={`Filter ${label}`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+        </button>
+      </div>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={onClose} />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-64 min-w-[250px] bg-white border border-gray-200 rounded-lg shadow-xl z-30 p-2.5 transform origin-top text-left normal-case tracking-normal font-normal">
+            <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-gray-100">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                <span className="text-xs font-semibold text-gray-700 truncate">Filter {toTitleCase(label) || label}</span>
+              </div>
+              {value && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange("");
+                    onClose();
+                  }}
+                  className="text-[10px] text-red-600 hover:underline font-bold whitespace-nowrap flex-shrink-0 cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <select
+              value={value}
+              onChange={(e) => {
+                onChange(e.target.value);
+                onClose();
+              }}
+              className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-normal text-gray-700 shadow-sm focus:border-[#C92C1E] focus:outline-none focus:ring-1 focus:ring-[#C92C1E] transition-all cursor-pointer truncate"
+            >
+              <option value="">Semua {toTitleCase(label) || label}</option>
+              {options.filter((opt) => opt.value && opt.label).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {toTitleCase(opt.label) || opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+    </th>
+  );
+}
+
+function HeaderMultiSelectFilter({
+  label,
+  options,
+  selectedValues,
+  onChange,
+  isOpen,
+  onToggle,
+  onClose,
+  align = "center",
+  style,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  align?: "left" | "center" | "right";
+  style?: React.CSSProperties;
+}) {
+  const isAllSelected = selectedValues.length >= options.length;
+  const isFiltered = !isAllSelected;
+
+  const toggleOption = (val: string) => {
+    if (selectedValues.includes(val)) {
+      onChange(selectedValues.filter((v) => v !== val));
+    } else {
+      onChange([...selectedValues, val]);
+    }
+  };
+
+  const selectAll = () => {
+    onChange(options.map((o) => o.value));
+  };
+
+  const clearAll = () => {
+    onChange([]);
+  };
+
+  return (
+    <th
+      style={style}
+      className={`px-4 py-4 font-bold relative group whitespace-nowrap ${align === "center" ? "text-center" : ""}`}
+    >
+      <div className={`flex items-center gap-1.5 select-none ${align === "center" ? "justify-center" : ""}`}>
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          className={`p-1 rounded-md transition-colors cursor-pointer ${
+            isFiltered ? "text-[#C92C1E] bg-red-50 hover:bg-red-100" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          }`}
+          title={`Filter ${label}`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+        </button>
+      </div>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={onClose} />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-64 min-w-[250px] bg-white border border-gray-200 rounded-lg shadow-xl z-30 p-2.5 transform origin-top text-left normal-case tracking-normal font-normal">
+            <div className="flex items-center justify-between gap-3 mb-2 pb-1.5 border-b border-gray-100">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                <span className="text-xs font-semibold text-gray-700 truncate">Filter {toTitleCase(label) || label}</span>
+              </div>
+              <button
+                type="button"
+                onClick={isAllSelected ? clearAll : selectAll}
+                className="text-[11px] text-[#C92C1E] hover:underline font-bold whitespace-nowrap flex-shrink-0 cursor-pointer"
+              >
+                {isAllSelected ? "Hapus Semua" : "Pilih Semua"}
+              </button>
+            </div>
+            <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+              {options.map((opt) => {
+                const isChecked = selectedValues.includes(opt.value);
+                return (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-2.5 px-2.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors ${
+                      isChecked ? "bg-red-50/70 text-gray-900 font-semibold" : "text-gray-700 hover:bg-gray-50 font-normal"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleOption(opt.value)}
+                      className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] cursor-pointer"
+                    />
+                    <span className="truncate">{toTitleCase(opt.label) || opt.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </th>
+  );
+}
+
+function SubscriptionTable({
+  items,
+  isAdmin,
+  isSales,
+  selectedIds,
+  isAllCurrentPageSelected,
+  onToggleSelectAll,
+  onToggleSelectRow,
+  onRowMouseDown,
+  onRowMouseEnter,
+  onOpenCall,
+  onEdit,
+  onTrash,
+  statusLangganan,
+  onStatusLanggananChange,
+  filterName,
+  onFilterNameChange,
+  filterOwnerCode,
+  onFilterOwnerCodeChange,
+  filterOwner,
+  onFilterOwnerChange,
+  filterCityName,
+  onFilterCityNameChange,
+  filterCity,
+  onFilterCityChange,
+  filterPlan,
+  onFilterPlanChange,
+  creationStatusFilter,
+  onCreationStatusFilterChange,
+  statusJatuhTempo,
+  onStatusJatuhTempoChange,
+  uniqueCities,
+  uniqueProvinces,
+  uniquePlans,
+  page,
+  limit,
+}: {
+  items: OutletSubscriptionStatusItem[];
+  isAdmin: boolean;
+  isSales: boolean;
+  selectedIds: number[];
+  isAllCurrentPageSelected: boolean;
+  onToggleSelectAll: () => void;
+  onToggleSelectRow: (id: number) => void;
+  onRowMouseDown: (id: number, currentlySelected: boolean) => void;
+  onRowMouseEnter: (id: number) => void;
+  onOpenCall: (item: OutletSubscriptionStatusItem) => void;
+  onEdit?: (outlet: BackendOutlet) => void;
+  onTrash?: (outlet: OutletSubscriptionStatusItem) => void;
+  statusLangganan: string[];
+  onStatusLanggananChange: (values: string[]) => void;
+  filterName: string;
+  onFilterNameChange: (val: string) => void;
+  filterOwnerCode: string;
+  onFilterOwnerCodeChange: (val: string) => void;
+  filterOwner: string;
+  onFilterOwnerChange: (val: string) => void;
+  filterCityName: string;
+  onFilterCityNameChange: (val: string) => void;
+  filterCity: string;
+  onFilterCityChange: (val: string) => void;
+  filterPlan: string;
+  onFilterPlanChange: (val: string) => void;
+  creationStatusFilter: string;
+  onCreationStatusFilterChange: (val: string) => void;
+  statusJatuhTempo: string;
+  onStatusJatuhTempoChange: (val: string) => void;
+  uniqueCities: string[];
+  uniqueProvinces: string[];
+  uniquePlans: string[];
+  page: number;
+  limit: number;
+}) {
+  const colCount = isAdmin ? 17 : 16;
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
+
+  return (
+    <table
+      id="kelolaan-outlet-subscription-table"
+      data-column-visibility-manual="true"
+      className="w-full min-w-[1100px] text-left text-sm text-gray-600"
+    >
+      <thead className="sticky top-0 z-20 border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500 shadow-xs">
+        <tr>
+          {isAdmin && (
+            <th className="w-12 px-4 py-4 text-center">
+              <input
+                type="checkbox"
+                checked={isAllCurrentPageSelected}
+                onChange={onToggleSelectAll}
+                className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E]"
+              />
+            </th>
+          )}
+          <th className="px-4 py-4 text-center font-bold w-12">No</th>
+          <th className="px-4 py-4 font-bold">Kode Outlet</th>
+          <HeaderInputFilter
+            label="Nama Outlet"
+            value={filterName}
+            onChange={onFilterNameChange}
+            isOpen={openFilter === "name"}
+            onToggle={() => setOpenFilter(openFilter === "name" ? null : "name")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Nama Outlet..."
+          />
+          <HeaderInputFilter
+            label="Kode Owner"
+            value={filterOwnerCode}
+            onChange={onFilterOwnerCodeChange}
+            isOpen={openFilter === "ownerCode"}
+            onToggle={() => setOpenFilter(openFilter === "ownerCode" ? null : "ownerCode")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Kode Owner..."
+          />
+          <HeaderInputFilter
+            label="Nama Owner"
+            value={filterOwner}
+            onChange={onFilterOwnerChange}
+            isOpen={openFilter === "owner"}
+            onToggle={() => setOpenFilter(openFilter === "owner" ? null : "owner")}
+            onClose={() => setOpenFilter(null)}
+            placeholder="Filter Nama Owner..."
+          />
+          <HeaderSelectFilter
+            label="Kota"
+            value={filterCityName}
+            onChange={onFilterCityNameChange}
+            isOpen={openFilter === "city"}
+            onToggle={() => setOpenFilter(openFilter === "city" ? null : "city")}
+            onClose={() => setOpenFilter(null)}
+            options={uniqueCities.map((c) => ({ value: c, label: c }))}
+          />
+          <HeaderSelectFilter
+            label="Provinsi"
+            value={filterCity}
+            onChange={onFilterCityChange}
+            isOpen={openFilter === "province"}
+            onToggle={() => setOpenFilter(openFilter === "province" ? null : "province")}
+            onClose={() => setOpenFilter(null)}
+            options={uniqueProvinces.map((p) => ({ value: p, label: p }))}
+          />
+          <HeaderSelectFilter
+            label="Paket / Plan"
+            value={filterPlan}
+            onChange={onFilterPlanChange}
+            isOpen={openFilter === "plan"}
+            onToggle={() => setOpenFilter(openFilter === "plan" ? null : "plan")}
+            onClose={() => setOpenFilter(null)}
+            options={uniquePlans.map((p) => ({ value: p, label: p }))}
+          />
+          <HeaderSelectFilter
+            label="Status Dibuat"
+            value={creationStatusFilter}
+            onChange={onCreationStatusFilterChange}
+            isOpen={openFilter === "creationStatus"}
+            onToggle={() => setOpenFilter(openFilter === "creationStatus" ? null : "creationStatus")}
+            onClose={() => setOpenFilter(null)}
+            align="center"
+            options={[
+              { value: "NEW", label: "New" },
+              { value: "EXISTING", label: "Existing" },
+            ]}
+          />
+          <th className="px-4 py-4 font-bold">Tanggal Dibuat</th>
+          <HeaderMultiSelectFilter
+            label="Kategori Nasabah"
+            options={SUBSCRIPTION_STATUS_ITEMS}
+            selectedValues={statusLangganan}
+            onChange={onStatusLanggananChange}
+            isOpen={openFilter === "statusLangganan"}
+            onToggle={() => setOpenFilter(openFilter === "statusLangganan" ? null : "statusLangganan")}
+            onClose={() => setOpenFilter(null)}
+            align="center"
+          />
+          <HeaderSelectFilter
+            label="Status Jatuh Tempo"
+            value={statusJatuhTempo}
+            onChange={onStatusJatuhTempoChange}
+            isOpen={openFilter === "dueStatus"}
+            onToggle={() => setOpenFilter(openFilter === "dueStatus" ? null : "dueStatus")}
+            onClose={() => setOpenFilter(null)}
+            align="center"
+            options={DUE_STATUS_OPTIONS.filter((opt) => opt.value !== "")}
+          />
           <th className="px-4 py-4 font-bold">Sisa Hari</th>
           <th className="px-4 py-4 font-bold">Tanggal Mulai</th>
           <th className="px-4 py-4 font-bold">Tanggal Berakhir</th>
           <th className="px-4 py-4 text-center font-bold">Aksi</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-gray-100 bg-white">
+        <tbody className="divide-y divide-gray-100 bg-white">
         {items.length === 0 ? (
           <tr>
-            <td colSpan={15} className="p-8 text-center text-sm font-medium text-gray-400">
+            <td colSpan={colCount} className="p-8 text-center text-sm font-medium text-gray-400">
               Tidak ada data langganan yang cocok untuk bulan ini.
             </td>
           </tr>
         ) : (
-          items.map((item) => (
-          <tr key={item.outlet_id} className="transition-colors hover:bg-gray-50">
+          items.map((item, idx) => (
+          <tr
+            key={item.outlet_id}
+            className={`transition-colors cursor-pointer select-none ${
+              selectedIds.includes(item.outlet_id) ? "bg-red-50/60" : "hover:bg-gray-50"
+            }`}
+            onMouseDown={(e) => {
+              if ((e.target as HTMLElement).closest('button, a, input')) return;
+              if (e.button !== 0) return;
+              onRowMouseDown(item.outlet_id, selectedIds.includes(item.outlet_id));
+            }}
+            onMouseEnter={() => {
+              onRowMouseEnter(item.outlet_id);
+            }}
+          >
+            {isAdmin && (
+              <td
+                className="px-4 py-4 align-top text-center cursor-pointer"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelectRow(item.outlet_id);
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(item.outlet_id)}
+                  readOnly
+                  className="rounded border-gray-300 text-[#C92C1E] focus:ring-[#C92C1E] pointer-events-none"
+                />
+              </td>
+            )}
+            <td className="px-4 py-4 text-center align-top font-medium text-gray-500 whitespace-nowrap">
+              {(page - 1) * limit + idx + 1}
+            </td>
             <td className="px-4 py-4 align-top font-medium text-gray-900">{item.outlet_code}</td>
             <td className="px-4 py-4 align-top font-medium text-gray-900">{item.outlet_name}</td>
             <td className="px-4 py-4 align-top font-medium text-gray-900">{item.owner.code || "—"}</td>
             <td className="px-4 py-4 align-top">{item.owner.name || "—"}</td>
-            <td className="px-4 py-4 align-top">{item.outlet_city || "—"}</td>
-            <td className="px-4 py-4 align-top">{item.outlet_province || "—"}</td>
+            <td className="px-4 py-4 align-top">{toTitleCase(item.outlet_city) || "—"}</td>
+            <td className="px-4 py-4 align-top">{toTitleCase(item.outlet_province) || "—"}</td>
             <td className="px-4 py-4 align-top">
               {item.package_plan.plan_name || item.package_plan.package_name || "—"}
             </td>
@@ -2145,30 +2982,94 @@ function SubscriptionTable({ items }: { items: OutletSubscriptionStatusItem[] })
               </span>
             </td>
             <td className="px-4 py-4 align-top text-center">
-              {item.due_status_code || item.due_status_label ? (
-                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${getSubscriptionStatusBadgeClass(
+              {(() => {
+                const subStatus = (item.subscription_status_code || item.subscription_status_label || "").toUpperCase();
+                const isNoPackage = subStatus === "NO_PACKAGE" || subStatus === "NO PACKAGE";
+                if (isNoPackage || (!item.due_status_code && !item.due_status_label)) {
+                  return <span className="text-gray-400">—</span>;
+                }
+                const badgeClass = getSubscriptionStatusBadgeClass(
                   item.due_status_code || item.due_status_label
-                )}`}>
-                  {getStatusDisplayLabel(item.due_status_code, item.due_status_label)}
-                </span>
-              ) : (
-                <span className="text-gray-400">—</span>
-              )}
+                );
+                const displayLabel = getStatusDisplayLabel(item.due_status_code, item.due_status_label);
+                return (
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-tight ${badgeClass}`}>
+                    {displayLabel}
+                  </span>
+                );
+              })()}
             </td>
             <td className="px-4 py-4 align-top">{item.remaining_days_display}</td>
             <td className="px-4 py-4 align-top whitespace-nowrap">{formatIndonesianDate(item.subscription_start_date || item.created_at)}</td>
             <td className="px-4 py-4 align-top whitespace-nowrap">{formatIndonesianDate(item.subscription_end_date || item.last_subscription_end_display)}</td>
             <td className="px-4 py-4 align-top text-center">
-              <Link
-                href={`/menu/kelolaan-outlet/detail?id=${item.outlet_id}`}
-                className="inline-flex rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
-                title="Lihat Detail Outlet"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              </Link>
+              <div className="flex items-center justify-center gap-2">
+                {isSales && onOpenCall && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenCall(item);
+                    }}
+                    className="rounded-lg bg-emerald-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                    title="Call & Chat Customer"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </button>
+                )}
+                <Link
+                  href={`/menu/kelolaan-outlet/detail?id=${item.outlet_id}`}
+                  className="rounded-lg bg-blue-50 p-2 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                  title="Lihat Detail Outlet"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </Link>
+                {isAdmin && onEdit && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit({
+                        id: item.outlet_id,
+                        owner_id: item.owner.id || 0,
+                        code: item.outlet_code,
+                        name: item.outlet_name,
+                        phone: item.outlet_phone || "",
+                        province: item.outlet_province || "",
+                        city: item.outlet_city || "",
+                        address: item.outlet_address || "",
+                      });
+                    }}
+                    className="rounded-lg bg-orange-50 p-2 text-orange-600 transition-colors hover:bg-orange-100 hover:text-orange-700"
+                    title="Edit Outlet"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                )}
+                {isAdmin && onTrash && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTrash(item);
+                    }}
+                    className="rounded-lg bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
+                    title="Pindahkan ke Sampah"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </td>
           </tr>
         ))
@@ -2196,34 +3097,89 @@ function ConfirmDialog({
   onConfirm: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-      <div className="app-modal-panel w-full max-w-sm rounded-2xl shadow-xl">
-        <div className="app-modal-header p-6">
-          <h3 className={`text-lg font-black ${danger ? "text-red-600" : "text-gray-900"}`}>{title}</h3>
-        </div>
-        <div className="app-modal-body space-y-4 p-6">
-        <p className="text-xs text-gray-600">{message}</p>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isBusy}
-            className="app-modal-close rounded-xl px-4 py-2 text-xs font-black"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isBusy}
-            className={`rounded-xl px-4 py-2 text-xs font-black text-white ${danger ? "bg-red-600 hover:bg-red-700" : "bg-[#C92C1E] hover:bg-[#A82216]"
+    <ScreenPortal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 md:p-6 backdrop-blur-xs">
+        <div className="flex w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+          {/* Header */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-red-50 to-white px-6 py-5 border-b border-gray-100 flex-shrink-0">
+            <div className="absolute top-0 right-0 p-4">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isBusy}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-gray-400 backdrop-blur-sm transition-all hover:bg-white hover:text-gray-700 hover:shadow-xs disabled:opacity-50"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3.5 pr-8">
+              <div
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                  danger
+                    ? "bg-gradient-to-br from-[#C92C1E] to-red-600 text-white shadow-lg shadow-red-200/50"
+                    : "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-200/50"
+                }`}
+              >
+                {danger ? (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <h3 className="text-lg font-bold tracking-tight text-gray-900">{title}</h3>
+                <p className="text-xs font-medium text-gray-500 mt-0.5">Konfirmasi Tindakan</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="p-6 text-sm font-medium text-gray-600 leading-relaxed">
+            <p>{message}</p>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex-shrink-0 flex items-center justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isBusy}
+              className="rounded-xl px-4 py-2 text-xs font-bold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={isBusy}
+              className={`group relative inline-flex items-center gap-2 overflow-hidden rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-lg transition-all disabled:opacity-50 ${
+                danger
+                  ? "bg-[#C92C1E] hover:bg-[#b02619] shadow-red-200"
+                  : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
               }`}
-          >
-            {isBusy ? "Memproses..." : confirmLabel}
-          </button>
-        </div>
+            >
+              {isBusy ? (
+                <>
+                  <svg className="h-3.5 w-3.5 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Memproses...
+                </>
+              ) : (
+                confirmLabel
+              )}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ScreenPortal>
   );
 }

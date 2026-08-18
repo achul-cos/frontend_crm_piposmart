@@ -353,13 +353,13 @@ export default function OutletTrashPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-gray-500 font-bold">
+                <td colSpan={9} className="p-8 text-center text-gray-500 font-bold">
                   Memuat data...
                 </td>
               </tr>
             ) : filteredTrash.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-gray-400 font-bold italic">
+                <td colSpan={9} className="p-8 text-center text-gray-400 font-bold italic">
                   Tidak ada data terhapus.
                 </td>
               </tr>
