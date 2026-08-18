@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { getCatalogPackages, getCatalogPlans, getEligiblePromotions, type CatalogPackage, type CatalogPlan, type CatalogPromotion } from "@/app/lib/api";
 import RemarkOptionsSection, {
   getRemarkLabelFromValue,
@@ -234,6 +235,12 @@ export default function CallPage({
   onSave: (result: CallFormResult) => void;
 }) {
   const { showError } = useFeedback();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
   const [callStatus, setCallStatus] = useState("");
   const [chatStatus, setChatStatus] = useState("");
   const [followUpDate, setFollowUpDate] = useState(getTodayInputDate());
@@ -445,11 +452,13 @@ export default function CallPage({
     setSalesPayload(getDefaultSalesPayload());
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-0">
       <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={handleClose} />
 
-      <div className="app-modal-panel relative z-10 flex w-full max-w-5xl rounded-[20px] bg-gray-50 shadow-2xl">
+      <div className="app-modal-panel relative z-10 flex w-full max-w-4xl rounded-[20px] bg-gray-50 shadow-2xl">
         <div className="app-modal-header flex items-start justify-between gap-4 rounded-t-[20px] px-6 py-5">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C92C1E]">
@@ -807,7 +816,8 @@ export default function CallPage({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

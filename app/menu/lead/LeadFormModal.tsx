@@ -509,8 +509,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, initialEditI
 
   return (
     <ScreenPortal>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-        <div className="app-modal-panel relative w-full max-w-2xl rounded-[32px] shadow-2xl transition-all">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="app-modal-panel relative w-full max-w-xl rounded-[32px] shadow-2xl transition-all">
         <div className="app-modal-header p-6">
           <div className="mx-auto font-sans text-[#1C1C1E]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

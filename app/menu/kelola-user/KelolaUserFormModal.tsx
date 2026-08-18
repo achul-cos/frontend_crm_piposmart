@@ -73,7 +73,7 @@ export default function KelolaUserFormModal({
 
   return (
     <ScreenPortal>
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
+      <div className="fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
         <div className="flex min-h-full items-center justify-center">
           <div
             className="app-modal-panel w-full max-w-3xl rounded-[32px] shadow-2xl transition-all xl:max-w-4xl"

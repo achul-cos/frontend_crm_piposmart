@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyRound, Search, Plus, RefreshCw, MoreVertical, Trash2, X } from 'lucide-react';
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
 import { authFetchJson } from '@/app/lib/api';
 import {
@@ -1253,11 +1254,12 @@ export default function KelolaUserPage() {
       />
 
       {selectedUser ? (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/70"
-          onClick={() => setSelectedUser(null)}
-        >
-          <div className="flex min-h-full items-center justify-center p-4 md:p-6">
+        <ScreenPortal>
+          <div
+            className="fixed inset-0 z-[9999] bg-slate-950/70"
+            onClick={() => setSelectedUser(null)}
+          >
+            <div className="flex min-h-full items-center justify-center p-4 md:p-6">
             <div
               className="app-modal-panel w-full max-w-2xl rounded-[32px] shadow-2xl"
               onClick={(event) => event.stopPropagation()}
@@ -1322,6 +1324,7 @@ export default function KelolaUserPage() {
             </div>
           </div>
         </div>
+        </ScreenPortal>
       ) : null}
     </div>
   );

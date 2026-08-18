@@ -58,6 +58,10 @@ function getValueDensityClass(valueText: string): string | null {
 }
 
 function normalizeQuickInfoValue(value: ReactNode): ReactNode {
+  if (typeof value === "number") {
+    return value.toLocaleString("id-ID");
+  }
+
   if (typeof value === "string" && isRupiahDisplayValue(value)) {
     return formatCompactRupiah(value);
   }

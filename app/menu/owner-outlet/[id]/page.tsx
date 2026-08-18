@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import React, { useCallback, useEffect, useState, use } from "react";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import { useRouter } from "next/navigation";
 import {
   authFetchJson,
@@ -404,38 +405,6 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
         <div className="space-y-6">
           <OwnerOverviewCard ownerId={ownerId} />
 
-          {/* Level 1: Ringkasan (Quick Stats) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="app-accent-surface rounded-2xl p-5 shadow-lg relative overflow-hidden flex flex-col justify-between">
-              <div className="relative z-10">
-                <p className="app-accent-kicker text-xs font-bold uppercase tracking-wider mb-1">Total Outlet Terdaftar</p>
-                <h2 className="text-3xl font-black">{outlets.length.toLocaleString("id-ID")}</h2>
-              </div>
-              <svg className="app-accent-decor absolute -bottom-4 -right-4 w-28 h-28 opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-            </div>
-            <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
-              <div className="relative z-10">
-                <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Kode Owner</p>
-                <h2 className="text-3xl font-black text-gray-900">{owner.code}</h2>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-5 border border-red-100 shadow-sm relative overflow-hidden group hover:border-[#C92C1E] transition-colors">
-              <div className="relative z-10">
-                <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Status Owner</p>
-                <h2 className="text-3xl font-black text-gray-900">{owner.status}</h2>
-              </div>
-              <div className="absolute top-0 right-0 p-5">
-                <span className="flex h-3 w-3 relative">
-                  {owner.status === "ACTIVE" && (
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  )}
-                  <span className={`relative inline-flex rounded-full h-3 w-3 ${owner.status === "ACTIVE" ? "bg-emerald-500" : "bg-red-500"}`}></span>
-                </span>
-              </div>
-            </div>
-          </div>
 
           <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex items-center gap-3 bg-gray-50/50">
@@ -486,12 +455,20 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kode Owner</span>
+                <span className="font-bold text-gray-900">{owner.code || "-"}</span>
+              </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Owner</span>
                 <span className="font-bold text-gray-900">{owner.name}</span>
               </div>
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Brand</span>
                 <span className="font-bold text-gray-900">{owner.brand_name || "-"}</span>
+              </div>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Email</span>
+                <span className="font-bold text-gray-900">{owner.email || "-"}</span>
               </div>
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tanggal Dibuat</span>
@@ -932,7 +909,8 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* Modal Tambah Outlet */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+        <ScreenPortal>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-0">
           <div 
             className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" 
             onClick={() => !isSubmitting && setIsAddModalOpen(false)} 
@@ -1128,11 +1106,13 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             </form>
           </div>
         </div>
+        </ScreenPortal>
       )}
 
       {/* Modal Edit Outlet */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+        <ScreenPortal>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-0">
           <div 
             className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" 
             onClick={() => !isEditSubmitting && setIsEditModalOpen(false)} 
@@ -1328,6 +1308,7 @@ export default function OwnerDetailPage({ params }: { params: Promise<{ id: stri
             </form>
           </div>
         </div>
+        </ScreenPortal>
       )}
     </div>
   );

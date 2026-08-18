@@ -1839,7 +1839,7 @@ export default function SubscriptionPage() {
             </div>
           )}
 
-          {totalPages > 1 && (
+          {true && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
               <div className="flex items-center gap-4">
                 <div className="text-xs font-medium text-gray-500">

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import {
   Search,
@@ -201,7 +202,10 @@ function Modal({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     const sb = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (sb > 0) document.body.style.paddingRight = `${sb}px`;
@@ -212,12 +216,14 @@ function Modal({
     };
   }, []);
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/70 p-4 md:p-6" onClick={onClose}>
       <div className="flex min-h-full items-center justify-center">
         <div
           className={`app-modal-panel w-full rounded-[32px] shadow-2xl transition-all ${
-            wide ? "max-w-5xl" : "max-w-3xl xl:max-w-4xl"
+            wide ? "max-w-4xl" : "max-w-2xl xl:max-w-3xl"
           }`}
           onClick={(event) => event.stopPropagation()}
         >
@@ -262,7 +268,8 @@ function Modal({
         </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -303,7 +310,10 @@ function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     document.body.style.overflow = "hidden";
 
     return () => {
@@ -311,8 +321,10 @@ function ConfirmDialog({
     };
   }, []);
 
-  return (
-    <div className="fixed inset-0 z-[60] bg-slate-950/70" onClick={onCancel}>
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[110] bg-slate-950/70" onClick={onCancel}>
       <div className="flex min-h-full items-center justify-center overflow-y-auto p-4 md:p-6">
           <div
             className="app-modal-panel w-full max-w-sm rounded-[32px] shadow-2xl"
@@ -353,7 +365,8 @@ function ConfirmDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -889,7 +902,7 @@ export default function PaketLanggananPage() {
         <div className="relative w-full">
           <div className="flex flex-col">
             <div className="overflow-x-auto">
-          <table id="catalog-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+          <table id="catalog-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="w-10 px-4 py-4 text-center">
@@ -1844,7 +1857,6 @@ function PromotionFormModal({
       subtitle="Master Promotion"
       icon={<Tag className="h-5 w-5" />}
       onClose={savedPromotion && mode === "create" ? onSaved : onClose}
-      wide
     >
       {!savedPromotion || mode === "edit" ? (
         <form onSubmit={handleSubmit} className="space-y-5">

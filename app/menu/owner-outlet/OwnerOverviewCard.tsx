@@ -74,18 +74,18 @@ export default function OwnerOverviewCard({ ownerId }: { ownerId: number }) {
     <div className="space-y-4">
       <QuickInfoCardGrid>
         <QuickInfoCard
-          label="Saldo Berjalan"
-          value={formatRupiah(balance.wallet.balance)}
-          description="Saldo wallet aktif milik owner ini."
-          tone="accent"
+          label="Jumlah Outlet"
+          value={ownerStatus.outlet_count}
+          description="Total outlet yang terdaftar."
+          tone="sky"
           silhouette="building"
           valueClassName="text-[2rem] md:text-[2.15rem]"
         />
         <QuickInfoCard
-          label="Total Transfer"
-          value={formatRupiah(balance.total_transferred)}
-          description="Akumulasi transfer yang pernah tercatat."
-          tone="sky"
+          label="Saldo Berjalan"
+          value={formatRupiah(balance.wallet.balance)}
+          description="Saldo wallet aktif milik owner ini."
+          tone="accent"
           valueClassName="text-[2rem] md:text-[2.15rem]"
         />
         <QuickInfoCard
@@ -96,9 +96,9 @@ export default function OwnerOverviewCard({ ownerId }: { ownerId: number }) {
           valueClassName="text-[2rem] md:text-[2.15rem]"
         />
         <QuickInfoCard
-          label="Total Terpakai"
-          value={formatRupiah(balance.total_spent)}
-          description="Total saldo yang sudah digunakan."
+          label="Outlet Berlangganan"
+          value={ownerStatus.subscribed_outlet_count}
+          description="Jumlah outlet yang aktif berlangganan."
           tone="rose"
           valueClassName="text-[2rem] md:text-[2.15rem]"
         />
