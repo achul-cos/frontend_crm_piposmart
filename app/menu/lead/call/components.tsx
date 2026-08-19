@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { getCatalogPackages, getCatalogPlans, getEligiblePromotions, type CatalogPackage, type CatalogPlan, type CatalogPromotion } from "@/app/lib/api";
 import RemarkOptionsSection, {
   getRemarkLabelFromValue,
@@ -21,6 +20,7 @@ import Remark3SalesSection, {
 } from "./remarks/remark-3/components";
 import { useFeedback, type FeedbackApi } from "@/app/components/feedback/FeedbackContext";
 import { formatPhoneDisplay, getWhatsAppUrl } from "@/app/lib/phone";
+import ScreenPortal from "@/app/components/ui/ScreenPortal";
 
 export interface CallCustomer {
   no: number;
@@ -235,12 +235,6 @@ export default function CallPage({
   onSave: (result: CallFormResult) => void;
 }) {
   const { showError } = useFeedback();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
   const [callStatus, setCallStatus] = useState("");
   const [chatStatus, setChatStatus] = useState("");
   const [followUpDate, setFollowUpDate] = useState(getTodayInputDate());
@@ -452,40 +446,45 @@ export default function CallPage({
     setSalesPayload(getDefaultSalesPayload());
   };
 
-  if (!mounted) return null;
+  return (
+    <ScreenPortal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 md:p-6 backdrop-blur-xs">
+        <div className="relative flex w-full max-w-5xl max-h-[92vh] flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150">
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-0">
-      <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={handleClose} />
+          {/* Header - Premium gradient & layout */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-red-50 to-white px-8 py-6 border-b border-gray-100 flex-shrink-0">
+            <div className="absolute top-0 right-0 p-4">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-gray-400 backdrop-blur-sm transition-all hover:bg-white hover:text-gray-700 hover:shadow-xs"
+                title="Tutup"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-      <div className="app-modal-panel relative z-10 flex w-full max-w-4xl rounded-[20px] bg-gray-50 shadow-2xl">
-        <div className="app-modal-header flex items-start justify-between gap-4 rounded-t-[20px] px-6 py-5">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C92C1E]">
-              CALL & CHAT CUSTOMER
-            </p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-900">
-              Form Laporan Aktivitas Lead
-            </h2>
-            <p className="mt-1 text-xs font-medium text-gray-500">
-              Catat hasil call, chat, follow-up, training, hingga closing customer.
-            </p>
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#C92C1E] to-red-600 text-white shadow-lg shadow-red-200/50">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              </div>
+              <div className="pt-0.5">
+                <h3 className="text-xl font-bold tracking-tight text-gray-900">
+                  Call & Chat Customer
+                </h3>
+                <p className="mt-1 text-sm font-medium text-gray-500">
+                  Form laporan aktivitas komunikasi, follow-up, training, hingga closing customer.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleClose}
-            className="app-modal-close rounded-xl p-2 transition-colors"
-            title="Tutup"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="min-h-0 flex flex-1 flex-col bg-gray-50">
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
+          <form onSubmit={handleSubmit} className="min-h-0 flex flex-1 flex-col overflow-hidden bg-white">
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-8 py-6">
             {/* COMPACT PROFILE CARD - MOCKUP STYLE */}
             <div className="rounded-2xl bg-white border border-red-100 p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-6">
@@ -763,61 +762,66 @@ export default function CallPage({
             )}
           </div>
 
-          <div className="shrink-0 border-t border-gray-200 bg-white px-6 py-4 z-10 rounded-b-[20px]">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {currentStep === 1 && "Lengkapi form Tahap 1 untuk melanjutkan."}
-                {currentStep === 2 && "Pilih remark yang sesuai untuk customer ini."}
-                {currentStep === 3 && "Tulis kesimpulan akhir sebelum menyimpan."}
-              </div>
+          {/* FOOTER ACTIONS - MOCKUP STYLE */}
+          <div className="flex-shrink-0 flex items-center justify-between border-t border-gray-100 bg-white px-8 py-5 rounded-b-[32px]">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {currentStep === 1 && "Lengkapi status call atau chat untuk melanjutkan."}
+              {currentStep === 2 && "Pilih remark yang sesuai untuk customer ini."}
+              {currentStep === 3 && "Tulis kesimpulan akhir sebelum menyimpan."}
+            </div>
 
-              <div className="flex justify-end gap-3">
-                {currentStep > 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(prev => prev - 1)}
-                    className="rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
-                  >
-                    Kembali
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
-                  >
-                    Batal
-                  </button>
-                )}
+            <div className="flex items-center gap-3">
+              {currentStep > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(prev => prev - 1)}
+                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+                >
+                  Kembali
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="rounded-xl px-5 py-2.5 text-sm font-bold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                >
+                  Batal
+                </button>
+              )}
 
-                {currentStep < 3 ? (
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(prev => prev + 1)}
-                    disabled={currentStep === 1 ? !isStatusComplete : !selectedRemark}
-                    className="rounded-xl bg-[#C92C1E] px-6 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Lanjut
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={!canSave}
-                    className="rounded-xl bg-[#C92C1E] px-6 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#A82216] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Simpan Laporan Call
-                  </button>
-                )}
-              </div>
+              {currentStep < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(prev => prev + 1)}
+                  disabled={currentStep === 1 ? !isStatusComplete : !selectedRemark}
+                  className="group inline-flex items-center gap-2 rounded-xl bg-[#C92C1E] px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-red-200 transition-all hover:bg-[#b02619] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                >
+                  Lanjut
+                  <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!canSave}
+                  className="group inline-flex items-center gap-2 rounded-xl bg-[#C92C1E] px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-red-200 transition-all hover:bg-[#b02619] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                >
+                  Simpan Laporan Call
+                  <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </form>
       </div>
-    </div>,
-    document.body
+    </div>
+  </ScreenPortal>
   );
 }
 
