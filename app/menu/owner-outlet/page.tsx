@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   type BackendOwner,
+  type OwnerListParams,
   createOwner,
   uploadImportFile,
   getImportBatch,
@@ -13,7 +14,6 @@ import {
   type ImportBatchResponse,
   type ImportRowError,
   updateOwner,
-  softDeleteOwner,
   bulkSoftDeleteOwners,
   bulkCreateOwnerOutlets,
   downloadOwnerExportFile,
@@ -38,7 +38,6 @@ import {
   RowActionGroup,
   ViewActionButton,
   EditActionButton,
-  DeleteActionButton,
 } from "@/app/components/table/RowActionButton";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
@@ -287,6 +286,8 @@ function formatToDatetimeLocal(isoString?: string | null) {
   return localDate.toISOString().slice(0, 16);
 }
 
+type OwnerPageTab = "list" | "non_register" | "analytics";
+
 export default function OwnerPage() {
   usePageTitle("Owner");
   const router = useRouter();
@@ -313,7 +314,7 @@ export default function OwnerPage() {
   const [selectedOwnerIds, setSelectedOwnerIds] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
-  const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
+  const [activeTab, setActiveTab] = useState<OwnerPageTab>("list");
 
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
@@ -396,8 +397,6 @@ export default function OwnerPage() {
     loadingVillages: outletLoadingVillages,
   } = useLocation();
 
-  const hasMoved = useRef(false);
-
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
@@ -411,7 +410,6 @@ export default function OwnerPage() {
   useEffect(() => {
     const handleMouseUp = () => {
       setIsDragging(false);
-      hasMoved.current = false;
     };
     window.addEventListener("mouseup", handleMouseUp);
     return () => window.removeEventListener("mouseup", handleMouseUp);
@@ -429,7 +427,7 @@ export default function OwnerPage() {
     }
   }, [isEditOwnerModalOpen, editOwnerForm.province, provinces, loadCitiesByProvinceName]);
 
-  const ownersQueryParams = useMemo(
+  const ownersQueryParams = useMemo<OwnerListParams>(
     () => ({
       page: pagination.page,
       limit: pagination.limit,
@@ -446,9 +444,10 @@ export default function OwnerPage() {
       end_date: endDate || undefined,
       created_from: startDate || undefined,
       created_to: endDate || undefined,
+      owner_kind: activeTab === "non_register" ? "non_register" : "registered",
       sort,
     }),
-    [pagination.page, pagination.limit, search, filters, startDate, endDate, sort]
+    [pagination.page, pagination.limit, search, filters, startDate, endDate, sort, activeTab]
   );
 
   const { data: ownersData, isLoading, refetch: refetchOwners } = useOwnersQuery(ownersQueryParams);
@@ -460,45 +459,15 @@ export default function OwnerPage() {
     void refetchOwners();
   }, [refetchOwners]);
 
+  const handleChangeTab = (tab: OwnerPageTab) => {
+    setActiveTab(tab);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    setSelectedOwnerIds([]);
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPagination((prev) => ({ ...prev, page: 1 }));
-  };
-
-  const handleToggleSelectRow = useCallback((id: number) => {
-    setSelectedOwnerIds((prev) =>
-      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
-    );
-  }, []);
-
-  const handleRowMouseDown = (id: number, currentlySelected: boolean) => {
-    setIsDragging(true);
-    hasMoved.current = false;
-    const mode = currentlySelected ? "deselect" : "select";
-    setDragMode(mode);
-
-    setSelectedOwnerIds((prev) => {
-      if (mode === "select" && !prev.includes(id)) return [...prev, id];
-      if (mode === "deselect" && prev.includes(id)) {
-        return prev.filter((selectedId) => selectedId !== id);
-      }
-      return prev;
-    });
-  };
-
-  const handleRowMouseEnter = (id: number) => {
-    if (!isDragging) return;
-
-    if (hasMoved.current) {
-      setSelectedOwnerIds((prev) => {
-        if (dragMode === "select" && !prev.includes(id)) return [...prev, id];
-        if (dragMode === "deselect" && prev.includes(id)) {
-          return prev.filter((selectedId) => selectedId !== id);
-        }
-        return prev;
-      });
-    }
-    hasMoved.current = true;
   };
 
   const submitAddOwner = async () => {
@@ -631,30 +600,6 @@ export default function OwnerPage() {
     void submitEditOwner();
   };
 
-  const handleDeleteOwner = async (ownerId: number) => {
-    const ok = await confirm({
-      title: "Hapus Owner",
-      message: "Apakah Anda yakin ingin menghapus owner ini? Data akan dipindahkan ke sampah dan bisa dipulihkan nanti.",
-      confirmLabel: "Hapus",
-      danger: true,
-    });
-    if (!ok) return;
-
-    try {
-      await withLoading(() => softDeleteOwner(ownerId), { label: "Menghapus owner..." });
-      loadOwners();
-    } catch (err: unknown) {
-      showError({
-        title: "Gagal menghapus owner",
-        message: "Sistem gagal menghapus owner ini.",
-        cause: "Bisa disebabkan oleh koneksi bermasalah.",
-        solution: "Periksa koneksi Anda dan coba lagi.",
-        technicalDetails: getErrorMessage(err, "Gagal menghapus owner"),
-        onRetry: () => void handleDeleteOwner(ownerId),
-      });
-    }
-  };
-
   const [ownerModalThemeMode, setOwnerModalThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") return "light";
     return readStoredThemeMode();
@@ -694,6 +639,7 @@ export default function OwnerPage() {
           created_to: endDate || undefined,
           date_from: startDate || undefined,
           date_to: endDate || undefined,
+          owner_kind: activeTab === "non_register" ? "non_register" : "registered",
         });
       }, { label: "Menyiapkan file ekspor..." });
 
@@ -869,6 +815,14 @@ export default function OwnerPage() {
   const subscribeCount = owners.filter((o) => getOwnerStatus(o) === "BERLANGGANAN").length;
   const trialCount = owners.filter((o) => getOwnerStatus(o) === "TRIAL").length;
   const notSubscribeCount = owners.length - subscribeCount - trialCount;
+  const isNonRegisterTab = activeTab === "non_register";
+  const tableTitle = isNonRegisterTab ? "Non-Register" : "Daftar Owner";
+  const tableDescription = isNonRegisterTab
+    ? "Data prospek dari user temp yang belum menyelesaikan registrasi."
+    : "Daftar seluruh data owner yang terdaftar dalam sistem.";
+  const emptyMessage = isNonRegisterTab
+    ? "Tidak ada data non-register ditemukan."
+    : "Tidak ada data owner ditemukan.";
 
   const renderSortableHeader = (key: string, label: string) => {
     const isSorted = sort.replace("-", "") === key;
@@ -894,7 +848,23 @@ export default function OwnerPage() {
     );
   };
 
-  const statCards = (
+  const statCards = isNonRegisterTab ? (
+    <QuickInfoCardGrid>
+      <QuickInfoCard
+        label="Total Non-Register"
+        value={total}
+        description="Prospek user temp yang belum menyelesaikan registrasi."
+        tone="accent"
+        silhouette="building"
+      />
+      <QuickInfoCard
+        label="Pada Halaman Ini"
+        value={owners.length}
+        description="Data non-register yang tampil sesuai filter aktif."
+        tone="sky"
+      />
+    </QuickInfoCardGrid>
+  ) : (
     <QuickInfoCardGrid>
       <QuickInfoCard
         label="Total Owner"
@@ -931,13 +901,14 @@ export default function OwnerPage() {
           {(
             [
               { key: "list", label: "Daftar Owner" },
+              { key: "non_register", label: "Non-Register" },
               { key: "analytics", label: "Analisis" },
             ] as const
           ).map((tab) => (
             <button
               key={tab.key}
               type="button"
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => handleChangeTab(tab.key)}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-all ${
                 activeTab === tab.key
                   ? "bg-white text-[#C92C1E] shadow-sm"
@@ -1074,15 +1045,17 @@ export default function OwnerPage() {
           <div className="flex flex-col rounded-2xl border border-gray-200/60 bg-white shadow-xs">
             <div className="flex flex-col items-start gap-4 border-b border-gray-50 p-6">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Daftar Owner</h2>
-                <p className="mt-1 text-sm text-gray-500">Daftar seluruh data owner yang terdaftar dalam sistem.</p>
+                <h2 className="text-xl font-bold text-gray-900">{tableTitle}</h2>
+                <p className="mt-1 text-sm text-gray-500">{tableDescription}</p>
               </div>
 
               {/* ACTION BUTTONS (BERADA DI SEBELAH KIRI) */}
               <div className="flex flex-wrap items-center gap-3 w-full">
-                <button onClick={() => setIsAddOwnerModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700">
-                  <PlusIcon className="h-4 w-4" /> Tambah Owner
-                </button>
+                {!isNonRegisterTab && (
+                  <button onClick={() => setIsAddOwnerModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-[#C92C1E] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-red-700">
+                    <PlusIcon className="h-4 w-4" /> Tambah Owner
+                  </button>
+                )}
 
                 <div className="relative">
                   <button
@@ -1245,7 +1218,7 @@ export default function OwnerPage() {
                   ) : owners.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="px-6 py-10 text-center text-gray-500">
-                        Tidak ada data owner ditemukan.
+                        {emptyMessage}
                       </td>
                     </tr>
                   ) : (

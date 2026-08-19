@@ -474,6 +474,7 @@ export interface OwnerListParams {
   end_date?: string;
   created_from?: string;
   created_to?: string;
+  owner_kind?: "registered" | "non_register" | "all";
   scope?: "active" | "trash" | "unscoped";
 }
 
@@ -2927,6 +2928,7 @@ export type OwnerExportKind = "owner" | "owner-outlet";
 
 export interface OwnerExportFilters extends ListGlobalOutletsParams {
   owner_keyword?: string;
+  owner_kind?: "registered" | "non_register" | "all";
   status?: string;
   subscription_status?: string;
   subscription_month?: string;
