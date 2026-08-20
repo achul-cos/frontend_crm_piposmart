@@ -30,8 +30,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+RUN if [ ! -f server.js ]; then \
+      nested_server="$(find . -mindepth 2 -maxdepth 2 -name server.js -print -quit)"; \
+      if [ -n "$nested_server" ]; then \
+        nested_dir="$(dirname "$nested_server")"; \
+        cp -a "$nested_dir"/. ./ && rm -rf "$nested_dir"; \
+      fi; \
+    fi; \
+    [ -f server.js ] || (echo "Next standalone server.js not found" >&2; exit 1)
+COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
