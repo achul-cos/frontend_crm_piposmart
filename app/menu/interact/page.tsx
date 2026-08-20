@@ -11,6 +11,7 @@ import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoC
 import ReportExportButton from "@/app/components/export/ReportExportButton";
 import { useInteractionListQuery, useInteractSalesListQuery } from "@/app/lib/queries/interact";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
   ssr: false,
@@ -54,14 +55,15 @@ export default function InteractPage() {
   const interactionListParams = useMemo(
     () => ({
       page,
-      limit,
+      limit: limit === 0 ? undefined : limit,
+      all: limit === 0,
       type: typeFilter || undefined,
       sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
       score: scoreFilter ? Number(scoreFilter) : undefined,
       interaction_from: dateFrom || undefined,
       interaction_to: dateTo || undefined,
     }),
-    [page, typeFilter, salesFilter, scoreFilter, dateFrom, dateTo, isSales]
+    [page, limit, typeFilter, salesFilter, scoreFilter, dateFrom, dateTo, isSales]
   );
 
   const { data: interactData, isLoading } = useInteractionListQuery(interactionListParams);
@@ -71,7 +73,7 @@ export default function InteractPage() {
   const salesList = salesListData || [];
   const totalItems = interactData?.pagination?.total || 0;
 
-  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const totalPages = limit === 0 ? 1 : Math.ceil(totalItems / limit) || 1;
   const typeFilterLabel =
     typeFilter === "CALL"
       ? "Call Saja"
@@ -330,7 +332,7 @@ export default function InteractPage() {
           </div>
 
           <div className="w-full max-w-full overflow-x-auto">
-            <table className="w-full min-w-[960px] text-left text-sm text-gray-600">
+            <table data-table-pagination-manual="true" className="w-full min-w-[960px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4">Waktu Interaksi</th>
@@ -441,7 +443,19 @@ export default function InteractPage() {
             </table>
           </div>
 
-          {totalPages > 0 && (
+          <TablePaginationFooter
+            currentPage={page}
+            totalItems={totalItems}
+            rowsPerPage={limit === 0 ? "all" : limit}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onRowsPerPageChange={(nextLimit) => {
+              setLimit(nextLimit === "all" ? 0 : nextLimit);
+              setPage(1);
+            }}
+          />
+
+          {false && totalPages > 0 && (
             <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500">

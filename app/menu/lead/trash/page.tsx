@@ -37,6 +37,7 @@ import {
 import { formatPhoneDisplay } from "@/app/lib/phone";
 import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import {
   RowActionGroup,
   RestoreActionButton,
@@ -343,12 +344,13 @@ export default function LeadTrashPage() {
   // on filter change), we simply clamp via safeCurrentPage below — avoids an
   // extra setState-in-effect render pass while keeping the same UX (an
   // out-of-range page after filtering snaps back into range).
-  const totalPages = Math.max(1, Math.ceil(displayData.length / rowsPerPage));
+  const effectiveRowsPerPage = rowsPerPage === 0 ? Math.max(displayData.length, 1) : rowsPerPage;
+  const totalPages = rowsPerPage === 0 ? 1 : Math.max(1, Math.ceil(displayData.length / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages) || 1;
-  const startDataIndex = (safeCurrentPage - 1) * rowsPerPage;
+  const startDataIndex = (safeCurrentPage - 1) * effectiveRowsPerPage;
   const paginatedData = useMemo(
-    () => displayData.slice(startDataIndex, startDataIndex + rowsPerPage),
-    [displayData, startDataIndex, rowsPerPage],
+    () => displayData.slice(startDataIndex, startDataIndex + effectiveRowsPerPage),
+    [displayData, startDataIndex, effectiveRowsPerPage],
   );
 
   const currentPageIds = useMemo(() => paginatedData.map((item) => item.no), [paginatedData]);
@@ -718,7 +720,7 @@ export default function LeadTrashPage() {
 
         {/* Table WorkSpace */}
         <div className="max-w-full overflow-x-auto">
-          <table id="lead-table-trash" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+          <table id="lead-table-trash" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
             <thead className="bg-[#f9fafb] text-xs font-black uppercase text-gray-500 tracking-wider border-y border-gray-200">
               <tr>
                 <th className="px-4 py-4 text-center w-12">
@@ -1017,7 +1019,19 @@ export default function LeadTrashPage() {
           </table>
         </div>
 
-        <div className="flex flex-col gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <TablePaginationFooter
+          currentPage={safeCurrentPage}
+          totalItems={displayData.length}
+          rowsPerPage={rowsPerPage === 0 ? "all" : rowsPerPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          onRowsPerPageChange={(nextRowsPerPage) => {
+            setRowsPerPage(nextRowsPerPage === "all" ? 0 : nextRowsPerPage);
+            setCurrentPage(1);
+          }}
+        />
+
+        {false && <div className="flex flex-col gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <span className="text-xs font-bold text-gray-500 hidden sm:inline-block">
               Total {displayData.length} Owner
@@ -1060,7 +1074,7 @@ export default function LeadTrashPage() {
               Selanjutnya
             </button>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

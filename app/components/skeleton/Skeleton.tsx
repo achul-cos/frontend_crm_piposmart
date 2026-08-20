@@ -33,7 +33,7 @@ export function SkeletonText({ className = "" }: { className?: string }) {
 export function TableSkeleton({ rows = 8, columns = 6 }: { rows?: number; columns?: number }) {
   return (
     <div className="w-full overflow-hidden" role="status" aria-label="Memuat data">
-      <table className="w-full border-collapse">
+      <table data-table-pagination-skip="true" className="w-full border-collapse">
         <tbody>
           {Array.from({ length: rows }).map((_, rowIndex) => (
             <tr key={rowIndex} className="border-b border-gray-100 dark:border-slate-800">

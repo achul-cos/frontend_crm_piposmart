@@ -11,6 +11,7 @@ import {
   EditActionButton,
   ToggleActiveActionButton,
 } from "@/app/components/table/RowActionButton";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import type { PartnerItem, PartnerTypeItem } from "@/app/lib/api";
 import {
   useCreatePartner,
@@ -265,11 +266,12 @@ export default function MitraSalesPage() {
 
   const [mitraPageSize, setMitraPageSize] = useState(10);
   const mitraTotalItems = visiblePartners.length;
-  const mitraTotalPages = Math.max(1, Math.ceil(mitraTotalItems / mitraPageSize));
+  const effectiveMitraPageSize = mitraPageSize === 0 ? Math.max(mitraTotalItems, 1) : mitraPageSize;
+  const mitraTotalPages = mitraPageSize === 0 ? 1 : Math.max(1, Math.ceil(mitraTotalItems / mitraPageSize));
   const paginatedMitra = useMemo(() => {
-    const start = (mitraPage - 1) * mitraPageSize;
-    return visiblePartners.slice(start, start + mitraPageSize);
-  }, [visiblePartners, mitraPage, mitraPageSize]);
+    const start = (mitraPage - 1) * effectiveMitraPageSize;
+    return visiblePartners.slice(start, start + effectiveMitraPageSize);
+  }, [visiblePartners, mitraPage, effectiveMitraPageSize]);
 
   const filteredPartnerTypes = useMemo(() => {
     const keyword = typeSearch.trim().toLowerCase();
@@ -695,7 +697,7 @@ export default function MitraSalesPage() {
           <div className="relative w-full">
             <div className="flex flex-col">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[800px] text-left text-sm text-gray-600">
+                <table data-table-pagination-manual="true" className="w-full min-w-[800px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="w-12 px-4 py-4 text-center">
@@ -782,7 +784,19 @@ export default function MitraSalesPage() {
                 )}
                   </tbody>
                 </table>
-          {mitraTotalPages > 1 && (
+          <TablePaginationFooter
+            currentPage={mitraPage}
+            totalItems={mitraTotalItems}
+            rowsPerPage={mitraPageSize === 0 ? "all" : mitraPageSize}
+            totalPages={mitraTotalPages}
+            onPageChange={setMitraPage}
+            onRowsPerPageChange={(nextPageSize) => {
+              setMitraPageSize(nextPageSize === "all" ? 0 : nextPageSize);
+              setMitraPage(1);
+            }}
+          />
+
+          {false && mitraTotalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
               <div className="flex items-center gap-4">
                 <div className="text-xs font-medium text-gray-500">
@@ -910,7 +924,7 @@ export default function MitraSalesPage() {
           <div className="relative w-full">
             <div className="flex flex-col">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[920px] text-left text-sm text-gray-600">
+                <table data-table-pagination-manual="true" className="w-full min-w-[920px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="w-12 px-4 py-4 text-center">
@@ -1091,7 +1105,19 @@ export default function MitraSalesPage() {
         </div>
       </div>
 
-          {mitraTotalPages > 0 && (
+          <TablePaginationFooter
+            currentPage={mitraPage}
+            totalItems={mitraTotalItems}
+            rowsPerPage={mitraPageSize === 0 ? "all" : mitraPageSize}
+            totalPages={mitraTotalPages}
+            onPageChange={setMitraPage}
+            onRowsPerPageChange={(nextPageSize) => {
+              setMitraPageSize(nextPageSize === "all" ? 0 : nextPageSize);
+              setMitraPage(1);
+            }}
+          />
+
+          {false && mitraTotalPages > 0 && (
             <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500">

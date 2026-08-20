@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyRound, Search, Plus, RefreshCw, MoreVertical, Trash2, X } from 'lucide-react';
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import { authFetchJson } from '@/app/lib/api';
 import {
   RowActionButton,
@@ -526,11 +527,12 @@ export default function KelolaUserPage() {
 
   const [userPageSize, setUserPageSize] = useState(10);
   const userTotalItems = filteredUsers.length;
-  const userTotalPages = Math.max(1, Math.ceil(userTotalItems / userPageSize));
+  const effectiveUserPageSize = userPageSize === 0 ? Math.max(userTotalItems, 1) : userPageSize;
+  const userTotalPages = userPageSize === 0 ? 1 : Math.max(1, Math.ceil(userTotalItems / userPageSize));
   const paginatedUsers = useMemo(() => {
-    const start = (userPage - 1) * userPageSize;
-    return filteredUsers.slice(start, start + userPageSize);
-  }, [filteredUsers, userPage, userPageSize]);
+    const start = (userPage - 1) * effectiveUserPageSize;
+    return filteredUsers.slice(start, start + effectiveUserPageSize);
+  }, [filteredUsers, userPage, effectiveUserPageSize]);
 
   const totalUsers = users.length;
   const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
@@ -1043,7 +1045,7 @@ export default function KelolaUserPage() {
         <div className="relative w-full">
           <div className="flex flex-col">
             <div className="overflow-x-auto">
-              <table id="users-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
+              <table id="users-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="w-12 px-4 py-4 text-center">
@@ -1193,7 +1195,19 @@ export default function KelolaUserPage() {
               )}
                 </tbody>
               </table>
-          {userTotalPages > 1 && (
+          <TablePaginationFooter
+            currentPage={userPage}
+            totalItems={userTotalItems}
+            rowsPerPage={userPageSize === 0 ? "all" : userPageSize}
+            totalPages={userTotalPages}
+            onPageChange={setUserPage}
+            onRowsPerPageChange={(nextPageSize) => {
+              setUserPageSize(nextPageSize === "all" ? 0 : nextPageSize);
+              setUserPage(1);
+            }}
+          />
+
+          {false && userTotalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
               <div className="flex items-center gap-4">
                 <div className="text-xs font-medium text-gray-500">

@@ -72,7 +72,7 @@ export default function ImportHistoryModal({
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
     try {
-      const resp = await getImportBatches({ profile, limit: 20 });
+      const resp = await getImportBatches({ profile, all: true });
       setBatches(resp?.items || []);
     } catch (err) {
       console.error("Gagal memuat riwayat import", err);

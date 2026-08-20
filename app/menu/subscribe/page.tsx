@@ -14,6 +14,7 @@ import {
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ReportExportButton from "@/app/components/export/ReportExportButton";
@@ -997,9 +998,9 @@ export default function SubscriptionPage() {
     totalPages: 1,
   };
   const totalItems = pagination.total;
-  const totalPages = Math.max(1, pagination.totalPages || Math.ceil(totalItems / limit) || 1);
-  const pageStart = totalItems === 0 ? 0 : (page - 1) * limit + 1;
-  const pageEnd = totalItems === 0 ? 0 : Math.min(page * limit, totalItems);
+  const totalPages = limit === 0 ? 1 : Math.max(1, pagination.totalPages || Math.ceil(totalItems / limit) || 1);
+  const pageStart = totalItems === 0 ? 0 : (page - 1) * Math.max(limit, 1) + 1;
+  const pageEnd = totalItems === 0 ? 0 : limit === 0 ? totalItems : Math.min(page * limit, totalItems);
   const activeItemCount =
     activeTab === "orders"
       ? orders.length
@@ -1383,7 +1384,7 @@ export default function SubscriptionPage() {
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-                  <table id="orders-table" data-column-visibility-manual="true" className="w-full min-w-[1120px] text-left text-xs">
+                  <table id="orders-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[1120px] text-left text-xs">
                     <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                       <tr>
                         <th className="w-12 px-4 py-4 text-center">
@@ -1526,7 +1527,7 @@ export default function SubscriptionPage() {
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-                  <table id="subscriptions-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-xs">
+                  <table id="subscriptions-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[900px] text-left text-xs">
                     <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="w-12 px-4 py-4 text-center">
@@ -1673,7 +1674,7 @@ export default function SubscriptionPage() {
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-                  <table id="reconciliations-table" data-column-visibility-manual="true" className="w-full min-w-[920px] text-left text-xs">
+                  <table id="reconciliations-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[920px] text-left text-xs">
                     <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="p-3 font-black">Reconciliation</th>
@@ -1762,7 +1763,7 @@ export default function SubscriptionPage() {
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] text-left text-xs">
+                  <table data-table-pagination-manual="true" className="w-full min-w-[900px] text-left text-xs">
                     <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="p-3 font-black">Issue</th>
@@ -1839,7 +1840,19 @@ export default function SubscriptionPage() {
             </div>
           )}
 
-          {true && (
+          <TablePaginationFooter
+            currentPage={page}
+            totalItems={totalItems}
+            rowsPerPage={limit === 0 ? "all" : limit}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onRowsPerPageChange={(nextLimit) => {
+              setLimit(nextLimit === "all" ? 0 : nextLimit);
+              setPage(1);
+            }}
+          />
+
+          {false && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
               <div className="flex items-center gap-4">
                 <div className="text-xs font-medium text-gray-500">

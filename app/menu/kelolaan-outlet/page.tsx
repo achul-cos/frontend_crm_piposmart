@@ -36,6 +36,7 @@ import BulkEditOutletModal, { type BulkEditFields } from "./BulkEditOutletModal"
 import SubscriptionImportModal from "./SubscriptionImportModal";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import { useLocation } from "@/app/lib/useLocation";
@@ -521,7 +522,8 @@ export default function KelolaanOutletPage() {
       subscription_status: filterOverviewStatusParam,
       creation_status: creationStatusFilter || undefined,
       page,
-      limit,
+      limit: limit === 0 ? undefined : limit,
+      all: limit === 0,
       start_date: createdFrom || undefined,
       end_date: createdTo || undefined,
     }),
@@ -551,8 +553,9 @@ export default function KelolaanOutletPage() {
       due_date_end: dueDateEnd || undefined,
       start_date_start: startDateStart || undefined,
       start_date_end: startDateEnd || undefined,
-      page,
-      limit,
+     page,
+      limit: limit === 0 ? undefined : limit,
+      all: limit === 0,
     }),
     [search, filterCode, filterName, filterOwner, filterOwnerCode, filterCity, filterCityName, statusLangganan, statusJatuhTempo, creationStatusFilter, filterPlan, month, dueDateReference, dueDateStart, dueDateEnd, startDateStart, startDateEnd, page, limit],
   );
@@ -579,6 +582,7 @@ export default function KelolaanOutletPage() {
         ? 0
         : overviewQuery.data?.pagination.total ?? 0;
   const isLoading = tableState === "langganan" ? subscriptionQuery.isLoading : overviewQuery.isLoading;
+  const effectiveLimit = limit === 0 ? Math.max(total, overviewItems.length, subscriptionItems.length, 1) : limit;
 
   useEffect(() => {
     const activeError = tableState === "langganan" ? subscriptionQuery.error : overviewQuery.error;
@@ -820,7 +824,7 @@ export default function KelolaanOutletPage() {
     setBulkResultMessage(null);
   }, [tableState, page, search, statusLangganan, statusJatuhTempo, creationStatusFilter, dueDateReference, month, dueDateStart, dueDateEnd, filterOverviewStatus, filterCode, filterName, filterOwner, filterCity, filterPlan]);
 
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const totalPages = limit === 0 ? 1 : Math.max(1, Math.ceil(total / limit));
 
   useEffect(() => {
     if (total > 0 && page > totalPages) {
@@ -1734,7 +1738,7 @@ export default function KelolaanOutletPage() {
                   uniqueProvinces={uniqueSubProvinces}
                   uniquePlans={uniqueSubPlans}
                   page={page}
-                  limit={limit}
+                  limit={effectiveLimit}
                 />
               ) : (
                 <OverviewTable
@@ -1750,7 +1754,7 @@ export default function KelolaanOutletPage() {
                   hasMovedRef={hasMoved}
                   monthFilter={month}
                   page={page}
-                  limit={limit}
+                  limit={effectiveLimit}
                   filterOwnerCode={filterOwnerCode}
                   onFilterOwnerCodeChange={(val) => {
                     setFilterOwnerCode(val);
@@ -1829,6 +1833,19 @@ export default function KelolaanOutletPage() {
 
             {/* Pagination */}
             {!isLoading && !error && (
+              <TablePaginationFooter
+                currentPage={page}
+                totalItems={total}
+                rowsPerPage={limit === 0 ? "all" : limit}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                onRowsPerPageChange={(nextLimit) => {
+                  setLimit(nextLimit === "all" ? 0 : nextLimit);
+                  setPage(1);
+                }}
+              />
+            )}
+            {false && !isLoading && !error && (
               <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
                 <div className="flex items-center gap-4">
                   <span className="text-xs font-medium text-gray-500">
@@ -2125,6 +2142,7 @@ function OverviewTable({
     <table
       id="kelolaan-outlet-overview-table"
       data-column-visibility-manual="true"
+      data-table-pagination-manual="true"
       className="w-full min-w-[1100px] text-left text-sm text-gray-600"
     >
       <thead className="sticky top-0 z-20 border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500 shadow-xs">
@@ -2806,6 +2824,7 @@ function SubscriptionTable({
     <table
       id="kelolaan-outlet-subscription-table"
       data-column-visibility-manual="true"
+      data-table-pagination-manual="true"
       className="w-full min-w-[1100px] text-left text-sm text-gray-600"
     >
       <thead className="sticky top-0 z-20 border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500 shadow-xs">

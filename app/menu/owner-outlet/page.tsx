@@ -32,6 +32,7 @@ import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import ImportHistoryModal from "@/app/components/ImportHistoryModal";
 import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 import {
@@ -430,7 +431,8 @@ export default function OwnerPage() {
   const ownersQueryParams = useMemo<OwnerListParams>(
     () => ({
       page: pagination.page,
-      limit: pagination.limit,
+      limit: pagination.limit === 0 ? undefined : pagination.limit,
+      all: pagination.limit === 0,
       q: search,
       code: filters.code,
       name: filters.name,
@@ -453,7 +455,8 @@ export default function OwnerPage() {
   const { data: ownersData, isLoading, refetch: refetchOwners } = useOwnersQuery(ownersQueryParams);
   const owners = ownersData?.data.items ?? [];
   const total = ownersData?.data.pagination?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pagination.limit));
+  const effectiveLimit = pagination.limit === 0 ? Math.max(total, owners.length, 1) : pagination.limit;
+  const totalPages = pagination.limit === 0 ? 1 : Math.max(1, Math.ceil(total / pagination.limit));
 
   const loadOwners = useCallback(() => {
     void refetchOwners();
@@ -1170,7 +1173,7 @@ export default function OwnerPage() {
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-              <table id="owner-table" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+              <table id="owner-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
                 <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="w-12 px-4 py-4 text-center">
@@ -1262,7 +1265,7 @@ export default function OwnerPage() {
                           </td>
 
                           <td className="px-4 py-4 text-center font-bold text-gray-900">
-                            {(pagination.page - 1) * pagination.limit + owners.indexOf(owner) + 1}
+                            {(pagination.page - 1) * effectiveLimit + owners.indexOf(owner) + 1}
                           </td>
                           <td className="px-4 py-4 align-top font-bold text-gray-900 whitespace-nowrap">
                             {owner.code || "-"}
@@ -1326,7 +1329,22 @@ export default function OwnerPage() {
               </table>
             </div>
 
-            <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
+            <TablePaginationFooter
+              currentPage={pagination.page}
+              totalItems={total}
+              rowsPerPage={pagination.limit === 0 ? "all" : pagination.limit}
+              totalPages={totalPages}
+              onPageChange={(nextPage) => setPagination((prev) => ({ ...prev, page: nextPage }))}
+              onRowsPerPageChange={(nextLimit) =>
+                setPagination((prev) => ({
+                  ...prev,
+                  limit: nextLimit === "all" ? 0 : nextLimit,
+                  page: 1,
+                }))
+              }
+            />
+
+            {false && <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500">
                   Menampilkan {(pagination.page - 1) * pagination.limit + 1} - {Math.min(pagination.page * pagination.limit, total)} dari {total} data
@@ -1387,7 +1405,7 @@ export default function OwnerPage() {
                   Selanjutnya
                 </button>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       </div>

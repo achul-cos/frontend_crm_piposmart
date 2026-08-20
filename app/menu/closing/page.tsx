@@ -9,6 +9,7 @@ import { getProfile } from "@/app/lib/api";
 import { AnimatedListItem } from "@/app/components/motion/primitives";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ReportExportButton from "@/app/components/export/ReportExportButton";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import {
   useClosingListQuery,
   useClosingSalesListQuery,
@@ -195,14 +196,15 @@ export default function ClosingPage() {
   const closingListParams = useMemo(
     () => ({
       page,
-      limit,
+      limit: limit === 0 ? undefined : limit,
+      all: limit === 0,
       q: debouncedFilters.searchQuery || undefined,
       status: debouncedFilters.statusFilter || undefined,
       sales_id: !isSales && debouncedFilters.salesFilter ? Number(debouncedFilters.salesFilter) : undefined,
       closed_from: debouncedFilters.dateFrom || undefined,
       closed_to: debouncedFilters.dateTo || undefined,
     }),
-    [page, debouncedFilters, isSales]
+    [page, limit, debouncedFilters, isSales]
   );
 
   const { data: closingData, isLoading } = useClosingListQuery(closingListParams);
@@ -212,7 +214,7 @@ export default function ClosingPage() {
   const salesList = salesListData || [];
   const totalItems = closingData?.pagination?.total || 0;
 
-  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const totalPages = limit === 0 ? 1 : Math.ceil(totalItems / limit) || 1;
   const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
   const visibleColumnCount = visibleColumns.length;
   const statusFilterLabel =
@@ -552,7 +554,7 @@ export default function ClosingPage() {
           </div>
 
           <div className="w-full max-w-full overflow-x-auto">
-            <table data-column-visibility-manual="true" className="w-full min-w-[1040px] text-left text-sm text-gray-600">
+            <table data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[1040px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   {isColumnVisible("code") ? <th className="px-4 py-4">Kode</th> : null}
@@ -673,7 +675,19 @@ export default function ClosingPage() {
             </table>
           </div>
 
-          {totalPages > 0 && (
+          <TablePaginationFooter
+            currentPage={page}
+            totalItems={totalItems}
+            rowsPerPage={limit === 0 ? "all" : limit}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onRowsPerPageChange={(nextLimit) => {
+              setLimit(nextLimit === "all" ? 0 : nextLimit);
+              setPage(1);
+            }}
+          />
+
+          {false && totalPages > 0 && (
             <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500">

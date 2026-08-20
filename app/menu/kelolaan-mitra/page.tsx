@@ -46,6 +46,7 @@ import {
 import AnalyticsTab from "./AnalyticsTab";
 import { PartnerActivityBadge } from "@/app/components/PartnerActivityBadge";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
@@ -430,6 +431,8 @@ export default function KelolaanMitraPage() {
   const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [partnerTotal, setPartnerTotal] = useState(0);
+  const partnerTotalPages = limit === 0 ? 1 : Math.max(1, Math.ceil(partnerTotal / limit));
 
   const [isDraggingTypes, setIsDraggingTypes] = useState(false);
   const [dragActionTypes, setDragActionTypes] = useState<"select" | "deselect" | null>(null);
@@ -672,13 +675,14 @@ export default function KelolaanMitraPage() {
       try {
         const result = await listPartners({
           search: appliedSearch,
-          limit: limit,
-          offset: (page - 1) * limit,
+          limit: limit === 0 ? 0 : limit,
+          offset: limit === 0 ? 0 : (page - 1) * limit,
         });
 
         if (cancelled) return;
 
         setPartners(result.items || []);
+        setPartnerTotal(result.pagination?.total || result.items?.length || 0);
       } catch (error) {
         if (!cancelled) {
           setPageError(getErrorMessage(error));
@@ -967,11 +971,12 @@ export default function KelolaanMitraPage() {
   const refreshPartners = async () => {
     const result = await listPartners({
       search: appliedSearch,
-      limit: limit,
-      offset: (page - 1) * limit,
+      limit: limit === 0 ? 0 : limit,
+      offset: limit === 0 ? 0 : (page - 1) * limit,
     });
 
-    setPartners(result.items || []);
+      setPartners(result.items || []);
+      setPartnerTotal(result.pagination?.total || result.items?.length || 0);
   };
 
   const refreshTypes = async (preferredId?: number) => {
@@ -1903,7 +1908,7 @@ export default function KelolaanMitraPage() {
               </tbody>
             </table>
           ) : (
-            <table id="partners-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
+            <table id="partners-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="w-12 px-4 py-4 text-center">
@@ -2056,6 +2061,20 @@ export default function KelolaanMitraPage() {
         </div>
 
         {tableMode !== "PARTNER_TYPES" ? (
+          <TablePaginationFooter
+            currentPage={page}
+            totalItems={partnerTotal}
+            rowsPerPage={limit === 0 ? "all" : limit}
+            totalPages={partnerTotalPages}
+            onPageChange={setPage}
+            onRowsPerPageChange={(nextLimit) => {
+              setLimit(nextLimit === "all" ? 0 : nextLimit);
+              setPage(1);
+            }}
+          />
+        ) : null}
+
+        {false && tableMode !== "PARTNER_TYPES" ? (
           <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
             <div className="flex items-center gap-4">
               <span className="text-xs font-medium text-gray-500">

@@ -467,6 +467,7 @@ export interface OwnerListParams {
   city?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
   sort?: string;
   status?: string;
   subscription_status?: string;
@@ -1085,6 +1086,7 @@ export interface InteractionListParams {
   follow_up_to?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
   sort?: string;
 }
 
@@ -1138,6 +1140,7 @@ export interface TrainingListParams {
   scheduled_to?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
   sort?: string;
 }
 
@@ -1259,6 +1262,7 @@ export interface ClosingListParams {
   closed_to?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
   sort?: string;
 }
 
@@ -1918,12 +1922,13 @@ export async function getImportBatch(id: number): Promise<ImportBatchResponse> {
   return json.data;
 }
 
-export async function getImportBatches(params?: { profile?: string, status?: string, page?: number, limit?: number }): Promise<ImportBatchListResponse> {
+export async function getImportBatches(params?: { profile?: string, status?: string, page?: number, limit?: number, all?: boolean }): Promise<ImportBatchListResponse> {
   const queryParams = new URLSearchParams();
   if (params?.profile) queryParams.append('profile', params.profile);
   if (params?.status) queryParams.append('status', params.status);
   if (params?.page) queryParams.append('page', String(params.page));
   if (params?.limit) queryParams.append('limit', String(params.limit));
+  if (params?.all) queryParams.append('all', 'true');
 
   const qs = queryParams.toString();
   const url = `${API_BASE_URL}/api/v1/imports${qs ? `?${qs}` : ''}`;
@@ -2232,7 +2237,7 @@ export interface CreatePartnerReferralPayload {
   notes?: string;
 }
 
-function buildQueryString(params: Record<string, string | number | undefined>) {
+function buildQueryString(params: Record<string, string | number | boolean | undefined>) {
   const query = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -2881,6 +2886,7 @@ export interface ListGlobalOutletsParams {
   owner_id?: number;
   page?: number;
   limit?: number;
+  all?: boolean;
   sort?: string;
   start_date?: string;
   end_date?: string;
@@ -3211,6 +3217,7 @@ export interface ListOutletSubscriptionStatusesParams {
   start_date_end?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
   sort?: string;
   creation_status?: string;
 }

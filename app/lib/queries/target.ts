@@ -86,7 +86,7 @@ async function getKpiRankingWithFallback(periodYear: number, periodMonth: number
 export async function getSalesTargets(periodYear: number, periodMonth: number) {
   const response = await apiFetch<{
     data?: SalesTargetItem[] | { items?: SalesTargetItem[] };
-  }>(`/sales-targets?period_year=${periodYear}&period_month=${periodMonth}`);
+  }>(`/sales-targets?period_year=${periodYear}&period_month=${periodMonth}&all=true`);
 
   return unwrapList(response);
 }

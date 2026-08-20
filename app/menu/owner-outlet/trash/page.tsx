@@ -11,6 +11,7 @@ import {
 import { formatPhoneDisplay } from "@/app/lib/phone";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import { useFeedback } from "@/app/components/feedback/FeedbackContext";
 import {
   RowActionGroup,
@@ -61,7 +62,8 @@ export default function OwnerTrashPage() {
   });
   const [selectedOwnerIds, setSelectedOwnerIds] = useState<number[]>([]);
 
-  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
+  const effectiveLimit = pagination.limit === 0 ? Math.max(pagination.total, owners.length, 1) : pagination.limit;
+  const totalPages = pagination.limit === 0 ? 1 : Math.max(1, Math.ceil(pagination.total / pagination.limit));
 
   const loadOwners = useCallback(async () => {
     setIsLoading(true);
@@ -69,7 +71,8 @@ export default function OwnerTrashPage() {
       const res = await fetchOwners({
         scope: "trash",
         page: pagination.page,
-        limit: pagination.limit,
+        limit: pagination.limit === 0 ? undefined : pagination.limit,
+        all: pagination.limit === 0,
         q: search,
         name: filters.name,
         brand_name: filters.brand_name,
@@ -82,7 +85,10 @@ export default function OwnerTrashPage() {
         sort,
       });
       setOwners(res.data.items);
-      setPagination(res.data.pagination);
+      setPagination((prev) => ({
+        ...res.data.pagination,
+        limit: prev.limit === 0 ? 0 : res.data.pagination.limit,
+      }));
     } catch (err) {
       console.error("Gagal memuat data owner terhapus:", err);
     } finally {
@@ -420,7 +426,7 @@ export default function OwnerTrashPage() {
         <div className="relative w-full">
           <div className="flex flex-col">
             <div className="overflow-x-auto">
-              <table id="owner-table-trash" data-column-visibility-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
+              <table id="owner-table-trash" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[1080px] text-left text-sm text-gray-600">
                 <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="w-12 px-4 py-4 text-center">
@@ -494,7 +500,7 @@ export default function OwnerTrashPage() {
                           </td>
 
                           <td className="px-4 py-4 text-center font-bold text-gray-900">
-                            {(pagination.page - 1) * pagination.limit + idx + 1}
+                            {(pagination.page - 1) * effectiveLimit + idx + 1}
                           </td>
                           <td className="px-4 py-4 align-top font-bold text-gray-900 whitespace-nowrap">
                             {owner.code || "-"}
@@ -553,7 +559,22 @@ export default function OwnerTrashPage() {
               </table>
             </div>
 
-            <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
+            <TablePaginationFooter
+              currentPage={pagination.page}
+              totalItems={pagination.total}
+              rowsPerPage={pagination.limit === 0 ? "all" : pagination.limit}
+              totalPages={totalPages}
+              onPageChange={(nextPage) => setPagination((prev) => ({ ...prev, page: nextPage }))}
+              onRowsPerPageChange={(nextLimit) =>
+                setPagination((prev) => ({
+                  ...prev,
+                  limit: nextLimit === "all" ? 0 : nextLimit,
+                  page: 1,
+                }))
+              }
+            />
+
+            {false && <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500">
                   Menampilkan {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total} data
@@ -600,7 +621,7 @@ export default function OwnerTrashPage() {
                   Selanjutnya
                 </button>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       </div>

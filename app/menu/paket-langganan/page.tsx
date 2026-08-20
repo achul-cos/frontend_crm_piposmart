@@ -46,6 +46,7 @@ import {
 import { usePackagesQuery, usePlansQuery, usePromotionsQuery } from "@/app/lib/queries/catalog";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
   ssr: false,
@@ -138,52 +139,17 @@ function Pagination({
   onPageChange: (p: number) => void;
   onRowsPerPageChange: (n: number) => void;
 }) {
-  if (totalItems === 0) return null;
-
-  const start = (currentPage - 1) * rowsPerPage + 1;
-  const end = Math.min(currentPage * rowsPerPage, totalItems);
-
   return (
-    <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
-      <p className="text-xs font-bold text-gray-400">
-        Menampilkan <span className="text-gray-700">{start} - {end}</span> dari{" "}
-        <span className="text-gray-700">{totalItems}</span> data
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={rowsPerPage}
-          onChange={(e) => onRowsPerPageChange(Number(e.target.value))}
-          className="h-8 cursor-pointer rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#C92C1E]"
-        >
-          {[10, 25, 50, 100].map((v) => (
-            <option key={v} value={v}>
-              {v} / halaman
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-          disabled={currentPage <= 1}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-        >
-          Prev
-        </button>
-
-        <div className="flex h-8 items-center justify-center rounded-lg bg-red-50 px-3 text-[11px] font-black text-[#C92C1E]">
-          {currentPage} / {totalPages}
-        </div>
-
-        <button
-          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage >= totalPages}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
-    </div>
+    <TablePaginationFooter
+      currentPage={currentPage}
+      totalItems={totalItems}
+      rowsPerPage={rowsPerPage === 0 ? "all" : rowsPerPage}
+      totalPages={totalPages}
+      onPageChange={onPageChange}
+      onRowsPerPageChange={(nextRowsPerPage) =>
+        onRowsPerPageChange(nextRowsPerPage === "all" ? 0 : nextRowsPerPage)
+      }
+    />
   );
 }
 
@@ -391,7 +357,8 @@ export default function PaketLanggananPage() {
       q: search || undefined,
       active: activeFilter === "" ? undefined : activeFilter === "true",
       page,
-      limit: rowsPerPage,
+      limit: rowsPerPage === 0 ? undefined : rowsPerPage,
+      all: rowsPerPage === 0,
       scope,
     }),
     [search, activeFilter, page, rowsPerPage, scope],
@@ -518,7 +485,7 @@ export default function PaketLanggananPage() {
       .catch(() => setPackageOptions([]));
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
+  const totalPages = rowsPerPage === 0 ? 1 : Math.max(1, Math.ceil(total / rowsPerPage));
 
   const currentIds = useMemo(() => {
     if (entity === "package") return packages.map((p) => p.id);
@@ -902,7 +869,7 @@ export default function PaketLanggananPage() {
         <div className="relative w-full">
           <div className="flex flex-col">
             <div className="overflow-x-auto">
-          <table id="catalog-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
+          <table id="catalog-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="w-10 px-4 py-4 text-center">

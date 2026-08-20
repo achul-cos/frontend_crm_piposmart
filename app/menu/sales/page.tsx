@@ -19,6 +19,7 @@ import { authFetchJson } from '@/app/lib/api';
 import { formatPhoneDisplay } from '@/app/lib/phone';
 import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoCard";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import ScreenPortal from "@/app/components/ui/ScreenPortal";
 
 const EMPTY_FORM: SalesFormState = {
@@ -206,11 +207,12 @@ export default function SalesPage() {
 
   const [salesPageSize, setSalesPageSize] = useState(10);
   const salesTotalItems = filteredSales.length;
-  const salesTotalPages = Math.max(1, Math.ceil(salesTotalItems / salesPageSize));
+  const effectiveSalesPageSize = salesPageSize === 0 ? Math.max(salesTotalItems, 1) : salesPageSize;
+  const salesTotalPages = salesPageSize === 0 ? 1 : Math.max(1, Math.ceil(salesTotalItems / salesPageSize));
   const paginatedSales = useMemo(() => {
-    const start = (salesPage - 1) * salesPageSize;
-    return filteredSales.slice(start, start + salesPageSize);
-  }, [filteredSales, salesPage, salesPageSize]);
+    const start = (salesPage - 1) * effectiveSalesPageSize;
+    return filteredSales.slice(start, start + effectiveSalesPageSize);
+  }, [filteredSales, salesPage, effectiveSalesPageSize]);
 
   useEffect(() => { setSalesPage(1); }, [search]);
 
@@ -510,7 +512,7 @@ export default function SalesPage() {
           <div className="relative w-full">
             <div className="flex flex-col">
               <div className="overflow-x-auto">
-                <table id="sales-table" data-column-visibility-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
+                <table id="sales-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[900px] text-left text-sm text-gray-600">
             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="w-12 px-4 py-4 text-center">
@@ -635,7 +637,19 @@ export default function SalesPage() {
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
+            <TablePaginationFooter
+              currentPage={salesPage}
+              totalItems={salesTotalItems}
+              rowsPerPage={salesPageSize === 0 ? "all" : salesPageSize}
+              totalPages={salesTotalPages}
+              onPageChange={setSalesPage}
+              onRowsPerPageChange={(nextPageSize) => {
+                setSalesPageSize(nextPageSize === "all" ? 0 : nextPageSize);
+                setSalesPage(1);
+              }}
+            />
+
+            {false && <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 p-4 sm:flex-row">
               <div className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500">
                   Menampilkan {salesTotalItems === 0 ? 0 : (salesPage - 1) * salesPageSize + 1}–{Math.min(salesPage * salesPageSize, salesTotalItems)} dari {salesTotalItems} data
@@ -677,7 +691,7 @@ export default function SalesPage() {
                   Selanjutnya
                 </button>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       ) : (

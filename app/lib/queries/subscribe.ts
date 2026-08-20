@@ -610,7 +610,8 @@ async function fetchSubscriptionPageData(params: {
       purchased_to: purchasedTo,
       sort: "-purchased_at",
       page: String(page),
-      limit: String(limit),
+      limit: limit === 0 ? "" : String(limit),
+      all: limit === 0 ? "true" : "",
     });
     const response = await fetchJson<
       | SubscriptionOrderItem[]
@@ -640,7 +641,8 @@ async function fetchSubscriptionPageData(params: {
       active_to: purchasedTo,
       sort: "-active_from",
       page: String(page),
-      limit: String(limit),
+      limit: limit === 0 ? "" : String(limit),
+      all: limit === 0 ? "true" : "",
     });
     const response = await fetchJson<
       | SubscriptionItem[]
@@ -668,7 +670,8 @@ async function fetchSubscriptionPageData(params: {
       status: statusFilter,
       sort: "-created_at",
       page: String(page),
-      limit: String(limit),
+      limit: limit === 0 ? "" : String(limit),
+      all: limit === 0 ? "true" : "",
     });
     const response = await fetchJson<
       | ReconciliationItem[]
@@ -695,7 +698,8 @@ async function fetchSubscriptionPageData(params: {
     status: statusFilter,
     sort: "-detected_at",
     page: String(page),
-    limit: String(limit),
+    limit: limit === 0 ? "" : String(limit),
+    all: limit === 0 ? "true" : "",
   });
   const response = await fetchJson<
     | ReconciliationIssueItem[]

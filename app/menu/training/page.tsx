@@ -12,6 +12,7 @@ import QuickInfoCard, { QuickInfoCardGrid } from "@/app/components/ui/QuickInfoC
 import { useTrainingListQuery, useTrainingSalesListQuery } from "@/app/lib/queries/training";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import { Search } from "lucide-react";
 
 const AnalyticsTab = dynamic(() => import("./AnalyticsTab"), {
@@ -57,7 +58,8 @@ export default function TrainingPage() {
   const trainingListParams = useMemo(
     () => ({
       page,
-      limit,
+      limit: limit === 0 ? undefined : limit,
+      all: limit === 0,
       status: statusFilter || undefined,
       training_type: typeFilter || undefined,
       sales_id: !isSales && salesFilter ? Number(salesFilter) : undefined,
@@ -75,7 +77,7 @@ export default function TrainingPage() {
   const salesList = salesListData || [];
   const totalItems = trainingData?.pagination?.total || 0;
 
-  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const totalPages = limit === 0 ? 1 : Math.ceil(totalItems / limit) || 1;
   const visibleSalesFilter = useMemo(() => !isSales, [isSales]);
   const activeTabLabel =
     activeTab === "calendar"
@@ -298,7 +300,7 @@ export default function TrainingPage() {
           </div>
 
           <div className="w-full max-w-full overflow-x-auto">
-            <table id="training-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
+            <table id="training-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
               <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-4">Jadwal Training</th>
@@ -421,7 +423,19 @@ export default function TrainingPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
+          <TablePaginationFooter
+            currentPage={page}
+            totalItems={totalItems}
+            rowsPerPage={limit === 0 ? "all" : limit}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onRowsPerPageChange={(nextLimit) => {
+              setLimit(nextLimit === "all" ? 0 : nextLimit);
+              setPage(1);
+            }}
+          />
+
+          {false && totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
               <div className="flex items-center gap-4">
                 <div className="text-xs font-medium text-gray-500">

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import AutoTableColumnVisibilityEnhancer from "@/app/components/table/AutoTableColumnVisibilityEnhancer";
+import AutoTablePaginationEnhancer from "@/app/components/table/AutoTablePaginationEnhancer";
 import { FeedbackProvider } from "@/app/components/feedback/FeedbackContext";
 import AppFooter from "@/app/components/layout/AppFooter";
 import { AppProviders } from "@/app/providers";
@@ -480,6 +481,7 @@ export default function RootLayout({
             }`}
         >
           <AutoTableColumnVisibilityEnhancer />
+          <AutoTablePaginationEnhancer />
           <AppProviders>
             <FeedbackProvider>
               {children}
@@ -526,6 +528,7 @@ export default function RootLayout({
           }`}
       >
         <AutoTableColumnVisibilityEnhancer />
+        <AutoTablePaginationEnhancer />
         <AppProviders>
         <FeedbackProvider>
         <div className="flex min-h-screen">

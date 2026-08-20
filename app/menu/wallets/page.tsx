@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { usePageTitle } from "@/app/lib/hooks/usePageTitle";
 import ColumnVisibilityControl from "@/app/components/table/ColumnVisibilityControl";
+import TablePaginationFooter from "@/app/components/table/TablePaginationFooter";
 import AnalyticsTabSkeleton from "@/app/components/skeleton/AnalyticsTabSkeleton";
 import dynamic from "next/dynamic";
 import {
@@ -658,22 +659,23 @@ export default function WalletsPage() {
   ]);
 
   const transferTotalItems = filteredTransferItems.length;
-  const transferTotalPages = Math.max(
+  const effectiveTransferPageSize = transferPageSize === 0 ? Math.max(transferTotalItems, 1) : transferPageSize;
+  const transferTotalPages = transferPageSize === 0 ? 1 : Math.max(
     1,
     Math.ceil(transferTotalItems / transferPageSize),
   );
 
   const paginatedTransferItems = useMemo(() => {
-    const start = (transferPage - 1) * transferPageSize;
-    return filteredTransferItems.slice(start, start + transferPageSize);
-  }, [filteredTransferItems, transferPage, transferPageSize]);
+    const start = (transferPage - 1) * effectiveTransferPageSize;
+    return filteredTransferItems.slice(start, start + effectiveTransferPageSize);
+  }, [filteredTransferItems, transferPage, effectiveTransferPageSize]);
 
   const transferPageStart =
-    transferTotalItems === 0 ? 0 : (transferPage - 1) * transferPageSize + 1;
+    transferTotalItems === 0 ? 0 : (transferPage - 1) * effectiveTransferPageSize + 1;
   const transferPageEnd =
     transferTotalItems === 0
       ? 0
-      : Math.min(transferPage * transferPageSize, transferTotalItems);
+      : Math.min(transferPage * effectiveTransferPageSize, transferTotalItems);
 
   useEffect(() => {
     setTransferPage(1);
@@ -809,18 +811,20 @@ export default function WalletsPage() {
   }, [payments, wallets, ledgers]);
 
   const [paymentPageSize, setPaymentPageSize] = useState(10);
-  const paymentTotalPages = Math.max(1, Math.ceil(payments.length / paymentPageSize));
+  const effectivePaymentPageSize = paymentPageSize === 0 ? Math.max(payments.length, 1) : paymentPageSize;
+  const paymentTotalPages = paymentPageSize === 0 ? 1 : Math.max(1, Math.ceil(payments.length / paymentPageSize));
   const paginatedPayments = useMemo(() => {
-    const start = (paymentPage - 1) * paymentPageSize;
-    return payments.slice(start, start + paymentPageSize);
-  }, [payments, paymentPage, paymentPageSize]);
+    const start = (paymentPage - 1) * effectivePaymentPageSize;
+    return payments.slice(start, start + effectivePaymentPageSize);
+  }, [payments, paymentPage, effectivePaymentPageSize]);
 
   const [walletPageSize, setWalletPageSize] = useState(10);
-  const walletTotalPages = Math.max(1, Math.ceil(wallets.length / walletPageSize));
+  const effectiveWalletPageSize = walletPageSize === 0 ? Math.max(wallets.length, 1) : walletPageSize;
+  const walletTotalPages = walletPageSize === 0 ? 1 : Math.max(1, Math.ceil(wallets.length / walletPageSize));
   const paginatedWallets = useMemo(() => {
-    const start = (walletPage - 1) * walletPageSize;
-    return wallets.slice(start, start + walletPageSize);
-  }, [wallets, walletPage, walletPageSize]);
+    const start = (walletPage - 1) * effectiveWalletPageSize;
+    return wallets.slice(start, start + effectiveWalletPageSize);
+  }, [wallets, walletPage, effectiveWalletPageSize]);
 
   const channelOptions = useMemo(() => {
     const channels = payments
@@ -1416,7 +1420,7 @@ export default function WalletsPage() {
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-                  <table id="payments-table" data-column-visibility-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
+                  <table id="payments-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[980px] text-left text-sm text-gray-600">
                     <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="w-12 px-4 py-4 text-center">
@@ -1590,7 +1594,19 @@ export default function WalletsPage() {
                 </tbody>
               </table>
               </div>
-          {paymentTotalPages > 1 && (
+          <TablePaginationFooter
+            currentPage={paymentPage}
+            totalItems={payments.length}
+            rowsPerPage={paymentPageSize === 0 ? "all" : paymentPageSize}
+            totalPages={paymentTotalPages}
+            onPageChange={setPaymentPage}
+            onRowsPerPageChange={(nextPageSize) => {
+              setPaymentPageSize(nextPageSize === "all" ? 0 : nextPageSize);
+              setPaymentPage(1);
+            }}
+          />
+
+          {false && paymentTotalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
               <div className="flex items-center gap-4">
                 <div className="text-xs font-medium text-gray-500">
@@ -1640,7 +1656,7 @@ export default function WalletsPage() {
             <div className="relative w-full">
               <div className="flex flex-col">
                 <div className="overflow-x-auto">
-                  <table id="wallets-table" data-column-visibility-manual="true" className="w-full min-w-[800px] text-left text-sm text-gray-600">
+                  <table id="wallets-table" data-column-visibility-manual="true" data-table-pagination-manual="true" className="w-full min-w-[800px] text-left text-sm text-gray-600">
                     <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="w-12 px-4 py-4 text-center">
@@ -1773,7 +1789,19 @@ export default function WalletsPage() {
                 </tbody>
               </table>
               </div>
-              {walletTotalPages > 1 && (
+              <TablePaginationFooter
+                currentPage={walletPage}
+                totalItems={wallets.length}
+                rowsPerPage={walletPageSize === 0 ? "all" : walletPageSize}
+                totalPages={walletTotalPages}
+                onPageChange={setWalletPage}
+                onRowsPerPageChange={(nextPageSize) => {
+                  setWalletPageSize(nextPageSize === "all" ? 0 : nextPageSize);
+                  setWalletPage(1);
+                }}
+              />
+
+              {false && walletTotalPages > 1 && (
                 <div className="flex items-center justify-between border-t border-gray-100 bg-white px-4 py-3">
                   <div className="flex items-center gap-4">
                     <div className="text-xs font-medium text-gray-500">
@@ -2006,6 +2034,7 @@ export default function WalletsPage() {
                           <table
                             id="wallet-transfer-table"
                             data-column-visibility-manual="true"
+                            data-table-pagination-manual="true"
                             className="w-full min-w-[1100px] text-left text-sm text-gray-600"
                           >
                             <thead className="border-y border-gray-200 bg-[#f9fafb] text-xs font-black uppercase tracking-wider text-gray-500">
@@ -2086,7 +2115,19 @@ export default function WalletsPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <TablePaginationFooter
+                      currentPage={transferPage}
+                      totalItems={transferTotalItems}
+                      rowsPerPage={transferPageSize === 0 ? "all" : transferPageSize}
+                      totalPages={transferTotalPages}
+                      onPageChange={setTransferPage}
+                      onRowsPerPageChange={(nextPageSize) => {
+                        setTransferPageSize(nextPageSize === "all" ? 0 : nextPageSize);
+                        setTransferPage(1);
+                      }}
+                    />
+
+                    {false && <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-4">
                         <div className="text-xs font-medium text-gray-500">
                           Menampilkan{" "}
@@ -2136,7 +2177,7 @@ export default function WalletsPage() {
                           Selanjutnya
                         </button>
                       </div>
-                    </div>
+                    </div>}
                   </div>
                 </>
               )}
